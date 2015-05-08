@@ -1,6 +1,5 @@
 #!/usr/local/bin/env python
 from __future__ import division
-import os
 import numpy as np
 import pandas as pd
 from lmfit import Parameters, Minimizer

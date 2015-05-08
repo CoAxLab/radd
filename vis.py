@@ -37,7 +37,6 @@ def scurves(lines=[], task='ssRe', linestyles=['-','--','-','--'], pstop=.5, sxd
         if len(lines[0])==6:
                 task='pro'
 
-	pth=utils.find_path()
 	style_params=utils.style_params(style='ticks', context='paper')
 	sns.set_style(rc=style_params['style'])
 	sns.set_context(rc=style_params['context'])
@@ -112,7 +111,7 @@ def scurves(lines=[], task='ssRe', linestyles=['-','--','-','--'], pstop=.5, sxd
 	if sxdata is not None:
                 for i, cond in enumerate(sxdata):
                         for idx in cond.iterrows():
-		                ax.plot(x, idx[1].values[::-1], marker='o', color=colors[i], ms=ms, mec=colors[i], lw=0, alpha=.1)
+		                ax.plot(x, idx[1].values, marker='o', color=colors[i], ms=ms, mec=colors[i], lw=0, alpha=.1)
 
 	plt.setp(ax, xlim=xxlim, xticks=xxticks, ylim=(-.05, 1.05), yticks=[0, .5, 1])
 	ax.set_xticklabels(xxticklabels, fontsize=24); 	ax.set_yticklabels([0.0, .5, 1.0], fontsize=24)
@@ -444,7 +443,7 @@ def gen_pro_traces(ptheta, deplist=[], integrate_exec_ss=False, return_exec_ss=F
         for d, c in zip(deplist, cond):
                 ptheta['v'] = d
                 ptheta['pGo'] = c
-                dvg, dvs = npsim.radd(ptheta, ntrials=10, tb=.565)
+                dvg, dvs = RADD.run(ptheta, ntrials=10, tb=.565)
                 dvglist.append(dvg[0])
 
         if c<.9:
@@ -475,7 +474,7 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
 
         for ssd in ssdlist:
                 rtheta['ssd'] = ssd
-                dvg, dvs = npsim.radd(rtheta, ntrials=10, tb=.650)
+                dvg, dvs = RADD.run(rtheta, ntrials=10, tb=.650)
                 dvglist.append(dvg[0])
                 dvslist.append(dvs[0])
 
@@ -495,6 +494,25 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
                 dvslist[i] = np.append(dvslist[i], np.array([0]))
         return [dvglist, dvslist, xinit_ss, ssi]
 
+
+def plot_npsim_traces(DVg=[], DVs=[], theta={}, tau=.0005, tb=.5451, cg='Green', cr='Red' ):
+
+        f,ax=plt.subplots(1,figsize=(8,5))
+        tr=theta['t']; a=theta['a']; z=theta['z']; ssd=theta['ssd']
+        for i, igo in enumerate(DVg):
+                plt.plot(np.arange(tr, tb, tau), igo, color=cg, alpha=.1, linewidth=.5)
+                if i<len(DVs) and DVs!=[]:
+                        plt.plot(np.arange(ssd, tb, tau), DVs[i], color=cr, alpha=.1, linewidth=.5)
+
+        plt.setp(ax, xlim=(tr, tb), ylim=(0,a))
+        ax.hlines(y=z, xmin=tr, xmax=tb, linewidth=3, linestyle='--', color="#6C7A89")
+        sns.despine(top=False,bottom=False, right=True, left=False)
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        return ax
 
 
 
@@ -648,7 +666,6 @@ def plot_bold_manuscript(df=pd.DataFrame, pgo=np.arange(0, 1.25, .25), task='pro
         plt.setp(ax, xlim=(-.75, 5.75), xticks=x, ylim=yylim, yticks=yylim, yticklabels=[str(int(yy)) for yy in yylim])
         xxticklabels=["0", "25", "50+", "50-", "75", "100"]
         ax.set_ylabel(r'$\sum_{t=tr}^{t=end}\theta_{G}$', fontsize=26)
-        #ax.set_ylabel(r'$\sum_{i=1}^n ( \theta_{GO_i}\/-\/\theta_{SS_i} )$', fontsize=18)
 	ax.set_xlabel('P(Go)',  fontsize=22)
         ax.set_xticklabels(xxticklabels, fontsize=20)
 	plt.setp(ax.get_yticklabels(), fontsize=20)

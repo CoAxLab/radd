@@ -1,6 +1,5 @@
 #!/usr/local/bin/env python
 from __future__ import division
-import os
 import pandas as pd
 import numpy as np
 from radd_demo import utils
@@ -16,7 +15,7 @@ def probold_bias(theta, bias={}, pgo=np.arange(0, 1.25, .25), tb=.560, ntrials=1
                 for k, v in bias.items():
 			theta[k]=v[i]
 
-                df=fitpro.simulate(theta, model='radd', ntrials=ntrials, return_all=return_all,
+                df=simulate(theta, model='radd', ntrials=ntrials, return_all=return_all,
                                 simbold=True, ssv_decay=ssv_decay, visual=visual, tb=tb, bias=k)
                 alldf.append(df)
 
