@@ -484,6 +484,64 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
         return [dvglist, dvslist, xinit_ss, ssi]
 
 
+def build_decision_axis(theta, gotraces):
+
+        # init figure, axes, properties
+        f, ax = plt.subplots(1, figsize=(7,4))
+
+        w=len(gotraces[0])+50
+        h=theta['a']
+        start=-100
+
+        plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
+
+        ax.hlines(y=h, xmin=-100, xmax=w, color='k')    
+        ax.hlines(y=0, xmin=-100, xmax=w, color='k')    
+        ax.hlines(y=theta['z'], xmin=start, xmax=w, color='Gray', linestyle='--', alpha=.7)
+        ax.vlines(x=w-50, ymin=0, ymax=h, color='r', linestyle='--', alpha=.5)
+        ax.vlines(x=start, ymin=0, ymax=h, color='k')
+
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        sns.despine(top=True, right=True, bottom=True, left=True)
+
+        return f, ax
+
+
+def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
+        
+        clist=['#2ecc71']*len(dvg_traces)
+        clist_ss = sns.light_palette('#e74c3c', n_colors=6)[::-1]
+        
+        for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
+                if g[i]>=rtheta['a'] or dvs_traces[nline][i]<=0: 
+                        continue
+                gl.set_data(x[:i+1], g[:i+1])
+                gl.set_color(clist[nline])
+                
+                if dvs_traces[nline][i]>0:
+                        ssi = len(g) - len(dvs_traces[nline]) + 1
+                        dvs_lines[nline].set_data(x[xi[nline]:i+1], dvs_traces[nline][xi[nline]:i+1])          
+                        dvs_lines[nline].set_color(clist_ss[nline])
+
+        return dvs_lines, dvg_lines
+
+
+def pro_animate(i, x, protraces, prolines):
+        
+        clist = sns.color_palette('autumn', n_colors=6)[::-1]
+        
+        for nline, (pline, ptrace) in enumerate(zip(prolines, protraces)):
+                pline.set_data(x[:i+1], ptrace[:i+1])
+                pline.set_color(clist[nline])
+        
+        return prolines,
+
+
+
 def plot_npsim_traces(DVg=[], DVs=[], theta={}, tau=.0005, tb=.5451, cg='Green', cr='Red' ):
 
         f,ax=plt.subplots(1,figsize=(8,5))
