@@ -483,6 +483,7 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
                 dvslist[i] = np.append(dvslist[i], np.array([0]))
         return [dvglist, dvslist, xinit_ss, ssi]
 
+
 def build_decision_axis(theta, gotraces):
 
         # init figure, axes, properties
