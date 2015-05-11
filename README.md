@@ -28,50 +28,56 @@ This code should not be used for any type of clinical purposes.
 
 ###import libraries
 ```python
-#from within cloned radd_demo directory
-import *
+#from parent directory of cloned radd_demo repo
+from radd_demo import *
 import numpy as np
 import pandas as pd
+import seaborn as sns
 
 ```
-###read data
+###read proactive data
 ```python
-nogos=pd.read_csv("pro_nogo.csv", index_col=0)
-prort=pd.read_csv("pro_rt.csv", index_col=0)
+fpath='radd_demo/demo/'
+nogos=pd.read_csv(fpath+"pro_nogo.csv", index_col=0)
+prort=pd.read_csv(fpath+"pro_rt.csv", index_col=0)
 ```
 
 ###plot data across Go trial probability
 ```python
-
+#list of colors for plotting
+clist = ['#22303d', '#434e57', '#bd4a4c', '#2980b9', '#009B76']
 #mean 'no-go' decision curve
 mean_nogo = nogos.mean().values
 #plot 'no-go' decision curve
-axp = vis.scurves([mean_nogo], task='Pro', sxdata=[nogos])
+axp = vis.scurves([mean_nogo], task='Pro', sxdata=[nogos], colors=clist)
 
 #RT(s) -> RT(ms)
 rts = prort.mean().values[1:]*1000
 rterr = prort.sem().values[1:]*1.96*1000
 #plot RTs
-axrt = vis.prort(bars=rts, berr=rterr)
+axrt = vis.prort(bars=rts, berr=rterr, colors=clist)
 ```
 
 ###simulate proactive data (drift-bias)
 ```python
 #read in parameters file
-protheta=pd.read_csv("pro_theta.csv", index_col=0)
+protheta=pd.read_csv(fpath+"pro_theta.csv", index_col=0)
 
 #convert to dictionary and extract all drift-rates to list
 ptheta, vlist = utils.get_params_from_flatp(protheta)
 
 #simulate effect of changing execution drift-rate across Go trial probability
-nogo_sim, prort_sim = fitpro.simple_prosim(ptheta, bias_list=vlist, bias='v')
+nogo_sim, rt_sim = fitpro.simple_prosim(ptheta, bias_vals=vlist, bias='v')
 ```
 
 ###plot the results
 ```python
-labels=['data', 'drift-bias']
-axp = vis.scurves([mean_nogo, nogo_sim], task='Pro', sxdata=[nogos], labels=labels)
-axrt = vis.prort(bars=rts, berr=rterr, lines=[rt_sim], labels=labels)
+prolabels=['data', 'drift-bias']
+prosim_colors=[clist[0], clist[2]]
+
+axp = vis.scurves([mean_nogo, nogo_sim], task='Pro', sxdata=[nogos], colors=prosim_colors, labels=prolabels)
+
+axrt = vis.prort(bars=mean_prort, berr=mean_prort_err, lines=[prort_sim], colors=prosim_colors, labels=prolabels)
 ```
 
 ###experiment with different parameter values
@@ -81,10 +87,16 @@ axrt = vis.prort(bars=rts, berr=rterr, lines=[rt_sim], labels=labels)
 * t = onset time
 
 ```python
-# lower boundary height by 10%
-ptheta['a'] = ptheta['a']*.9
-nogo_sim, prort_sim = fitpro.simple_prosim(ptheta, bias_list=vlist, bias='v')
+#make a copy of proactive parameters
+exptheta = ptheta.copy()
 
-axp = vis.scurves([mean_nogo, nogo_sim], task='Pro', sxdata=[nogos], labels=labels)
-axrt = vis.prort(bars=rts, berr=rterr, lines=[rt_sim], labels=labels)
+# lower boundary height by 10%
+exptheta['a'] = ptheta['a']*.9
+nogo_sim2, prort_sim2 = fitpro.simple_prosim(exptheta, bias_vals=vlist, bias='v')
+
+prolabels2=['data', 'drift-bias\nhigh bound', 'drift-bias\nlow bound']
+prosim_colors2=[clist[0], clist[2], clist[3]]
+
+axp = vis.scurves([mean_nogo, nogo_sim, nogo_sim2], task='Pro', labels=prolabels2, colors=prosim_colors2)
+axrt = vis.prort(bars=mean_prort, berr=mean_prort_err, lines=[prort_sim, prort_sim2], labels=prolabels2, colors=prosim_colors2)
 ```

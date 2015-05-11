@@ -214,10 +214,10 @@ def analyze_proactive_trials(DVg, DVs, theta, filt_rts=True, tb=.560, filtr=.545
 
 	return pstop, rt
 
-def simple_prosim(theta, bias_values, bias='v', pgo=np.arange(0, 1.2, .2))
+def simple_prosim(theta, bias_vals, bias='v', pgo=np.arange(0, 1.2, .2)):
 
 	nogo_list, rt_list = [], []
-	for pg, val in zip(pgo, bias_values):
+	for pg, val in zip(pgo, bias_vals):
 		#update P(Go)
 		theta['pGo'] = pg
 		#update bias param

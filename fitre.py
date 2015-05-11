@@ -152,3 +152,14 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, return_all=F
 		return stops, go_trial_array[go_trial_array<tb]
 	else:
 		return sacc, rt
+
+def simple_resim(theta, ssdlist=np.arange(0.2, .45, .05)):
+
+	stop_list, rert_list = [], []
+	for ssd in ssdlist:
+		theta['ssd'] = ssd
+		dvg, dvs = RADD.run(theta, tb=.650)
+		stop, rt = analyze_reactive_trials(dvg, dvs, theta)
+		stop_list.append(stop); rert_list.append(rt)
+	rert = np.mean(rert_list)
+	return np.array(stop_list), rert*1000

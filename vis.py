@@ -32,11 +32,12 @@ def res(arr,lower=0.0,upper=1.0):
         arr += lower
         return arr
 
-def scurves(lines=[], task='ssRe', linestyles=['-','--','-','--'], pstop=.5, sxdata=None, pse_only=False, labels=[], colors=[], yerr=[], all_solid=False, title='stop_curves', plot_data=False):
+def scurves(lines=[], task='ssRe', linestyles=[], pstop=.5, sxdata=None, pse_only=False, labels=[], colors=[], yerr=[], all_solid=False, title='stop_curves', plot_data=False):
 
         if len(lines[0])==6:
                 task='pro'
-
+        if linestyles==[]:
+                linestyles=['-']*len(lines)
 	style_params=utils.style_params(style='ticks', context='paper')
 	sns.set_style(rc=style_params['style'])
 	sns.set_context(rc=style_params['context'])
@@ -139,9 +140,9 @@ def prort(bars, lines=[], berr=[], labels=['Data', 'Drift', 'Onset'], colors=['#
         if lines!=[]:
 
                 for i, line in enumerate(lines):
-                        ax.plot(x, np.array(line)*1000, color=colors[i+1], lw=4, label=labels[i+1])
+                        ax.plot(x, np.array(line), color=colors[i+1], lw=4, label=labels[i+1])
 
-        ax.legend(loc=0, fontsize=20)
+        ax.legend(loc=0, fontsize=17)
         yylim=[490, 560]
         plt.setp(ax, ylim=(yylim[0], yylim[1]), yticks=yylim, xticks=x)
         ax.set_yticklabels(yylim, fontsize=22)
@@ -362,7 +363,7 @@ def plot_chi_dist(chi, bins=15, labels=['Drift', 'Onset'], rug=False, norm=False
 
         return ax
 
-def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.5451, cg='Green', cr='Red' ):
+def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.5451, cg='Green', cr='Red'):
 
     f,ax=plt.subplots(1,figsize=(8,5))
     tr=sim_theta['t']; a=sim_theta['a']; z=sim_theta['z']; ssd=sim_theta['ssd']
@@ -420,21 +421,21 @@ def bar_line_evs(means=None, err=None, sxdata=None, colors=['#4E4E8B', '#AD3333'
 	plt.savefig("PSE_%s%s" % (task, ".svg"), rasterized=True, dpi=300)
 	return ax
 
-def gen_pro_traces(ptheta, deplist=[], integrate_exec_ss=False, return_exec_ss=False, cond=np.arange(0, 1.2, .2)):
+
+def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, return_exec_ss=False, pgo=np.arange(0, 1.2, .2)):
 
         dvglist=[]; dvslist=[]
 
-        if deplist==[]:
-                deplist=np.ones_like(cond)
+        if bias_vals==[]:
+                deplist=np.ones_like(pgo)
 
-
-        for d, c in zip(deplist, cond):
-                ptheta['v'] = d
-                ptheta['pGo'] = c
+        for val, pg in zip(bias_vals, pgo):
+                ptheta[bias] = val
+                ptheta['pGo'] = pg
                 dvg, dvs = RADD.run(ptheta, ntrials=10, tb=.565)
                 dvglist.append(dvg[0])
 
-        if c<.9:
+        if pg<.9:
                 dvslist.append(dvs[0])
         else:
                 dvslist.append([0])
@@ -458,7 +459,7 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
         rtheta['pGo']=.5
         rtheta['ssv']=-abs(rtheta['ssv'])
         #animation only works if tr<=ssd
-        rtheta['t']=.199
+        rtheta['t']=np.min(ssdlist)-.001
 
         for ssd in ssdlist:
                 rtheta['ssd'] = ssd
