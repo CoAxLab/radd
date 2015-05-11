@@ -232,8 +232,8 @@ def plot_re_bar(y, ysim=[], yerr=[], ysimerr=[], sxdata=None, colors=[], ylabel=
         if ysim!=[]:
 
 	        ax.errorbar(xsim, ysim, yerr=ysimerr, marker='o', mfc=None, ms=10, lw=3, color='k', ecolor='k', elinewidth=3)
-                ax.plot(xsim[0], ysim[0], marker='o', color=colors[2], ms=14, label='Base Model')
-                ax.plot(xsim[1], ysim[1], marker='o', color=colors[3], ms=14, label='Diff Model')
+                ax.plot(xsim[0], ysim[0], marker='o', color=colors[2], ms=14, label='Baseline')
+                ax.plot(xsim[1], ysim[1], marker='o', color=colors[3], ms=14, label='Caution')
 
 	ax.bar(x, y, width=.5, align='center', yerr=yerr, color=colors, error_kw=dict(elinewidth=3, ecolor='k'), alpha=.9)
 
