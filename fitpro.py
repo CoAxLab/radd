@@ -188,29 +188,15 @@ def analyze_proactive_trials(DVg, DVs, theta, filt_rts=True, tb=.560, filtr=.545
 
 	"""
 
-	DVg is instantiated for all trials, containing the evidence trace for each one.
-	DVs contains traces for a subset of those trials in which a SS occurs (proportional to
-	pGo provided in theta). Thus, p(NoGo) is calculated by generating a binary vector
-	containing all responses from DVg and appending any 0's (no response/stop/no-go trials)
-	produced by DVs. That is, DVs can only actually CAUSE a stop (Although in our task
-	it won't or very rarely does), so we just want to include any rare cases where that
-	vector determined the outcome of the trial.
-
-
-	IMPORTANT: 	Need to change default tb value for RADD beta release
-			and include a caveat in the tutorial-notebook/docs
-			discussing how the tb was determined for the published data
-			(i.e., go rts were calculated from responses made prior to .545ms)
-
-
+	DVg is instantiated for all trials, containing the evidence trace for each one.	DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta). Thus, p(NoGo) is calculated by generating a binary vector containing all responses from DVg and appending any 0's (no response/stop/no-go trials) produced by DVs. That is, DVs can only actually CAUSE a stop (Although in our task 	it won't or very rarely does), so we just want to include any rare cases where that vector determined the outcome of the trial.
 	"""
 
-	theta=fitfx.update_params(theta)
+	theta=utils.update_params(theta)
 	tr=theta['tt'];	a=theta['a']; ssd=theta['ssd']
 
-	# what happened on go trials (with no stop signal occuring)?
+	# what happened on go trials (with no stop signal occuring)
 	responses=[1 if np.any(DVgn>=a) else 0 for DVgn in DVg]
-	# what happened on trials with a stop signal?
+	# what happened on trials with a stop signal
 	ss_out=[0 if np.any(DVsn<=0) else 1 for DVsn in DVs]
 
 	# get vector of trial outcomes (1:go, 0:nogo)

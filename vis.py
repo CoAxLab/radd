@@ -125,7 +125,7 @@ def scurves(lines=[], task='ssRe', linestyles=['-','--','-','--'], pstop=.5, sxd
 
 
 
-def prort(bars, lines=[], berr=[], lerr=[], labels=['Data', 'Drift', 'Onset'], colors=['#2d2d2d', '#1abd80', purples[5]], dist_list=[]):
+def prort(bars, lines=[], berr=[], labels=['Data', 'Drift', 'Onset'], colors=['#2d2d2d', '#1abd80', purples[5]], dist_list=[]):
 
         f, ax=plt.subplots(1, figsize=(5.5,6))
         x=np.arange(20,120,20)
@@ -135,12 +135,11 @@ def prort(bars, lines=[], berr=[], lerr=[], labels=['Data', 'Drift', 'Onset'], c
 
         ax.bar(x, bars, yerr=berr, width=10, align='center', color=colors[0], error_kw=dict(elinewidth=2, capsize=0, ecolor='k'), label=labels[0], alpha=.95)
 
-        
+
         if lines!=[]:
-                if lerr==[]:
-                        lerr=np.zeros_like(lines)
-                ax.errorbar(x, lines[0], yerr=lerr[0], color=colors[1], lw=4, label=labels[1])
-                ax.errorbar(x, lines[1], yerr=lerr[1], color=colors[2], lw=4, label=labels[2])
+
+                for i, line in enumerate(lines):
+                        ax.plot(x, np.array(line)*1000, color=colors[i+1], lw=4, label=labels[i+1])
 
         ax.legend(loc=0, fontsize=20)
         yylim=[490, 560]
@@ -495,8 +494,8 @@ def build_decision_axis(theta, gotraces):
 
         plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
 
-        ax.hlines(y=h, xmin=-100, xmax=w, color='k')    
-        ax.hlines(y=0, xmin=-100, xmax=w, color='k')    
+        ax.hlines(y=h, xmin=-100, xmax=w, color='k')
+        ax.hlines(y=0, xmin=-100, xmax=w, color='k')
         ax.hlines(y=theta['z'], xmin=start, xmax=w, color='Gray', linestyle='--', alpha=.7)
         ax.vlines(x=w-50, ymin=0, ymax=h, color='r', linestyle='--', alpha=.5)
         ax.vlines(x=start, ymin=0, ymax=h, color='k')
@@ -512,32 +511,32 @@ def build_decision_axis(theta, gotraces):
 
 
 def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
-        
+
         clist=['#2ecc71']*len(dvg_traces)
         clist_ss = sns.light_palette('#e74c3c', n_colors=6)[::-1]
-        
+
         for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
-                if g[i]>=rtheta['a'] or dvs_traces[nline][i]<=0: 
+                if g[i]>=rtheta['a'] or dvs_traces[nline][i]<=0:
                         continue
                 gl.set_data(x[:i+1], g[:i+1])
                 gl.set_color(clist[nline])
-                
+
                 if dvs_traces[nline][i]>0:
                         ssi = len(g) - len(dvs_traces[nline]) + 1
-                        dvs_lines[nline].set_data(x[xi[nline]:i+1], dvs_traces[nline][xi[nline]:i+1])          
+                        dvs_lines[nline].set_data(x[xi[nline]:i+1], dvs_traces[nline][xi[nline]:i+1])
                         dvs_lines[nline].set_color(clist_ss[nline])
 
         return dvs_lines, dvg_lines
 
 
 def pro_animate(i, x, protraces, prolines):
-        
+
         clist = sns.color_palette('autumn', n_colors=6)[::-1]
-        
+
         for nline, (pline, ptrace) in enumerate(zip(prolines, protraces)):
                 pline.set_data(x[:i+1], ptrace[:i+1])
                 pline.set_color(clist[nline])
-        
+
         return prolines,
 
 

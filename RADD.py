@@ -8,8 +8,7 @@ import numpy as np
 def run(theta, no_ss=False, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='radd'):
 
 	"""
-	DVg is instantiated for all trials. DVs contains traces for a subset of those
-	trials in which a SS occurs (proportional to pGo provided in theta).
+	DVg is instantiated for all trials. DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta).
 
 	"""
 
