@@ -127,39 +127,28 @@ def scurves(lines=[], task='ssRe', linestyles=['-','--','-','--'], pstop=.5, sxd
 
 def prort(bars, lines=[], berr=[], lerr=[], labels=['Data', 'Drift', 'Onset'], colors=['#2d2d2d', '#1abd80', purples[5]], dist_list=[]):
 
-        f, ax=plt.subplots(1, figsize=(6.5,5))
+        f, ax=plt.subplots(1, figsize=(5.5,6))
         x=np.arange(20,120,20)
 
         if berr==[]:
                 berr=np.zeros_like(bars)
-        if np.any(bars<1):
-                bars=np.array(bars)*1000
-                berr=np.array(berr)*1000
-        elif np.any(bars<10):
-                bars=np.array(bars)*100
-                berr=np.array(berr)*100
 
-        ax.bar(x, bars, yerr=berr, width=10, align='center', color=colors[0], error_kw=dict(elinewidth=2, capsize=0, ecolor='k'), label=labels[0], alpha=.7)
+        ax.bar(x, bars, yerr=berr, width=10, align='center', color=colors[0], error_kw=dict(elinewidth=2, capsize=0, ecolor='k'), label=labels[0], alpha=.95)
 
-
-        if lerr==[]:
-                lerr=np.zeros_like(lines)
-        if np.any(lines[0]<1):
-                lines=[np.array(l)*1000 for l in lines]
-                lerr=[np.array(l)*1000 for l in lerr]
-        elif np.any(lines[0])<10:
-                lines=[np.array(l)*100 for l in lines]
-                lerr=[np.array(l)*100 for l in lerr]
-
-        ax.errorbar(x, lines[0], yerr=lerr[0], color=colors[1], lw=4, label=labels[1])
-        ax.errorbar(x, lines[1], yerr=lerr[1], color=colors[2], lw=4, label=labels[2])
+        
+        if lines!=[]:
+                if lerr==[]:
+                        lerr=np.zeros_like(lines)
+                ax.errorbar(x, lines[0], yerr=lerr[0], color=colors[1], lw=4, label=labels[1])
+                ax.errorbar(x, lines[1], yerr=lerr[1], color=colors[2], lw=4, label=labels[2])
 
         ax.legend(loc=0, fontsize=20)
-        yylim=[480, 560]
+        yylim=[490, 560]
         plt.setp(ax, ylim=(yylim[0], yylim[1]), yticks=yylim, xticks=x)
         ax.set_yticklabels(yylim, fontsize=22)
         ax.set_xticklabels([str(int(xt)) for xt in x], fontsize=22)
-        ax.set_ylabel('P(Go)', fontsize=24)
+        ax.set_xlabel('P(Go)', fontsize=24)
+        ax.set_ylabel('RT (ms)', fontsize=24)
         ax.set_xlim(10, 110)
 
         plt.tight_layout()
@@ -247,12 +236,12 @@ def plot_re_bar(y, ysim=[], yerr=[], ysimerr=[], sxdata=None, colors=[], ylabel=
                 ax.plot(xsim[0], ysim[0], marker='o', color=colors[2], ms=14, label='Base Model')
                 ax.plot(xsim[1], ysim[1], marker='o', color=colors[3], ms=14, label='Diff Model')
 
-	ax.bar(x, y, width=.5, align='center', yerr=yerr, color=colors, error_kw=dict(elinewidth=3, ecolor='k'), alpha=.8)
+	ax.bar(x, y, width=.5, align='center', yerr=yerr, color=colors, error_kw=dict(elinewidth=3, ecolor='k'), alpha=.9)
 
 	ax.set_ylabel(ylabel, fontsize=30)
 	plt.setp(ax, xticks=x, xlim=(0.6, 2.4), ylim=yylim, yticks=yylim)
 	ax.set_yticklabels(yylim, fontsize=30)
-	ax.set_xticklabels(['Baseline', 'Difficult'], fontsize=30)
+	ax.set_xticklabels(['Baseline', 'Caution'], fontsize=30)
 	sns.despine(); plt.tight_layout()
 
 	if save:
@@ -493,6 +482,64 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
                 dvslist[i] = np.append(gtrace[:leng-lens], strace)
                 dvslist[i] = np.append(dvslist[i], np.array([0]))
         return [dvglist, dvslist, xinit_ss, ssi]
+
+
+def build_decision_axis(theta, gotraces):
+
+        # init figure, axes, properties
+        f, ax = plt.subplots(1, figsize=(7,4))
+
+        w=len(gotraces[0])+50
+        h=theta['a']
+        start=-100
+
+        plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
+
+        ax.hlines(y=h, xmin=-100, xmax=w, color='k')    
+        ax.hlines(y=0, xmin=-100, xmax=w, color='k')    
+        ax.hlines(y=theta['z'], xmin=start, xmax=w, color='Gray', linestyle='--', alpha=.7)
+        ax.vlines(x=w-50, ymin=0, ymax=h, color='r', linestyle='--', alpha=.5)
+        ax.vlines(x=start, ymin=0, ymax=h, color='k')
+
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+
+        sns.despine(top=True, right=True, bottom=True, left=True)
+
+        return f, ax
+
+
+def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
+        
+        clist=['#2ecc71']*len(dvg_traces)
+        clist_ss = sns.light_palette('#e74c3c', n_colors=6)[::-1]
+        
+        for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
+                if g[i]>=rtheta['a'] or dvs_traces[nline][i]<=0: 
+                        continue
+                gl.set_data(x[:i+1], g[:i+1])
+                gl.set_color(clist[nline])
+                
+                if dvs_traces[nline][i]>0:
+                        ssi = len(g) - len(dvs_traces[nline]) + 1
+                        dvs_lines[nline].set_data(x[xi[nline]:i+1], dvs_traces[nline][xi[nline]:i+1])          
+                        dvs_lines[nline].set_color(clist_ss[nline])
+
+        return dvs_lines, dvg_lines
+
+
+def pro_animate(i, x, protraces, prolines):
+        
+        clist = sns.color_palette('autumn', n_colors=6)[::-1]
+        
+        for nline, (pline, ptrace) in enumerate(zip(prolines, protraces)):
+                pline.set_data(x[:i+1], ptrace[:i+1])
+                pline.set_color(clist[nline])
+        
+        return prolines,
+
 
 
 def plot_npsim_traces(DVg=[], DVs=[], theta={}, tau=.0005, tb=.5451, cg='Green', cr='Red' ):

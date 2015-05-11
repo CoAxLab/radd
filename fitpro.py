@@ -16,7 +16,6 @@ def fit_proactive_data(data, inits={}, est_global=True, depends_on={'v':'pGo'}, 
 	optall={name:inits[name] for name in pnames}
 	dep=depends_on.keys()[0]
 	if dep+'(Hi)' in inits.keys():
-		#dep=pnames.pop(pnames.index(depends_on.keys()[0]))
 		# init drift as mean between Hi and Lo P(Go) HDDM estimates
 		optall[dep]=(inits[dep+'(Hi)']+inits[dep+'(Lo)'])/2
 		hilo=True
