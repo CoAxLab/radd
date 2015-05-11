@@ -7,7 +7,7 @@ This code should not be used for any type of clinical purposes.
 
 #Files in the "demo/" directory:
 
-###IPython Notebook with various examples
+###IPython Notebook with various examples & simulations
 * [RADD_Demo.ipynb](http://nbviewer.ipython.org/github/CoAxLab/radd_demo/blob/master/demo/RADD_Demo.ipynb)
 
 ###Example data (9 subjects)
@@ -24,6 +24,8 @@ This code should not be used for any type of clinical purposes.
 * pro_theta.csv - mean optimized parameter set for bootstrapped fits to proactive data
 
 
+#Tutorial
+
 ###import libraries
 ```python
 #from within cloned radd_demo directory
@@ -32,38 +34,57 @@ import numpy as np
 import pandas as pd
 
 ```
-####read data
+###read data
 ```python
 nogos=pd.read_csv("pro_nogo.csv", index_col=0)
 prort=pd.read_csv("pro_rt.csv", index_col=0)
 ```
 
-####plot
+###plot data across Go trial probability
 ```python
-axp = vis.scurves([nogos.mean().values], task='Pro', sxdata=[nogos], colors=['#2d2d2d'])
+
+#mean 'no-go' decision curve
+mean_nogo = nogos.mean().values
+#plot 'no-go' decision curve
+axp = vis.scurves([mean_nogo], task='Pro', sxdata=[nogos])
+
 #RT(s) -> RT(ms)
 rts = prort.mean().values[1:]*1000
-axrt = vis.prort(bars=rts, berr=prort.sem().values[1:]*1.96*1000)
+rterr = prort.sem().values[1:]*1.96*1000
+#plot RTs
+axrt = vis.prort(bars=rts, berr=rterr)
 ```
 
-####simulate proactive data (drift-bias)
+###simulate proactive data (drift-bias)
 ```python
-#read in parameters
+#read in parameters file
 protheta=pd.read_csv("pro_theta.csv", index_col=0)
+
 #convert to dictionary and extract all drift-rates to list
 ptheta, vlist = utils.get_params_from_flatp(protheta)
 
+#simulate effect of changing execution drift-rate across Go trial probability
+nogo_sim, prort_sim = fitpro.simple_prosim(ptheta, bias_list=vlist, bias='v')
+```
 
-nogo_list, rt_list = [], []
-for pg, v in zip(np.arange(0, 1.2, .2), vlist):
+###plot the results
+```python
+labels=['data', 'drift-bias']
+axp = vis.scurves([mean_nogo, nogo_sim], task='Pro', sxdata=[nogos], labels=labels)
+axrt = vis.prort(bars=rts, berr=rterr, lines=[rt_sim], labels=labels)
+```
 
-    ptheta['pGo'] = pg
-    ptheta['v'] = v
+###experiment with different parameter values
+* v = drift-rate
+* z = starting point
+* a = boundary height
+* t = onset time
 
-    dvg, dvs = RADD.run(ptheta)
-    nogo, rt = fitpro.analyze_proactive_trials(dvg, dvs, ptheta)
-    nogo_list.append(nogo); rt_list.append(rt)
+```python
+# lower boundary height by 10%
+ptheta['a'] = ptheta['a']*.9
+nogo_sim, prort_sim = fitpro.simple_prosim(ptheta, bias_list=vlist, bias='v')
 
-
-
+axp = vis.scurves([mean_nogo, nogo_sim], task='Pro', sxdata=[nogos], labels=labels)
+axrt = vis.prort(bars=rts, berr=rterr, lines=[rt_sim], labels=labels)
 ```

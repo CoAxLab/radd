@@ -186,11 +186,6 @@ def simulate(theta, ntrials=2000, tb=.560, filt_rts=True, filtr=.5451, rtfunc='m
 
 def analyze_proactive_trials(DVg, DVs, theta, filt_rts=True, tb=.560, filtr=.5451, rtfunc='mean', return_all=False):
 
-	"""
-
-	DVg is instantiated for all trials, containing the evidence trace for each one.	DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta). Thus, p(NoGo) is calculated by generating a binary vector containing all responses from DVg and appending any 0's (no response/stop/no-go trials) produced by DVs. That is, DVs can only actually CAUSE a stop (Although in our task 	it won't or very rarely does), so we just want to include any rare cases where that vector determined the outcome of the trial.
-	"""
-
 	theta=utils.update_params(theta)
 	tr=theta['tt'];	a=theta['a']; ssd=theta['ssd']
 
@@ -218,3 +213,23 @@ def analyze_proactive_trials(DVg, DVs, theta, filt_rts=True, tb=.560, filtr=.545
 		rt=np.mean(rts[rts<tb])
 
 	return pstop, rt
+
+def simple_prosim(theta, bias_values, bias='v', pgo=np.arange(0, 1.2, .2))
+
+	nogo_list, rt_list = [], []
+	for pg, val in zip(pgo, bias_values):
+		#update P(Go)
+		theta['pGo'] = pg
+		#update bias param
+		theta[bias] = val
+
+		# run simulation, outputs simulated go-nogo (dvg) and
+		# stop (dvs) process vectors for each trial (n=2000)
+		# NOTE: in the proactive task SSD occurs too late (450ms)
+		# for the stop-process to affect model output
+		dvg, dvs = RADD.run(theta)
+		# extract no-go probability and go RT from
+		nogo, rt = analyze_proactive_trials(dvg, dvs, theta)
+		nogo_list.append(nogo); rt_list.append(rt)
+
+	return np.array(nogo_list), np.array(rt_list[1:])*1000
