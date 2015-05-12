@@ -34,11 +34,11 @@ def Reboot(data, inits, cond, depends=['v'], niter=150, ntrials=2000, all_params
 
 		fit_results.append(fits_i)
 		y_pred.loc[i,:]=fits_i['yhat'].values
-		y_pred.to_csv(prepend+"_fits"+".csv", index=False)
+		y_pred.to_csv(prepend+"_fits_"+model+".csv", index=False)
 
 	fit_df=pd.concat(fit_results)
-	fit_df.to_csv(prepend+"_fitinfo"+model+".csv")
-	poptdf.to_csv(prepend+"_popt.csv")
+	fit_df.to_csv(prepend+"_fitinfo_"+model+".csv")
+	poptdf.to_csv(prepend+"_popt_"+model+".csv")
 
 	return y_pred
 
