@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from radd_demo import utils, fitre
 
-def Reboot(data, inits, cond, depends=['v'], niter=150, ntrials=2000, method='rwr', model='radd', maxfun=500, ftol=1.e-3, xtol=1.e-3, savepth='./', **kwargs):
+def Reboot(data, inits, cond, depends=['v'], niter=150, ntrials=2000, all_params=0, method='rwr', model='radd', maxfun=500, ftol=1.e-3, xtol=1.e-3, savepth='./', **kwargs):
 
 	prepend=savepth+cond+"_"+method+"_"+model
 	# initialize data storage objects
@@ -27,7 +27,7 @@ def Reboot(data, inits, cond, depends=['v'], niter=150, ntrials=2000, method='rw
 			sample_y = resample_reactive(data, method='rwr')
 
 		fits_i, params = fitre.run_reactive_model(sample_y, inits=inits, nx=i, ntrials=ntrials,
-			model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol)
+			model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params)
 
 		for name in poptdf.columns:
 			poptdf.loc[i, name]=params[name]

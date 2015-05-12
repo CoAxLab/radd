@@ -6,7 +6,7 @@ from lmfit import Parameters, Minimizer
 from radd_demo import utils, vis, RADD
 from radd_demo.utils import *
 
-def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=1, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
+def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=0, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
 
 	ssdlist=[200,250,300,350,400,'rt']
 	sxlist=data.idx.unique()
@@ -19,7 +19,7 @@ def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=1,
 
 	ssdlist=[200,250,300,350,400,'rt']
 	sxpred_list=[]
-	pb=utils.PBinJ(len(sxlist), color="#009B76"); sx_n=0
+	#pb=utils.PBinJ(len(sxlist), color="#009B76"); sx_n=0
 
 	for sx, sxdf in data.groupby('idx'):
 
@@ -54,7 +54,7 @@ def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=1,
 		return sxpred
 
 
-def run_reactive_model(y, inits={}, model='radd', depends=['v'], ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=1, ssdlist=[200,250,300,350,400,'rt'], **kwargs):
+def run_reactive_model(y, inits={}, model='radd', depends=['v'], ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, ssdlist=[200,250,300,350,400,'rt'], **kwargs):
 
 	p=Parameters()
 
