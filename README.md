@@ -8,7 +8,7 @@ This code should not be used for any type of clinical purposes.
 #Files in the "demo/" directory:
 
 ###IPython Notebook with various examples & simulations
-* [RADD_Demo.ipynb](http://nbviewer.ipython.org/github/CoAxLab/radd_demo/blob/master/demo/RADD_Demo.ipynb)
+#[**RADD_Demo.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd_demo/blob/master/demo/RADD_Demo.ipynb)
 
 ###Example data (9 subjects)
 * pro_nogo.csv - probability of nogo decisions in proactive task 9 (subjects) x 6 (Go trial probability)
