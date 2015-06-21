@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd import utils, RADD, boldfx, fitre 
+from radd import utils, RADD, boldfx, fitre
 from scipy.stats.mstats import mquantiles as mq
 
 sns.set(font="Helvetica")
@@ -799,6 +799,7 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         axes[-1].plot(qsim_sg, prob*(1-pdefect), marker='o', linestyle='--', color=reds[2], label='Sim Err')
 
         axes[-1].set_ylim(-.05, 1); axes[-1].set_xlim(.43, np.max(qg)+.05);
-        plt.tight_layout()
+
         axes[-1].legend(loc=0)
         axes[0].legend(loc=1)
+        #plt.tight_layout()
