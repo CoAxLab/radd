@@ -141,7 +141,8 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, return_all=F
                 stops_i = [ssd + np.argmax(DVsn>=a)*.0005 if np.any(DVsn>=a) else 999 for i, DVsn in enumerate(DVs)]
 
         #calculate stop accuracy
-	stops = [1 if gos_i[i]>si else 0 for i, si in enumerate(stops_i)]
+	stops = np.array([1 if gos_i[i]>si else 0 for i, si in enumerate(stops_i)])
+	gos = np.append(np.abs(1-stops), np.ones(ngo_trials - nss_trials))
 	sacc=np.mean(stops)
 
 	#calculate mean go rt
@@ -149,17 +150,24 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, return_all=F
 	rt=np.mean(go_trial_array[go_trial_array<tb])
 
 	if return_all:
-		return stops, go_trial_array[go_trial_array<tb]
+		ssd_list = [int(ssd*1000)]*nss_trials+[1000]*ngo_trials
+		ttypes=['stop']*nss_trials+['go']*ngo_trials
+		d = {'choice':gos, 'stop':stops, 'GoRT':go_trial_array, 'SSRT': stops_i, 'SSD':ssd_list, 'trial_type':ttypes}
+		df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in d.iteritems()]))
+		return df.ix[df['GoRT']<tb], np.nan
+		#return stops, go_trial_array[go_trial_array<tb]
 	else:
 		return sacc, rt
 
-def simple_resim(theta, ssdlist=np.arange(0.2, .45, .05)):
-
+def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000, return_all=False):
+	ssdlist = np.array(ssdlist)*.001
 	stop_list, rert_list = [], []
 	for ssd in ssdlist:
 		theta['ssd'] = ssd
-		dvg, dvs = RADD.run(theta, tb=.650)
-		stop, rt = analyze_reactive_trials(dvg, dvs, theta)
+		dvg, dvs = RADD.run(theta, tb=.650, ntrials=ntrials)
+		stop, rt = analyze_reactive_trials(dvg, dvs, theta, return_all=return_all)
 		stop_list.append(stop); rert_list.append(rt)
+	if return_all:
+		return pd.concat(stop_list)#, rert_list
 	rert = np.mean(rert_list)
 	return np.array(stop_list), rert*1000

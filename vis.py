@@ -6,7 +6,8 @@ import numpy as np
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd_demo import utils, RADD, boldfx
+from radd_demo import utils, RADD, boldfx, fitre 
+from scipy.stats.mstats import mquantiles as mq
 
 sns.set(font="Helvetica")
 sp=utils.style_params()
@@ -726,3 +727,78 @@ def plot_bold_manuscript(df=pd.DataFrame, pgo=np.arange(0, 1.25, .25), task='pro
                 f.savefig(outpath+"pro_bold_"+bias+"_manscrpt_allresp_150trials.svg", rasterized=True, format='svg', dpi=600)
 
         return ax
+        
+def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_hist=True, emp_kde=False):
+        
+        redf = pd.read_csv("/Users/kyle/Dropbox/CoAx/SS/Reactive/Re_Data.csv")
+        popt = pd.read_csv("/Users/kyle/Dropbox/CoAx/SS/Reactive/BSL/Boot/RADD/rwr_rebsl_popt_radd.csv", index_col=0)
+        popt = popt.mean().to_dict()
+        popt['pGo']=.5; prob = np.array([.025, .25, .5, .75, .975])
+        simdf = fitre.simple_resim(popt, return_all=True, ntrials=ntrials)
+        
+        if sim_hist==True:
+                norm_hist=True
+        else:
+                norm_hist=True
+        f, axes = plt.subplots(2, 3, figsize=(14, 8))
+        axes = np.array(axes).flatten()
+
+
+        emp_cor = redf.query('trial_type=="go" & choice=="go"').rt.values
+        sim_cor = simdf.query('trial_type=="go" & choice==1').GoRT.values
+        #emp_all = redf.query('choice=="go"').rt.values
+        #sim_all = simdf.query('choice==1').GoRT.values
+        for i, (ssd, df) in enumerate(redf.groupby('ssd')):
+
+                if ssd>500:
+                        break
+                if i==0:
+                        labels=['Empirical Go','Simulated Go','Empirical ssGo Err','Simulated ssGo Err']
+                        yl = axes[i].get_ylim();
+                else:
+                        labels=[None]*4
+                sgo = df.query('trial_type=="stop" & choice=="go"').rt.values-ssd*.001
+                sim_errs = simdf[simdf['SSD'].isin([ssd])].query('trial_type=="stop" & choice==1').GoRT.values-(ssd*.001)
+
+                #plot Correct Go
+                sns.distplot(emp_cor, bins=bins, hist=emp_hist, kde=emp_kde, norm_hist=norm_hist, label=labels[0], ax=axes[i], color=greens[3], kde_kws={'shade':True})
+                sns.distplot(sim_cor, bins=bins, hist=sim_hist, kde=sim_kde, norm_hist=norm_hist, label=labels[1], ax=axes[i], color=greens[2], kde_kws={'shade':True})
+                #sns.kdeplot(emp_cor, label=labels[0], cumulative=True, ax=axes[i], color=greens[3], shade=False, alpha=.8)
+                #sns.kdeplot(sim_cor, label=labels[1], cumulative=True, ax=axes[i], color=blues[2], shade=False, alpha=.8)
+
+                try:
+                        #plot Empirical SS->Go
+                        sns.distplot(sgo, bins=bins, hist=emp_hist, kde=emp_kde, norm_hist=norm_hist, ax=axes[i], color=reds[5], kde_kws={'shade':True}, label=labels[2])
+                        #sns.kdeplot(sgo, label=labels[2], cumulative=True, ax=axes[i], color=reds[5], shade=False, alpha=.8)
+                except Exception: pass
+                
+                try:
+                        #plot Simulated SS->Go
+                        sns.distplot(sim_errs, bins=bins, hist=sim_hist, kde=sim_kde, norm_hist=norm_hist, ax=axes[i], color=reds[2], kde_kws={'shade':True}, label=labels[3])
+                        #sns.kdeplot(sim_errs, label=labels[2], cumulative=True, ax=axes[i], color=reds[0], shade=False, alpha=.8)
+                except Exception: pass
+                
+                yl = axes[i].get_ylim();
+                axes[i].set_xlim(.0, .7)
+                axes[i].text(.02, yl[1]*.95, str(ssd)+'ms', fontsize=16)
+                sns.despine()
+                
+        qg = mq(emp_cor, prob = prob)
+        qsim_g = mq(sim_cor, prob = prob)
+
+        all_sgo = redf.query('trial_type=="stop" & choice=="go"').rt
+        qsg = mq(all_sgo, prob = prob)
+        all_sim_errs = simdf.query('trial_type=="stop" & choice==1').GoRT
+        qsim_sg = mq(all_sim_errs, prob = prob)
+
+        pdefect = redf.query('trial_type=="go"').mean()['acc']
+        axes[-1].plot(qg, prob*pdefect, marker='o', color=greens[3], label='Emp Correct')
+        axes[-1].plot(qsim_g, prob*pdefect, marker='o', linestyle='--', color=greens[2], label='Sim Correct')
+
+        axes[-1].plot(qsg, prob*(1-pdefect), marker='o', color=reds[5], label='Emp Err')
+        axes[-1].plot(qsim_sg, prob*(1-pdefect), marker='o', linestyle='--', color=reds[2], label='Sim Err')
+
+        axes[-1].set_ylim(-.05, 1); axes[-1].set_xlim(.43, np.max(qg)+.05); 
+        plt.tight_layout()
+        axes[-1].legend(loc=0)
+        axes[0].legend(loc=1)
