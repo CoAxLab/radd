@@ -3,8 +3,8 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 from lmfit import Parameters, Minimizer
-from radd_demo import utils, vis, RADD
-from radd_demo.utils import *
+from radd import utils, vis, RADD
+from radd.utils import *
 
 def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=0, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
 

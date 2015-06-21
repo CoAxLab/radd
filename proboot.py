@@ -2,7 +2,7 @@
 from __future__ import division
 import numpy as np
 import pandas as pd
-from radd_demo import utils, fitpro
+from radd import utils, fitpro
 
 
 def Proboot(data, inits, niter=150, depends_on={'v':'pGo'}, save_path="./", simfx='vector', method='rwr', ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, tb=.560, disp=False, filt_rts=True, rtfunc='mean', **kwargs):
@@ -61,7 +61,7 @@ def Proboot(data, inits, niter=150, depends_on={'v':'pGo'}, save_path="./", simf
 	fit_df.to_csv(save_path+method+"_pro_fitinfo_"+model+"_"+rtfunc+".csv", index=False)
 
 	return ps_pred, rt_pred, fit_df
-        
+
 
 def resample_proactive(df, n=None, method='rwr', filt_rts=True):
 

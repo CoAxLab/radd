@@ -1,7 +1,7 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import os
-from radd_demo import utils
+from radd import utils
 import numpy as np
 
 

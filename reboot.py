@@ -2,7 +2,7 @@
 from __future__ import division
 import numpy as np
 import pandas as pd
-from radd_demo import utils, fitre
+from radd import utils, fitre
 
 def Reboot(data, inits, cond, depends=['v'], niter=150, ntrials=2000, all_params=0, method='rwr', model='radd', maxfun=500, ftol=1.e-3, xtol=1.e-3, savepth='./', **kwargs):
 

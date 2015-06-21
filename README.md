@@ -8,7 +8,7 @@ This code should not be used for any type of clinical purposes.
 #Files in the "demo/" directory:
 
 ###IPython Notebook with various examples, simulations, and animations (access via the link below)
-#[**RADD_Demo.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd_demo/blob/master/demo/RADD_Demo.ipynb)
+#[**RADD_Demo.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/master/demo/RADD_Demo.ipynb)
 
 ###Example data (9 subjects)
 * pro_nogo.csv - probability of nogo decisions in proactive task 9 (subjects) x 6 (Go trial probability)
@@ -28,8 +28,8 @@ This code should not be used for any type of clinical purposes.
 
 ###import libraries
 ```python
-#from parent directory of cloned radd_demo repo
-from radd_demo import *
+#from parent directory of cloned radd repo
+from radd import *
 import numpy as np
 import pandas as pd
 import seaborn as sns
@@ -37,7 +37,7 @@ import seaborn as sns
 ```
 ###read proactive data
 ```python
-fpath='radd_demo/demo/'
+fpath='radd/demo/'
 nogos=pd.read_csv(fpath+"pro_nogo.csv", index_col=0)
 prort=pd.read_csv(fpath+"pro_rt.csv", index_col=0)
 ```

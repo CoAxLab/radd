@@ -6,7 +6,7 @@ import numpy as np
 from collections import OrderedDict
 from lmfit import Parameters, Minimizer
 from scipy.stats.mstats import mquantiles
-from radd_demo import utils, vis, boldfx, RADD
+from radd import utils, vis, boldfx, RADD
 #from scipy.optimize import differential_evolution
 
 def fit_proactive_data(data, inits={}, est_global=True, depends_on={'v':'pGo'}, ntrials=2000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, filt_rts=True, tb=.560, disp=False, rtfunc='mean', **kwargs):

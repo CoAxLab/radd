@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd_demo import utils, RADD, boldfx, fitre 
+from radd import utils, RADD, boldfx, fitre 
 from scipy.stats.mstats import mquantiles as mq
 
 sns.set(font="Helvetica")
@@ -727,15 +727,15 @@ def plot_bold_manuscript(df=pd.DataFrame, pgo=np.arange(0, 1.25, .25), task='pro
                 f.savefig(outpath+"pro_bold_"+bias+"_manscrpt_allresp_150trials.svg", rasterized=True, format='svg', dpi=600)
 
         return ax
-        
+
 def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_hist=True, emp_kde=False):
-        
+
         redf = pd.read_csv("/Users/kyle/Dropbox/CoAx/SS/Reactive/Re_Data.csv")
         popt = pd.read_csv("/Users/kyle/Dropbox/CoAx/SS/Reactive/BSL/Boot/RADD/rwr_rebsl_popt_radd.csv", index_col=0)
         popt = popt.mean().to_dict()
         popt['pGo']=.5; prob = np.array([.025, .25, .5, .75, .975])
         simdf = fitre.simple_resim(popt, return_all=True, ntrials=ntrials)
-        
+
         if sim_hist==True:
                 norm_hist=True
         else:
@@ -771,18 +771,18 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
                         sns.distplot(sgo, bins=bins, hist=emp_hist, kde=emp_kde, norm_hist=norm_hist, ax=axes[i], color=reds[5], kde_kws={'shade':True}, label=labels[2])
                         #sns.kdeplot(sgo, label=labels[2], cumulative=True, ax=axes[i], color=reds[5], shade=False, alpha=.8)
                 except Exception: pass
-                
+
                 try:
                         #plot Simulated SS->Go
                         sns.distplot(sim_errs, bins=bins, hist=sim_hist, kde=sim_kde, norm_hist=norm_hist, ax=axes[i], color=reds[2], kde_kws={'shade':True}, label=labels[3])
                         #sns.kdeplot(sim_errs, label=labels[2], cumulative=True, ax=axes[i], color=reds[0], shade=False, alpha=.8)
                 except Exception: pass
-                
+
                 yl = axes[i].get_ylim();
                 axes[i].set_xlim(.0, .7)
                 axes[i].text(.02, yl[1]*.95, str(ssd)+'ms', fontsize=16)
                 sns.despine()
-                
+
         qg = mq(emp_cor, prob = prob)
         qsim_g = mq(sim_cor, prob = prob)
 
@@ -798,7 +798,7 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         axes[-1].plot(qsg, prob*(1-pdefect), marker='o', color=reds[5], label='Emp Err')
         axes[-1].plot(qsim_sg, prob*(1-pdefect), marker='o', linestyle='--', color=reds[2], label='Sim Err')
 
-        axes[-1].set_ylim(-.05, 1); axes[-1].set_xlim(.43, np.max(qg)+.05); 
+        axes[-1].set_ylim(-.05, 1); axes[-1].set_xlim(.43, np.max(qg)+.05);
         plt.tight_layout()
         axes[-1].legend(loc=0)
         axes[0].legend(loc=1)

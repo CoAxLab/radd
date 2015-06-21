@@ -2,7 +2,7 @@
 from __future__ import division
 import pandas as pd
 import numpy as np
-from radd_demo import utils
+from radd import utils
 
 
 
