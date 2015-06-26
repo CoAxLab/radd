@@ -4,16 +4,17 @@ This demo is not meant to be a comprehensive walkthrough of all analyses and mod
 
 This code should not be used for any type of clinical purposes.
 
-##ATTENTION
+###ATTN:
+---
+Currently under development. The link below still contains useful examples of the model functionality but the code contained therein is outdated. A more comprehensive set of examples and tutorials for using the model will be posted within the next couple of months
+
 
 ---
-* Currently under development. The link below still contains useful examples of the model functionality but the code contained therein is outdated. A more comprehensive set of examples and tutorials for using the model will be posted within the next couple of months
----
+
 
 ###Files in the "demo/" directory:
 
-###IPython Notebook with various examples, simulations, and animations (access via the link below)
-###[**RADD_Demo.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/master/demo/RADD_Demo.ipynb)
+* IPython Notebook with various examples, simulations, and animations [**RADD_Demo.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/master/demo/RADD_Demo.ipynb)
 
 ###Example data (9 subjects)
 * pro_nogo.csv - probability of nogo decisions in proactive task 9 (subjects) x 6 (Go trial probability)
