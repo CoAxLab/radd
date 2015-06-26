@@ -6,7 +6,7 @@ import numpy as np
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd import utils, RADD, boldfx, fitre
+from radd import RADD, boldfx, fitre, utils
 from scipy.stats.mstats import mquantiles as mq
 
 sns.set(font="Helvetica")

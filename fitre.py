@@ -3,8 +3,8 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 from lmfit import Parameters, Minimizer
-from radd import utils, RADD
 from radd.utils import *
+from radd import RADD
 
 def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=0, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
 
@@ -23,7 +23,7 @@ def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=0,
 
 	for sx, sxdf in data.groupby('idx'):
 
-		y=utils.rangl_data(sxdf)
+		y=rangl_data(sxdf)
 		sx_n+=1
 
 		#check if nested dictionary
@@ -85,89 +85,103 @@ def run_reactive_model(y, inits={}, model='radd', depends=['v'], ntrials=5000, m
 	return pred, params
 
 
-def ssre_minfunc(p, ydata, ntrials, model='radd', tb=.650, intervar=False):
+def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, intervar=False):
 
-	theta={k:p[k].value for k in p.keys()}
+	try:
+		theta={k:p[k].value for k in p.keys()}
+	except Exception:
+		theta=p.copy()
 	theta['pGo']=.5
 
 	delays=np.arange(0.200, 0.450, .05)
-	accvec=[]; rtvec=[]
-	y=np.array(ydata)
+	dflist=[]
+	#y=np.array(ydata)
 
 	for ssd in delays:
 		theta['ssd']=ssd
-		sacc, grt = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
-		accvec.append(sacc)
-		rtvec.append(grt)
+		df = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
+		dflist.append(df)
+		#accvec.append(sacc)
+		#rtvec.append(grt)
+	#accvec.append(np.mean(rtvec))
+	#yhat=np.array(accvec)
 
-	accvec.append(np.mean(rtvec))
-	yhat=np.array(accvec)
-
-	return yhat-y
+	return rangl_data(pd.concat(dflist))-y
 
 
-def simulate(theta, ntrials=20000, tb=.650, model='radd', intervar=False, return_all=False, return_traces=False, **kwargs):
+def simulate(theta, ntrials=20000, tb=.650, model='radd', quant=True, intervar=False, return_traces=False):
 
 	if intervar:
-		theta=utils.get_intervar_ranges(theta)
+		theta=get_intervar_ranges(theta)
 
 	dvg, dvs = RADD.run(theta, ntrials=ntrials, model=model, tb=tb)
 
 	if return_traces:
 		return dvg, dvs
 
-	sacc, rt = analyze_reactive_trials(dvg, dvs, theta, model=model, return_all=return_all)
+	df = analyze_reactive_trials(dvg, dvs, theta, model=model)
+	
+	if not quant:
+		sacc = df.query('trial_type=="stop"').acc.mean()
+		rt = df.query('response==1 and acc==1').rt.mean()*10
+		return sacc, rt
+	else:
+		 return df
 
-	if not return_all:
-		rt=rt*10
+def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650):
 
-	return sacc, rt
-
-
-def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, return_all=False):
-
-	ngo_trials=len(DVg)
-	nss_trials=len(DVs)
-
-	theta=utils.update_params(theta)
+	ngo=len(DVg)
+	nss=len(DVs)
+	
+	theta=update_params(theta)
 	tr=theta['tt'];	a=theta['a']; ssd=theta['ssd']
 
-	#get individual trial go and ss rt's
-	gos_i = [tr + np.argmax(DVgn>=a)*.0005 if np.any(DVgn>=a) else 999 for i, DVgn in enumerate(DVg)]
-
-        if model in ['radd', 'ipb']:
-                stops_i = [ssd + np.argmax(DVsn<=0)*.0005 if np.any(DVsn<=0) else 999 for i, DVsn in enumerate(DVs)]
-        else:
-                stops_i = [ssd + np.argmax(DVsn>=a)*.0005 if np.any(DVsn>=a) else 999 for i, DVsn in enumerate(DVs)]
-
-        #calculate stop accuracy
-	stops = np.array([1 if gos_i[i]>si else 0 for i, si in enumerate(stops_i)])
-	gos = np.append(np.abs(1-stops), np.ones(ngo_trials - nss_trials))
-	sacc=np.mean(stops)
-
-	#calculate mean go rt
-	go_trial_array=np.array(gos_i)
-	rt=np.mean(go_trial_array[go_trial_array<tb])
-
-	if return_all:
-		ssd_list = [int(ssd*1000)]*nss_trials+[1000]*ngo_trials
-		ttypes=['stop']*nss_trials+['go']*ngo_trials
-		d = {'choice':gos, 'stop':stops, 'GoRT':go_trial_array, 'SSRT': stops_i, 'SSD':ssd_list, 'trial_type':ttypes}
-		df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in d.iteritems()]))
-		return df.ix[df['GoRT']<tb], np.nan
-		#return stops, go_trial_array[go_trial_array<tb]
+	#check for and record go trial RTs
+	grt = np.array([tr + np.argmax(DVgn>=a)*.0005 if np.any(DVgn>=a) else 999 for DVgn in DVg[nss:, :]])	
+	if model=='abias':
+		ab=a+theta['ab']
+		delay = np.ceil((tb-tr)/.0005) - np.ceil((tb-ssd)/.0005)		
+		#check for and record SS-Respond RTs that occur before boundary shift
+		ert_pre = np.array([tr + np.argmax(vec>=a)*.0005 if np.any(vec>=a) else 999 for vec in DVg[:nss, :delay]])
+		#check for and record SS-Respond RTs that occur POST boundary shift (t=ssd)
+		ert_post = np.array([tr + np.argmax(vec>=ab)*.0005 if np.any(vec>=ab) else 999 for vec in DVg[:nss, delay:]])
+		#SS-Respond RT equals the smallest value
+		ert = np.fmin(ert_pre, ert_post)
 	else:
-		return sacc, rt
+		#check for and record SS-Respond RTs
+		ert = np.array([tr + np.argmax(DVgn>=a)*.0005 if np.any(DVgn>=a) else 999 for DVgn in DVg[:nss, :]])
+		
+        if model in ['radd', 'ipb','abias']:
+                ssrt = [ssd + np.argmax(DVsn<=0)*.0005 if np.any(DVsn<=0) else 999 for i, DVsn in enumerate(DVs)]
+        else:
+                ssrt = [ssd + np.argmax(DVsn>=a)*.0005 if np.any(DVsn>=a) else 999 for i, DVsn in enumerate(DVs)]
+	
+	# Prepare and return simulations df
+	
+        # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
+	stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
+	response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
+	# Add "choice" column to pad for error in later stages
+	choice=np.where(response==1, 'go', 'stop')
+	# Condition 
+	ssdlist = [int(ssd*1000)]*nss+[1000]*ngo
+	ttypes=['stop']*nss+['go']*ngo
+	# Take the shorter of the ert and ssrt list, concatenate with grt
+	rt=np.append(np.fmin(ert,ssrt), grt)
+	d = {'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes}
+	df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in d.iteritems()]))
+	# calculate accuracy for both trial_types
+	df['acc'] = np.where(df['trial_type']==df['choice'], 1, 0)
+	return df
 
-def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000, return_all=False):
+def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000, return_all=True):
 	ssdlist = np.array(ssdlist)*.001
-	stop_list, rert_list = [], []
+	dflist = []
+	theta['pGo']=.5
 	for ssd in ssdlist:
 		theta['ssd'] = ssd
 		dvg, dvs = RADD.run(theta, tb=.650, ntrials=ntrials)
-		stop, rt = analyze_reactive_trials(dvg, dvs, theta, return_all=return_all)
-		stop_list.append(stop); rert_list.append(rt)
-	if return_all:
-		return pd.concat(stop_list)#, rert_list
-	rert = np.mean(rert_list)
-	return np.array(stop_list), rert*1000
+		df = analyze_reactive_trials(dvg, dvs, theta)
+		dflist.append(df)
+	
+	return pd.concat(dflist)

@@ -1,7 +1,7 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import os
-from radd import utils
+from radd.utils import update_params
 import numpy as np
 
 
@@ -12,11 +12,11 @@ def run(theta, no_ss=False, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='ra
 
 	"""
 
-	theta=utils.update_params(theta)
+	theta=update_params(theta)
 	tr=theta['tt']; mu=theta['vv']; a=theta['a'];
 	z=theta['zz']; ssd=theta['ssd']
 
-	if model in ['radd', 'ipb']:
+	if model in ['radd', 'ipb', 'abias']:
 		ssv=-abs(theta['ssv'])
         else:
                 ssv=abs(theta['ssv'])
@@ -41,7 +41,7 @@ def run(theta, no_ss=False, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='ra
 	if no_ss:
 		return DVg, np.array(np.array([999]))
 
-	if tr<ssd and model=='radd':
+	if tr<ssd and model in ['abias', 'radd']:
 		IXs = Tg - Ts
 		init_ss = DVg[:nSS, IXs]
 		init_ss[init_ss>a] = np.nan

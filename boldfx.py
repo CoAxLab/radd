@@ -2,9 +2,7 @@
 from __future__ import division
 import pandas as pd
 import numpy as np
-from radd import utils
-
-
+from radd.utils import update_params
 
 def probold_bias(theta, bias={}, pgo=np.arange(0, 1.25, .25), tb=.560, ntrials=150, return_all=False, visual=False, ssv_decay=False):
 
@@ -22,8 +20,6 @@ def probold_bias(theta, bias={}, pgo=np.arange(0, 1.25, .25), tb=.560, ntrials=1
         prosims=pd.concat(alldf)
 
         return prosims
-
-
 
 def trialwise_integrated_BOLD(df=pd.DataFrame, outcomes=['s','g','ng']):
 
@@ -93,7 +89,7 @@ def rise(theta, model='radd', tb=.560, ttype='go', tau=.0005, si=.01, task='pro'
 	else:
 		sstrial=0
 
-	theta=utils.update_params(theta)
+	theta=update_params(theta)
 
 	tr=theta['tt']; mu=theta['vv'];
 	a=theta['a']; z=theta['zz'];
