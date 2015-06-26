@@ -95,16 +95,11 @@ def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, intervar=False):
 
 	delays=np.arange(0.200, 0.450, .05)
 	dflist=[]
-	#y=np.array(ydata)
 
 	for ssd in delays:
 		theta['ssd']=ssd
 		df = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
 		dflist.append(df)
-		#accvec.append(sacc)
-		#rtvec.append(grt)
-	#accvec.append(np.mean(rtvec))
-	#yhat=np.array(accvec)
 
 	return rangl_data(pd.concat(dflist))-y
 
@@ -120,7 +115,7 @@ def simulate(theta, ntrials=20000, tb=.650, model='radd', quant=True, intervar=F
 		return dvg, dvs
 
 	df = analyze_reactive_trials(dvg, dvs, theta, model=model)
-	
+
 	if not quant:
 		sacc = df.query('trial_type=="stop"').acc.mean()
 		rt = df.query('response==1 and acc==1').rt.mean()*10
@@ -128,42 +123,46 @@ def simulate(theta, ntrials=20000, tb=.650, model='radd', quant=True, intervar=F
 	else:
 		 return df
 
-def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650):
+def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
 	ngo=len(DVg)
 	nss=len(DVs)
-	
+
 	theta=update_params(theta)
 	tr=theta['tt'];	a=theta['a']; ssd=theta['ssd']
 
+	#define RT functions for upper and lower bound processes
+	upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
+	lower_rt = lambda DV: np.array([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
+
 	#check for and record go trial RTs
-	grt = np.array([tr + np.argmax(DVgn>=a)*.0005 if np.any(DVgn>=a) else 999 for DVgn in DVg[nss:, :]])	
+	grt = upper_rt(a, DVg[nss:, :])
 	if model=='abias':
 		ab=a+theta['ab']
-		delay = np.ceil((tb-tr)/.0005) - np.ceil((tb-ssd)/.0005)		
+		delay = np.ceil((tb-tr)/dt) - np.ceil((tb-ssd)/dt)
 		#check for and record SS-Respond RTs that occur before boundary shift
-		ert_pre = np.array([tr + np.argmax(vec>=a)*.0005 if np.any(vec>=a) else 999 for vec in DVg[:nss, :delay]])
+		ert_pre = upper_rt(a, DVg[:nss, :delay])
 		#check for and record SS-Respond RTs that occur POST boundary shift (t=ssd)
-		ert_post = np.array([tr + np.argmax(vec>=ab)*.0005 if np.any(vec>=ab) else 999 for vec in DVg[:nss, delay:]])
+		ert_post = upper_rt(ab, DVg[:nss, delay:])
 		#SS-Respond RT equals the smallest value
 		ert = np.fmin(ert_pre, ert_post)
 	else:
 		#check for and record SS-Respond RTs
-		ert = np.array([tr + np.argmax(DVgn>=a)*.0005 if np.any(DVgn>=a) else 999 for DVgn in DVg[:nss, :]])
-		
+		ert = upper_rt(a, DVg[:nss, :])
+
         if model in ['radd', 'ipb','abias']:
-                ssrt = [ssd + np.argmax(DVsn<=0)*.0005 if np.any(DVsn<=0) else 999 for i, DVsn in enumerate(DVs)]
+                ssrt = lower_rt(DVs)
         else:
-                ssrt = [ssd + np.argmax(DVsn>=a)*.0005 if np.any(DVsn>=a) else 999 for i, DVsn in enumerate(DVs)]
-	
+                ssrt = upper_rt(a, DVs)
+
 	# Prepare and return simulations df
-	
+
         # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
 	stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
 	response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
 	# Add "choice" column to pad for error in later stages
 	choice=np.where(response==1, 'go', 'stop')
-	# Condition 
+	# Condition
 	ssdlist = [int(ssd*1000)]*nss+[1000]*ngo
 	ttypes=['stop']*nss+['go']*ngo
 	# Take the shorter of the ert and ssrt list, concatenate with grt
@@ -183,5 +182,5 @@ def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000, return_all=Tr
 		dvg, dvs = RADD.run(theta, tb=.650, ntrials=ntrials)
 		df = analyze_reactive_trials(dvg, dvs, theta)
 		dflist.append(df)
-	
+
 	return pd.concat(dflist)
