@@ -4,9 +4,10 @@ This demo is not meant to be a comprehensive walkthrough of all analyses and mod
 
 This code should not be used for any type of clinical purposes.
 
-##ATTENTION:
+##ATTENTION
+
 ---
-Currently under development. The link below still contains useful examples of the model functionality but the code contained therein is outdated. A more comprehensive set of examples and tutorials for using the model will be posted within the next couple of months
+* Currently under development. The link below still contains useful examples of the model functionality but the code contained therein is outdated. A more comprehensive set of examples and tutorials for using the model will be posted within the next couple of months
 ---
 
 ###Files in the "demo/" directory:
