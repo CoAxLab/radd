@@ -15,25 +15,17 @@ def fit_proactive_data_TEST(data, inits={}, est_global=True, depends_on={'v':'pG
 	hilo=False
 	optall={name:inits[name] for name in pnames}
 	dep=depends_on.keys()[0]
-	
+
 	# init pGo at .5 for global optimization
 	# and set ssd at 450ms
 	inits['pGo']=.5; inits['ssd']=.450;
-
-	if rtfunc=='quants':
-		pstop, rt = utils.pstop_quants(data, filt_rts=filt_rts)
-	elif rtfunc=='mquant':
-		pstop, rt = utils.pstop_mquant(data, filt_rts=filt_rts)
-	else:
-		pstop, rt = utils.pstop_meanrt(data, filt_rts=filt_rts)
-		print pstop, rt
-
 	if est_global:
+
 		# first optimize full parameter set
 		# collapsing across conditions (see "params" below)
-		#optall={name:inits[name] for name in pnames}
+		# optall={name:inits[name] for name in pnames}
 		# init drift as mean between Hi and Lo P(Go) HDDM estimates
-		#optall[dep]=(inits[dep+'(Hi)']+inits[dep+'(Lo)'])/2
+		# optall[dep]=(inits[dep+'(Hi)']+inits[dep+'(Lo)'])/2
 
 		y=np.array([pstop.mean(), rt.mean()])
 		p=Parameters()

@@ -16,7 +16,7 @@ def Proboot(data, inits, niter=150, depends_on={'v':'pGo'}, save_path="./", simf
 	#dpstop, drt = utils.pstop_quants(data, filt_rts=filt_rts)
 	#print "data pstop: ", dpstop
 	#print "data rt: ", drt
-	pgolist=[0,20,40,60,80,100]
+	pgolist=data[depends_on.values()].unique()
 	ps_pred=pd.DataFrame(columns=pgolist, index=np.arange(niter))
 	rt_pred=pd.DataFrame(columns=pgolist, index=np.arange(niter))
 
@@ -25,18 +25,6 @@ def Proboot(data, inits, niter=150, depends_on={'v':'pGo'}, save_path="./", simf
 	#tb=[utils.sample_tb(mu, sd) for mu, sd in zip(tb_mu, tb_sd)]
 
 	for i in range(niter):
-
-		if method=='subsample':
-			psdf=pd.DataFrame(columns=pgolist, index=data.idx.unique())
-			rtdf=pd.DataFrame(columns=pgolist, index=data.idx.unique())
-			# sample proportionally based on condition like generating
-			# synthetic sx then averging to get bx rt and pstop
-			for nsample in psdf.index.values:
-				xP, xRT = resample_proactive(data, method='subsample', filter_rts=filter_rts)
-				rtdf.loc[nsample,:]=xRT
-				psdf.loc[nsample, :]=xP
-			samplep=psdf.mean().values
-			samplert=rtdf.mean().values
 
 		elif method=='rwr':
 			bx_data = resample_proactive(data, method='rwr', filt_rts=filt_rts)

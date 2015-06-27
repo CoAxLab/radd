@@ -6,37 +6,24 @@ from lmfit import Parameters, Minimizer
 from radd.utils import *
 from radd import RADD
 
-def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=0, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
+def fit_subjects(data, inits, model='radd', depends_on={'v':'Cond'}, all_params=0, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
 
 	ssdlist=[200,250,300,350,400,'rt']
 	sxlist=data.idx.unique()
+	if 'pGo' in inits.keys(): del inits['pGo']
+	if 'ssd' in inits.keys(): del inits['ssd']
 
-	for k in inits.keys():
-		if k=='pGo' or k=='ssd':
-			del inits[k]
-
-	poptdf=pd.DataFrame(columns=['a', 't', 'v', 'z', 'ssv'], index=sxlist)
-
-	ssdlist=[200,250,300,350,400,'rt']
+	poptdf=pd.DataFrame(columns=inits.keys(), index=sxlist)
 	sxpred_list=[]
 	#pb=utils.PBinJ(len(sxlist), color="#009B76"); sx_n=0
 
 	for sx, sxdf in data.groupby('idx'):
 
 		y=rangl_data(sxdf)
-		sx_n+=1
 
-		#check if nested dictionary
-		#(for when sx have unique init values)
-		if type(inits.values()[0]) is dict:
-			init_theta = inits[sx]
-		else:
-			init_theta = inits
-
-		sxpred, popt=run_reactive_model(y, init_theta, depends=depends, ntrials=ntrials, all_params=all_params, maxfun=maxfun, ftol=ftol, xtol=xtol, model=model)
+		sxpred, popt = run_reactive_model(y, init_theta, depends=depends_on, ntrials=ntrials, all_params=all_params, maxfun=maxfun, ftol=ftol, xtol=xtol, model=model)
 		sxpred['idx']=[sx]*len(sxpred)
 
-		pb.update_i(sx_n)
 		sxpred_list.append(sxpred)
 
 		for k in popt.keys():
@@ -54,33 +41,25 @@ def fit_reactive_data(data, inits={}, model='radd', depends=['v'], all_params=0,
 		return sxpred
 
 
-def run_reactive_model(y, inits={}, model='radd', depends=['v'], ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, ssdlist=[200,250,300,350,400,'rt'], **kwargs):
+def run_reactive_model(y, inits={}, model='radd', depends_on={'v':'Cond'}, ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, ssdlist=[200,250,300,350,400,'rt'], **kwargs):
 
 	p=Parameters()
 
-	if all_params: vary=1
-	else: vary=0
+	if 'pGo' in inits.keys(): del inits['pGo']
+	if 'ssd' in inits.keys(): del inits['ssd']
 
+	for key, val in depends_on.items():
+		p.add(key, value=val, vary=1)
 	for key, val in inits.items():
-		if key in ['pGo', 'ssd'] or not all_params:
-			vary=0
-		else:
-			vary=1
-		if key in depends:
-			p.add(key, value=val, vary=1)
-		else:
-			p.add(key, value=val, vary=vary)
+		p.add(key, value=val, vary=all_params)
 
 	popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials),
 		fcn_kws={'model':model}, method='Nelder-Mead')
 	popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=False)
 
 	params=pd.Series({k:p[k].value for k in p.keys()})
-	res=popt.residual
-	res[-1]=res[-1]/10; y[-1]=y[-1]/10; yhat=y+res
-
-	pred=pd.DataFrame.from_dict({'ssdlist':ssdlist, 'ydata':y, 'residuals':res,
-		'yhat':yhat, 'chi':popt.chisqr}, orient='columns')
+	pred=pd.DataFrame.from_dict({'ydata':y, 'residuals':popt.residual, 'yhat':y+res,
+				'chi':popt.chisqr}, orient='columns')
 
 	return pred, params
 
@@ -114,14 +93,8 @@ def simulate(theta, ntrials=20000, tb=.650, model='radd', quant=True, intervar=F
 	if return_traces:
 		return dvg, dvs
 
-	df = analyze_reactive_trials(dvg, dvs, theta, model=model)
+	return analyze_reactive_trials(dvg, dvs, theta, model=model)
 
-	if not quant:
-		sacc = df.query('trial_type=="stop"').acc.mean()
-		rt = df.query('response==1 and acc==1').rt.mean()*10
-		return sacc, rt
-	else:
-		 return df
 
 def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
@@ -156,7 +129,6 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
                 ssrt = upper_rt(a, DVs)
 
 	# Prepare and return simulations df
-
         # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
 	stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
 	response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
@@ -173,7 +145,7 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 	df['acc'] = np.where(df['trial_type']==df['choice'], 1, 0)
 	return df
 
-def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000, return_all=True):
+def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):
 	ssdlist = np.array(ssdlist)*.001
 	dflist = []
 	theta['pGo']=.5
