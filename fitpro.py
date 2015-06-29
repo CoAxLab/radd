@@ -7,97 +7,17 @@ from collections import OrderedDict
 from lmfit import Parameters, Minimizer
 from scipy.stats.mstats import mquantiles
 from radd import utils, vis, boldfx, RADD
-#from scipy.optimize import differential_evolution
-
-def fit_proactive_data_TEST(data, inits={}, est_global=True, depends_on={'v':'pGo'}, ntrials=2000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, filt_rts=True, tb=.560, disp=False, rtfunc='mean', **kwargs):
-
-	pgolist=[0,20,40,60,80,100]; pnames=['a', 't', 'z', 'v', 'ssv', 'ssd', 'pGo']
-	hilo=False
-	optall={name:inits[name] for name in pnames}
-	dep=depends_on.keys()[0]
-
-	# init pGo at .5 for global optimization
-	# and set ssd at 450ms
-	inits['pGo']=.5; inits['ssd']=.450;
-	if est_global:
-
-		# first optimize full parameter set
-		# collapsing across conditions (see "params" below)
-		# optall={name:inits[name] for name in pnames}
-		# init drift as mean between Hi and Lo P(Go) HDDM estimates
-		# optall[dep]=(inits[dep+'(Hi)']+inits[dep+'(Lo)'])/2
-
-		y=np.array([pstop.mean(), rt.mean()])
-		p=Parameters()
-		for k, v in optall.items():
-			if k in ['pGo', 'ssd']: vary=0
-			else: vary=1
-			p.add(k, value=v, min=0.0, vary=vary)
-
-		popt = Minimizer(sspro_minfunc, p, fcn_args=(y, ntrials), fcn_kws={'rtfunc':rtfunc, 'filt_rts':filt_rts}, method='Nelder-Mead')
-		popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
-
-		# globally optimized parameter set
-		global_params={k:p[k].value for k in p.keys()}
-		if hilo:
-			global_params[dep+'(Lo)']=inits[dep+'(Lo)']; global_params[dep+'(Hi)']=inits[dep+'(Hi)']
-		pd.Series(global_params).to_csv("global_opt_theta.csv")
-	else:
-		global_params=inits
-	# fix optimized parameters and refit
-	# allowing depends param to vary across P(Go)
-	fits=pd.DataFrame({'psdata':pstop, 'rtdata': rt/10}, index=pgolist)
-	fits_all, rt_sim, ps_sim = run_proactive_model(pstop, rt, inits=global_params, depends_on=depends_on, pnames=pnames, ntrials=ntrials, ftol=ftol, xtol=xtol, maxfun=maxfun, tb=tb, pgolist=pgolist, filt_rts=filt_rts)
-	# frame and save fit results
-	fits['psradd']=np.array(ps_sim)
-	fits['rtradd']=np.array(rt_sim)
-
-	fits.to_csv("flat_fits.csv")
-	fits_all.to_csv("flat_fits_info.csv")
-	dep_names=[depends_on.keys()[0] + str(pg) for pg in pgolist]
-
-	popt=global_params.copy()
-	for i, dn in enumerate(dep_names):
-		popt[dn]=fits_all[dep].values[i]
-	pd.Series(popt).to_csv("flat_opt_theta.csv")
-
-	return fits, fits_all, pd.Series(popt)
-
-
 
 def fit_proactive_data(data, inits={}, est_global=True, depends_on={'v':'pGo'}, ntrials=2000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, filt_rts=True, tb=.560, disp=False, rtfunc='mean', **kwargs):
 
-	pgolist=[0,20,40,60,80,100]; pnames=['a', 't', 'z', 'v', 'ssv', 'ssd', 'pGo']
-	hilo=False
 	optall={name:inits[name] for name in pnames}
-	dep=depends_on.keys()[0]
-	if dep+'(Hi)' in inits.keys():
-		# init drift as mean between Hi and Lo P(Go) HDDM estimates
-		optall[dep]=(inits[dep+'(Hi)']+inits[dep+'(Lo)'])/2
-		hilo=True
+	dep=depends_on.keys()
 
-	if 'ssv' in inits.keys():
-		del inits['ssv']
-	# init pGo at .5 for global optimization
-	# and set ssd at 450ms
+	if 'ssv' in inits.keys(): del inits['ssv']
 	inits['pGo']=.5; inits['ssd']=.450;
 
-	if rtfunc=='quants':
-		pstop, rt = utils.pstop_quants(data, filt_rts=filt_rts)
-	elif rtfunc=='mquant':
-		pstop, rt = utils.pstop_mquant(data, filt_rts=filt_rts)
-	else:
-		pstop, rt = utils.pstop_meanrt(data, filt_rts=filt_rts)
-		print pstop, rt
-
 	if est_global:
-		# first optimize full parameter set
-		# collapsing across conditions (see "params" below)
-		#optall={name:inits[name] for name in pnames}
-		# init drift as mean between Hi and Lo P(Go) HDDM estimates
-		#optall[dep]=(inits[dep+'(Hi)']+inits[dep+'(Lo)'])/2
-
-		y=np.array([pstop.mean(), rt.mean()])
+		y = utils.rangl_pro(data)
 		p=Parameters()
 		for k, v in optall.items():
 			if k in ['pGo', 'ssd']: vary=0
@@ -136,23 +56,8 @@ def fit_proactive_data(data, inits={}, est_global=True, depends_on={'v':'pGo'}, 
 
 def run_proactive_model(pstop, rt, inits={}, depends_on={'v':'pGo'}, ntrials=2000, nx=0, maxfun=5000, ftol=1.e-3, xtol=1.e-3, rtfunc='mean', disp=False, filt_rts=True, **kwargs):
 
-	pnames=['a', 't', 'z', 'v', 'ssv', 'ssd', 'pGo']
 	inits['ssd']=.450
-	if 'pgo' not in kwargs.keys():
-		pgo=[0,20,40,60,80,100]
-
-	dep=pnames.pop(pnames.index(depends_on.keys()[0]))
-
-	rts_i=[]; ps_i=[]
 	fit_results=pd.DataFrame(columns=['n','pGo', dep, 'psdata', 'psradd', 'rtdata', 'rtradd', 'chi', 'redchi'], index=pgo)
-
-	if dep+'0' in inits.keys():
-		init_list=[inits[dep + str(pg_i)] for pg_i in pgo]
-	elif dep+'(Hi)' in inits.keys():
-		init_list = [inits[dep+'(Lo)']]*3
-		init_list.extend([inits[dep+'(Hi)']]*3)
-	else:
-		init_list=[inits[dep]]*len(pgo)
 
 	for i, pg in enumerate(pgo):
 

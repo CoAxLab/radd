@@ -6,84 +6,82 @@ from lmfit import Parameters, Minimizer
 from radd.utils import *
 from radd import RADD
 
-def fit_subjects(data, inits, model='radd', depends_on={'v':'Cond'}, all_params=0, ntrials=2000, maxfun=5000, save_path="./", ftol=1.e-3, xtol=1.e-3, **kwargs):
+def fit_indx(data, inits, cond=None, indx=[], depends=['xx'], ntrials=2000, all_params=0, model='radd', maxfun=500, ftol=1.e-3, xtol=1.e-3):
 
-	ssdlist=[200,250,300,350,400,'rt']
-	sxlist=data.idx.unique()
-	if 'pGo' in inits.keys(): del inits['pGo']
-	if 'ssd' in inits.keys(): del inits['ssd']
+	if indx==[]:
+		indx=data.idx.unique()
 
-	poptdf=pd.DataFrame(columns=inits.keys(), index=sxlist)
-	sxpred_list=[]
-	#pb=utils.PBinJ(len(sxlist), color="#009B76"); sx_n=0
+	delays = list(data.query('trial_type=="stop"').ssd.unique())
+	cond = depends_on.values()[0]; nc=len(data[cond].unique())
+	popt_cols=sum([['ix'], ['cond'], ['chi'], inits.keys()], [])
+	qp_cols=['ix', 'cond', 'ttype', '5q', '25q', '50q', '75q', '95q', 'prespond']
+	pstop_cols=sum([['ix'], ['cond'], delays],[])
 
-	for sx, sxdf in data.groupby('idx'):
+	index = np.arange(len(indx))
+	pstop_df=pd.DataFrame(columns=pstop_cols, index=index)
+	gqp_df=pd.DataFrame(columns=qp_cols, index=index)
+	eqp_df=pd.DataFrame(columns=qp_cols, index=index)
+	popt_df=pd.DataFrame(columns=popt_cols, index=index)
 
-		y=rangl_data(sxdf)
+	for i, ix in enumerate(indx):
+		if 'bootstrap': y = resample_reactive(data)
+		else: y = rangl_re(data[data['idx']==ix])
 
-		sxpred, popt = run_reactive_model(y, init_theta, depends=depends_on, ntrials=ntrials, all_params=all_params, maxfun=maxfun, ftol=ftol, xtol=xtol, model=model)
-		sxpred['idx']=[sx]*len(sxpred)
+		params, yhat = run_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
+                    depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0)
 
-		sxpred_list.append(sxpred)
+		# get predictions and store optimized parameter set
+		params['ix']=ix; params['cond']=cond
+		# fill df: [cond] [go/ssgo], [cor/err rt quantiles], [prob corr/err response]
+		gqp_df.loc[i,:] = sum([[ix], [cond], ['go'], list(yhat[:5]*.1), [yhat[9]+.05*yhat[9]]], [])
+		eqp_df.loc[i,:] = sum([[ix], [cond], ['stop'], list(yhat[10:15]*.1), [yhat[19]+.05*yhat[19]]], [])
+		pstop_df.loc[i,:] = sum([[ix], [cond], list(yhat[20:25])], [])
+		popt_df.loc[i]=pd.Series({k:params[k] for k in popt_df.columns})
 
-		for k in popt.keys():
-			poptdf.loc[sx, k]=popt[k]
+    return pd.concat([gqp_df, eqp_df]), pstop_df, popt_df
 
-		poptdf.to_csv(save_path+"popt_all.csv")
-		sxpred.to_csv(save_path+"fits_sx"+str(sx)+".csv")
+def run_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0):
 
-	if len(sxlist)>1:
-		allpred = pd.concat(sxpred_list)
-		allpred.to_csv(save_path+"allsx_fits.csv")
-		return allpred
+    if 'pGo' in inits.keys(): del inits['pGo']
+    if 'ssd' in inits.keys(): del inits['ssd']
 
-	else:
-		return sxpred
+    p=Parameters()
+    for key, val in inits.items():
+        if key in depends:
+            p.add(key, value=val, vary=1)
+            continue
+        p.add(key, value=val, vary=all_params)
 
+    popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials),
+        fcn_kws={'model':model}, method='Nelder-Mead')
+    popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=True)
 
-def run_reactive_model(y, inits={}, model='radd', depends_on={'v':'Cond'}, ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, ssdlist=[200,250,300,350,400,'rt'], **kwargs):
+    params={k: p[k].value for k in p.keys()}
+    params['chi']=popt.chisqr
+    resid=popt.residual; yhat=y+resid
 
-	p=Parameters()
-
-	if 'pGo' in inits.keys(): del inits['pGo']
-	if 'ssd' in inits.keys(): del inits['ssd']
-
-	for key, val in depends_on.items():
-		p.add(key, value=val, vary=1)
-	for key, val in inits.items():
-		p.add(key, value=val, vary=all_params)
-
-	popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials),
-		fcn_kws={'model':model}, method='Nelder-Mead')
-	popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=False)
-
-	params=pd.Series({k:p[k].value for k in p.keys()})
-	pred=pd.DataFrame.from_dict({'ydata':y, 'residuals':popt.residual, 'yhat':y+res,
-				'chi':popt.chisqr}, orient='columns')
-
-	return pred, params
+    return params, yhat
 
 
-def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, intervar=False):
+def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[], intervar=False):
 
 	try:
 		theta={k:p[k].value for k in p.keys()}
 	except Exception:
 		theta=p.copy()
-	theta['pGo']=.5
-
-	delays=np.arange(0.200, 0.450, .05)
-	dflist=[]
+	theta['pGo']=.5; delays=np.arange(0.200, 0.450, .05)
 
 	for ssd in delays:
 		theta['ssd']=ssd
 		df = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
 		dflist.append(df)
 
-	return rangl_data(pd.concat(dflist))-y
+	yhat = rangl_re(pd.concat(dflist))
+
+	return yhat - y
 
 
-def simulate(theta, ntrials=20000, tb=.650, model='radd', quant=True, intervar=False, return_traces=False):
+def simulate(theta, ntrials=2000, tb=.650, model='radd', intervar=False, return_traces=False):
 
 	if intervar:
 		theta=get_intervar_ranges(theta)
@@ -98,12 +96,11 @@ def simulate(theta, ntrials=20000, tb=.650, model='radd', quant=True, intervar=F
 
 def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
-	ngo=len(DVg)
 	nss=len(DVs)
+	ngo=len(DVg) - nss
 
 	theta=update_params(theta)
 	tr=theta['tt'];	a=theta['a']; ssd=theta['ssd']
-
 	#define RT functions for upper and lower bound processes
 	upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
 	lower_rt = lambda DV: np.array([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
@@ -139,10 +136,11 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 	ttypes=['stop']*nss+['go']*ngo
 	# Take the shorter of the ert and ssrt list, concatenate with grt
 	rt=np.append(np.fmin(ert,ssrt), grt)
-	d = {'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes}
-	df = pd.DataFrame(dict([(k, pd.Series(v)) for k, v in d.iteritems()]))
+
+	df = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes})
 	# calculate accuracy for both trial_types
 	df['acc'] = np.where(df['trial_type']==df['choice'], 1, 0)
+	df.rt.replace(999, np.nan, inplace=True)
 	return df
 
 def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):

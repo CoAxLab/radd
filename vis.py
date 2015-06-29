@@ -803,3 +803,37 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         axes[-1].legend(loc=0)
         axes[0].legend(loc=1)
         #plt.tight_layout()
+
+
+def ssgo_go_rts(data):
+        """
+        plot stop-signal respond and go trial RT distributions
+        args:
+            data (Pandas DataFrame)
+        """
+
+        f, axes = plt.subplots(2, 3, figsize=(15, 7))
+        axes = np.array(axes).flatten()
+        prob = np.arange(.025, .975, .25)
+
+        for i, (ssd, df) in enumerate(data.groupby('ssd')):
+
+                allgo = data.query('choice=="go"')
+                sgo = df.query('trial_type=="stop" & choice=="go"')
+
+                if len(sgo)<1:
+                        continue
+
+                sns.distplot(sgo.rt.values, bins=20, hist=False, kde_kws={"shade":True, "alpha":.4},
+                ax=axes[i], color=reds[5], label=str(ssd))
+                sns.distplot(allgo.rt.values, bins=20, hist=False, kde_kws={"shade":True, "alpha":.4},
+                ax=axes[i], color=greens[3])
+                sns.despine()
+
+        all_sgo = redf.query('trial_type=="stop" & choice=="go"')
+        qg = mq(allgo.rt, prob = prob)
+        qsg = mq(all_sgo.rt, prob = prob)
+        defect_scalar = redf.query('trial_type=="go"').mean()['acc']
+        axes[-1].plot(prob, qg, marker='o', color=greens[3])
+        axes[-1].plot(prob, qsg, marker='o', color=reds[5])
+        plt.tight_layout()

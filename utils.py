@@ -9,7 +9,102 @@ import os, re
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
-#from radd import vis
+
+
+def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
+
+	gotrials = data.query('response==1 & acc==1')
+	sigresp = data.query('response==1 & acc==0')
+
+	pcor, perr = data.groupby('trial_type').mean()['response'].values
+	wcor = prob*pcor
+	werr = prob*perr
+
+	gq = mq(gotrials.rt.values, prob=wcor)
+	eq = mq(sigresp.rt.values, prob=werr)
+
+	pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
+
+	return np.array([gq*10, wcor, eq*10, werr, pstop]).flatten()
+
+
+def rangl_pro(data, cutoff=.560, prob=np.array([.05,.25,.50,.75,.95])):
+
+	gotrials = data.query('response==1')
+	pcor, perr = data.groupby('trial_type').mean()['response'].values
+	wcor = prob*pcor
+	werr = prob*perr
+
+	gq = mq(gotrials.rt.values, prob=wcor)
+	eq = mq(sigresp.rt.values, prob=werr)
+
+	pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
+
+	return np.array([gq*10, wcor, eq*10, werr, pstop]).flatten()
+
+
+def aic(model):
+	k = len(model.get_stochasticts())
+	logp = sum([x.logp for x in model.get_observeds()['node']])
+	return 2 * k - 2 * logp
+
+
+def bic(model):
+	k = len(model.get_stochastics())
+	n = len(model.data)
+	logp = sum([x.logp for x in model.get_observeds()['node']])
+	return -2 * logp + k * np.log(n)
+
+
+def resample_reactive(data, n=None):
+
+	df=data.copy(); bootlist=list()
+	if n==None: n=len(data)
+
+	for ssd, ssdf in df.groupby('ssd'):
+		boots = ssdf.reset_index(drop=True)
+		orig_ix = np.asarray(boots.index[:])
+		resampled_ix = rwr(orig_ix, get_index=True, n=n)
+		bootdf = ssdf.irow(resampled_ix)
+		bootlist.append(bootdf)
+
+	#concatenate and return all resampled conditions
+	return rangl_re(pd.concat(bootlist))
+
+def resample_proactive(df, n=None, method='rwr', filt_rts=True):
+
+	pvec=list(); rtvec=list(); df=df.copy(); i=0
+	bootdf_list=list()
+	if n==None: nlist=[len(df)]*6
+
+	for pg, pgdf in df.groupby('pGo'):
+		boots = pgdf.reset_index(drop=True)
+		orig_ix = np.asarray(boots.index[:])
+		resampled_ix = rwr(orig_ix, get_index=True, n=nlist[i])
+		bootdf=pgdf.irow(resampled_ix)
+		bootdf_list.append(bootdf)
+		i+=1
+
+	return pd.concat(bootdf_list)
+
+def rwr(X, get_index=False, n=None):
+	"""
+	Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
+	"""
+
+	if isinstance(X, pd.Series):
+		X = X.copy()
+		X.index = range(len(X.index))
+	if n == None:
+		n = len(X)
+
+	resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
+	X_resample = np.array(X[resample_i])
+
+	if get_index:
+		return resample_i
+	else:
+		return X_resample
 
 def update_params(theta):
 
@@ -96,52 +191,6 @@ def get_params_from_flatp(theta, dep='v', pgo=np.arange(0,120,20)):
 	return theta, plist
 
 
-def rangl_data(data, cutoff=.650, quant=True, prob=np.array([.05,.25,.50,.75,.95])):
-	
-	gotrials = data.query('response==1 & acc==1')
-	sigresp = data.query('response==1 & acc==0')
-
-	if quant:	
-		pcor, perr = data.groupby('trial_type').mean()['response'].values
-		#gocor=data[(data['trial_type']=='go')&(data['acc']==1)&(data['rt']<cutoff)]
-		wcor = prob*pcor
-		werr = prob*perr 
-
-		gq = mq(gotrials.rt.values, prob=wcor)
-		eq = mq(sigresp.rt.values, prob=werr)
-		
-		pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
-		
-		return np.array([gq*10, wcor, eq*10, werr, pstop]).flatten()
-		
-		
-	else:
-		gocor=gotrials[gotrials.rt<cutoff]
-		rts=gocor.rt.mean()*10
-		ydata=data[data['trial_type']=='stop'].groupby('ssd').mean()['acc'].values
-		return np.append(ydata, rts)
-
-
-def rwr(X, get_index=False, n=None):
-	"""
-	Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
-	"""
-
-	if isinstance(X, pd.Series):
-		X = X.copy()
-		X.index = range(len(X.index))
-	if n == None:
-		n = len(X)
-
-	resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
-	X_resample = np.array(X[resample_i])
-
-	if get_index:
-		return resample_i
-	else:
-		return X_resample
-
-
 def remove_outliers(df, sd=1.95):
 
 	print "len(df) = %s \n\n" % (str(len(df)))
@@ -205,13 +254,13 @@ def scurves(lines=[], task='ssRe', pstop=.5, ax=None, linestyles=None, colors=No
 		colors=sns.color_palette('husl', n_colors=len(lines))
 		labels=['']*len(lines)
 		linestyles = ['-']*len(lines)
-		
+
         lines=[np.array(line) if type(line)==list else line for line in lines]
 	pse=[];
-	
+
 	if 'Re' in task:
 		x=np.array([400, 350, 300, 250, 200], dtype='float')
-		xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000); 
+		xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
 		yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
 	else:
 		x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
@@ -230,7 +279,7 @@ def scurves(lines=[], task='ssRe', pstop=.5, ax=None, linestyles=None, colors=No
 		idx = (np.abs(pxp - pstop)).argmin()
 
 		pse.append(xp[idx]/scale_factor)
-		
+
 		# Plot the results
 		ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
 		pse.append(xp[idx]/scale_factor)
@@ -247,11 +296,11 @@ def kde_fit_quantiles(rtquants, nsamples=1000):
 	takes quantile estimates and fits cumulative density function
 	returns samples to pass to sns.kdeplot()
 	"""
-	
+
 	kdefit = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(rtquants)
-    	
+
 	samples = kdefit.sample(n_samples=nsamples).flatten()
-    
+
 	return samples
 
 
@@ -284,7 +333,7 @@ def style_params(style='ticks', context='paper'):
 		'legend.fontsize': 14.,'lines.linewidth': 3.0,'lines.markeredgewidth': 0.0, 'lines.markersize': 6.,'patch.linewidth': 0.24,
 		'xtick.labelsize': 14.,'xtick.major.pad': 5.6, 'xtick.major.width': 0.8,'xtick.minor.width': 0.4,'ytick.labelsize': 14.,
 		'ytick.major.pad': 5.6,'ytick.major.width': 0.8,'ytick.minor.width': 0.4}
-		
+
 	colors=['ghostwhite', '#95A5A6', '#6C7A89',
 	'#3498db', '#4168B7', '#5C97BF', '#34495e', '#3A539B', '#4B77BE',
 	(0.21568627450980393, 0.47058823529411764, 0.7490196078431373),
@@ -306,7 +355,7 @@ def mat2py(indir, outdir=None, droplist=None):
 	if droplist is None:
 		droplist = ['dt_vec', 'Speed', 'state', 'time', 'probe_trial', 'ypos', 'fill_pos', 't_vec', 'Y', 'pos']
 
-	flist = filter(lambda x: 'SS' in x and '_fMRI_Proactive' in x and 'run' in x, os.listdir(indir))    
+	flist = filter(lambda x: 'SS' in x and '_fMRI_Proactive' in x and 'run' in x, os.listdir(indir))
 	dflist = []
 	noresp_group = []
 	os.chdir(indir)
@@ -325,11 +374,11 @@ def mat2py(indir, outdir=None, droplist=None):
 		columns.insert(1, 'run')
 	        columns.insert(2, 'date')
 
-		data = [[vals[0][0] for vals in trial] for trial in mat['Data'][0]]    
+		data = [[vals[0][0] for vals in trial] for trial in mat['Data'][0]]
 		for trial in data:
 			trial.insert(0,int(idx[2:]))
 			trial.insert(1, int(run[-1]))
-			trial.insert(2, date)	
+			trial.insert(2, date)
 		df = pd.DataFrame(data, columns=columns)
 	        df.rename(columns={'Keypress': 'go', 'Hit':'hit', 'Stop':'nogo', 'DO_STOP':'sstrial', 'GoPoint':'pGo', 'Bonus':'bonus'}, inplace=True)
 
@@ -356,14 +405,13 @@ def mat2py(indir, outdir=None, droplist=None):
 			df['pGo'] = df['pGo']*100
 			df['pGo'] = df['pGo'].astype(int)
 			df['rt'] = df['rt'].astype(float)
-			
+
 			if outdir:
 				df.to_csv(outdir+'sx%s_proimg_data.csv' % idx, index=False)
 			dflist.append(df)
-	
+
 	master=pd.concat(dflist)
 	if outdir:
 		master.to_csv(outdir+"ProImg_All.csv", index=False)
-	
-	return master
 
+	return master

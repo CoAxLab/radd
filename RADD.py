@@ -5,7 +5,7 @@ from radd.utils import update_params
 import numpy as np
 
 
-def run(theta, no_ss=False, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='radd'):
+def run(theta, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='radd'):
 
 	"""
 	DVg is instantiated for all trials. DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta).
@@ -37,9 +37,6 @@ def run(theta, no_ss=False, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='ra
 	trials=np.random.random_sample((ntrials, Tg))
 	#simulate all go signal paths
 	DVg = z + np.cumsum(np.where(trials<Pg, dx, -dx), axis=1)
-
-	if no_ss:
-		return DVg, np.array(np.array([999]))
 
 	if tr<ssd and model in ['abias', 'radd']:
 		IXs = Tg - Ts
