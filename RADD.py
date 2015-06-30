@@ -5,7 +5,7 @@ from radd.utils import update_params
 import numpy as np
 
 
-def run(theta, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='radd'):
+def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd'):
 
 	"""
 	DVg is instantiated for all trials. DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta).
@@ -18,8 +18,8 @@ def run(theta, ntrials=2000, tb=0.560, tau=.0005, si=.01, model='radd'):
 
 	if model in ['radd', 'ipb', 'abias']:
 		ssv=-abs(theta['ssv'])
-        else:
-                ssv=abs(theta['ssv'])
+	else:
+		ssv=abs(theta['ssv'])
 
 	if 'si' in theta.keys():
 		si=theta['si']

@@ -1,70 +1,163 @@
 #!/usr/local/bin/env python
 from __future__ import division
+import os
 import numpy as np
 import pandas as pd
-from radd import utils, fitre
+from scipy.stats.mstats import mquantiles as mq
+from scipy import optimize
+from scipy.io import loadmat
+from radd import fitre, fitpro, utils
 
-def Reactive(data, inits, depends_on={'xx':'XX'}, fit='bootstrap', opt_global=False, ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, savepth='./', model='radd', niter=500):
+class Model(object):
 
-	if global_opt:
-		inits, yhat = run_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
-                    depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+    from radd import fitre, fitpro, utils
+    from scipy.stats.mstats import mquantiles
 
-	# initialize data storage objects
-	if fit=='bootstrap': indx = range(niter)
-	elif fit=='subjects': indx = data.idx.unique()
+    def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, depends_on={'xx':'XX'}, fit='bootstrap', niter=50, *args, **kwargs):
 
-	qplist = []; sclist; plist=[]
-	for i, (c, cond_df) in enumerate(data.groupby(cond)):
-
-		qp_df, pstop_df, popt_df = fit_indx(cond_df, inits, c, depends=depends_on.keys(), model=model, indx=indx, ntrials=ntrials, all_params=0, maxfun=maxfun, ftol=ftol, xtol=xtol)
-
-		qplist.append(qp_df)
-		sclist.append(pstop_df)
-		plist.append(popt_df)
-
-	qp_df.to_csv(savepth+model+"_qpfits.csv", index=False)
-	pstop_df.to_csv(savepth+model+"_scurve.csv", index=False)
-	popt_df.to_csv(savepth+model+"_boot_popt.csv")
-
-	return qp_df, pstop_df, popt_df
-
-
-
-def Proactive(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, tb=.560, disp=False, filt_rts=True, **kwargs):
-
-	fit_results=list()
-	pgolist=data[depends_on.values()].unique()
-	ps_pred=pd.DataFrame(columns=pgolist, index=np.arange(niter))
-	rt_pred=pd.DataFrame(columns=pgolist, index=np.arange(niter))
-
-	prepend=savepth+model
-	# initialize data storage objects
-	cond = depends_on.values(); popt_cols = inits.keys()
-	qp_cols = [cond, 'ttype', '5q', '25q', '50q', '75q', '95q', 'presp']
-	pstop_cols = data.ssd.unique()
-
-	fit_results=list();
-	qp_df=pd.DataFrame(columns=qp_cols, index=np.arange(niter*2))
-	pstop_df=pd.DataFrame(columns=pstop_cols, index=np.arange(niter))
-	popt_df=pd.DataFrame(columns=popt_cols, index=np.arange(niter))
-
-	for i in range(niter):
-
-		bx_data = resample_proactive(data, method='rwr', filt_rts=filt_rts)
-
-		fits_i, rts_i, ps_i = fitpro.run_proactive_model(pstop, rt, inits, filt_rts=filt_rts, ntrials=ntrials, depends_on=depends_on, nx=i, simfx=simfx, tb=tb,maxfun=maxfun, ftol=ftol, xtol=xtol, pgolist=pgolist, disp=disp)
-
-		ps_pred.loc[i,:]=np.array(ps_i)
-		rt_pred.loc[i,:]=np.array(rts_i)
-		fit_results.append(fits_i)
+        self.model = model
+        self.inits = inits
+        self.kind = kind
+        self.data = data
+        self.niter = niter
+        self.depends_on = depends_on
+        self.depends = self.depends_on.keys()
+        self.cond = self.depends_on.values()[0]
+        self.fitparams = None
+        self.live_update = True
+        self.i = 0
+        self.fit = fit
+        if self.fit=='bootstrap':
+            self.indx=range(niter)
+        elif self.fit=='subjects':
+            self.indx=list(self.data.idx.unique())
 
 
-		rt_pred.to_csv(save_path+method+"_pro_qpfits.csv", index=False)
-		ps_pred.to_csv(save_path+method+"_pro_scurve.csv", index=False)
+    def set_fitparams(self, xtol=1.e-3, ftol=1.e-3, maxfun=5000, ntrials=2000, niter=500):
+
+        self.fitparams = {'ntrials':ntrials, 'maxfun':maxfun, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
+
+        if self.fit=='bootstrap':
+            self.indx=range(self.fitparams['niter'])
+
+    def get_fitparams(self):
+
+        if self.fitparams==None:
+            self.set_fitparams()
+        fitp = self.fitparams
+
+        return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfun'], fitp['niter']
+
+    def set_rt_cutoff(self, rt_cutoff=None):
+
+        if rt_cutoff==None:
+            if self.kind=='reactive':
+                self.rt_cutoff = .650
+            elif self.kind=='proactive':
+                self.rt_cutoff = .54502
+            else:
+                self.rt_cutoff=self.data.query('response==1').rt.max()
+        else:
+            self.rt_cutoff=rt_cutoff
+
+    def global_opt(self):
+
+        inits = self.inits
+        ntrials, ftol, xtol, maxfun, niter = self.get_fitparams
+
+        self.inits, self.yhat = run_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
+                        depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+
+    def build_fit_store(self):
+
+        inits=self.inits; data=self.data; cond=self.cond; indx = self.indx
+
+        labels = data[cond].unique()
+        nlabels = len(labels)
+        index = range(nlabels*len(indx))
+        popt_cols=sum([['indx'], [cond], ['chi'], inits.keys()], [])
+        qp_cols=['indx', cond, 'ttype', '5q', '25q', '50q', '75q', '95q', 'prespond']
+
+        self.gqp_fits = pd.DataFrame(columns=qp_cols, index=index)
+        self.popt = pd.DataFrame(columns=popt_cols, index=index)
+
+        if self.kind=='reactive':
+            self.eqp_fits = pd.DataFrame(columns=qp_cols, index=index)
+            delays = list(data.query('trial_type=="stop"').ssd.unique())
+            pstop_cols=sum([['indx'], [cond], delays],[])
+            self.pstop_fits = pd.DataFrame(columns=pstop_cols, index=index)
+
+    def run_model(self, save=False, savepth='./', live_update=True, disp=False):
+
+        if self.fit=='bootstrap': self.indx = range(self.niter)
+        elif self.fit=='subjects': self.indx = self.data.idx.unique()
+
+        # initialize data storage objects
+        self.build_fit_store()
+        self.live_update=live_update
+
+        for label, cdf in self.data.groupby(self.cond):
+            self.fit_indx(cdata=cdf, label=label, savepth=savepth, disp=disp)
+
+        if save:
+            self.gqp_fits.to_csv(savepth+self.model+"_qpfits.csv", index=False)
+            #self.pstop_fits.to_csv(savepth+self.model+"_scurve.csv", index=False)
+            self.popt.to_csv(savepth+self.model+"_popt.csv")
 
 
-	fit_df=pd.concat(fit_results)
-	fit_df.to_csv(save_path+method+"_pro_fitinfo.csv", index=False)
+    def fit_indx(self, cdata, label, savepth='./', disp=False):
 
-	return ps_pred, rt_pred, fit_df
+        data = cdata; inits = self.inits; model=self.model; depends=self.depends;
+        ntrials, ftol, xtol, maxfun, niter = self.get_fitparams()
+
+        for i, indxi in enumerate(self.indx):
+
+            if self.kind=='reactive':
+                if 'bootstrap': y = utils.resample_reactive(data)
+                else: y = utils.rangl_re(data[data['idx']==indxi])
+                params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
+                        depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
+                self.store_recost(indxi, label, params, yhat)
+
+            elif self.kind=='proactive':
+                inits['pGo']=data.pGo.mean()
+                if 'bootstrap': y = utils.resample_proactive(data)
+                else: y = utils.rangl_pro(data[data['idx']==indxi])
+                params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model,
+                        depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
+                self.store_procost(indxi, label, params, yhat)
+
+            if self.live_update:
+                self.gqp_fits.to_csv(savepth+self.model+"_gqp.csv", index=False)
+                self.popt.to_csv(savepth+self.model+"_popt.csv", index=False)
+
+                if self.kind=='reactive':
+                    self.eqp_fits.to_csv(savepth+self.model+"_eqp.csv", index=False)
+                    self.pstop_fits.to_csv(savepth+self.model+"_pstop.csv", index=False)
+
+
+    def store_recost(self, indxi, label, params, yhat):
+        # get predictions and store optimized parameter set
+        params['indx']=indxi; params[self.cond]=label
+        gqpi = sum([[indxi], [label], ['go'], list(yhat[:5]*.1), [yhat[9]+.05*yhat[9]]], [])
+        eqpi = sum([[indxi], [label], ['stop'], list(yhat[10:15]*.1), [yhat[19]+.05*yhat[19]]], [])
+        pstopi = sum([[indxi], [label], list(yhat[20:25])], [])
+        popti = pd.Series({k:params[k] for k in self.popt.columns})
+
+        # fill df: [cond] [go/ssgo], [cor/err rt quantiles], [prob corr/err response]
+        self.gqp_fits.loc[self.i,:] = gqpi
+        self.eqp_fits.loc[self.i,:] = eqpi
+        self.pstop_fits.loc[self.i,:] = pstopi
+        self.popt.loc[self.i,:] = popti
+        self.i+=1
+
+    def store_procost(self, indxi, label, params, yhat):
+        # get predictions and store optimized parameter set
+        params['indx']=indxi; params[self.cond]=label
+        gqpi = sum([[indxi], [label], ['go'], list(yhat[:5]*.1), [yhat[9]+.05*yhat[9]]], [])
+        popti = pd.Series({k:params[k] for k in self.popt.columns})
+
+        # fill df: [cond] [go/ssgo], [cor/err rt quantiles], [prob corr/err response]
+        self.gqp_fits.loc[self.i,:] = gqpi
+        self.popt.loc[self.i,:] = popti
+        self.i+=1

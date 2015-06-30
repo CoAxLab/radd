@@ -28,19 +28,13 @@ def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
 	return np.array([gq*10, wcor, eq*10, werr, pstop]).flatten()
 
 
-def rangl_pro(data, cutoff=.560, prob=np.array([.05,.25,.50,.75,.95])):
+def rangl_pro(df, tb=.560, rt_cutoff=.54502, prob=np.array([.05,.25,.50,.75,.95])):
 
-	gotrials = data.query('response==1')
-	pcor, perr = data.groupby('trial_type').mean()['response'].values
-	wcor = prob*pcor
-	werr = prob*perr
+    gotrials = df.query('response==1')
+    pgo = df.response.mean()*prob
+    gq = mq(gotrials[gotrials.rt<=rt_cutoff].rt, prob=pgo)
 
-	gq = mq(gotrials.rt.values, prob=wcor)
-	eq = mq(sigresp.rt.values, prob=werr)
-
-	pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
-
-	return np.array([gq*10, wcor, eq*10, werr, pstop]).flatten()
+    return np.array([gq*10, pgo]).flatten()
 
 
 def aic(model):
@@ -59,7 +53,7 @@ def bic(model):
 def resample_reactive(data, n=None):
 
 	df=data.copy(); bootlist=list()
-	if n==None: n=len(data)
+	if n==None: n=len(df)
 
 	for ssd, ssdf in df.groupby('ssd'):
 		boots = ssdf.reset_index(drop=True)
@@ -71,21 +65,18 @@ def resample_reactive(data, n=None):
 	#concatenate and return all resampled conditions
 	return rangl_re(pd.concat(bootlist))
 
-def resample_proactive(df, n=None, method='rwr', filt_rts=True):
+def resample_proactive(data, n=None, rt_cutoff=.54502):
 
-	pvec=list(); rtvec=list(); df=df.copy(); i=0
-	bootdf_list=list()
-	if n==None: nlist=[len(df)]*6
+	df=data.copy(); bootdf_list=list()
+	if n==None: nlist=len(df)
 
-	for pg, pgdf in df.groupby('pGo'):
-		boots = pgdf.reset_index(drop=True)
-		orig_ix = np.asarray(boots.index[:])
-		resampled_ix = rwr(orig_ix, get_index=True, n=nlist[i])
-		bootdf=pgdf.irow(resampled_ix)
-		bootdf_list.append(bootdf)
-		i+=1
+	boots = df.reset_index(drop=True)
+	orig_ix = np.asarray(boots.index[:])
+	resampled_ix = rwr(orig_ix, get_index=True, n=n)
+	bootdf = df.irow(resampled_ix)
+	bootdf_list.append(bootdf)
 
-	return pd.concat(bootdf_list)
+	return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 def rwr(X, get_index=False, n=None):
 	"""

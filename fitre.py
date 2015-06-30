@@ -6,41 +6,7 @@ from lmfit import Parameters, Minimizer
 from radd.utils import *
 from radd import RADD
 
-def fit_indx(data, inits, cond=None, indx=[], depends=['xx'], ntrials=2000, all_params=0, model='radd', maxfun=500, ftol=1.e-3, xtol=1.e-3):
-
-	if indx==[]:
-		indx=data.idx.unique()
-
-	delays = list(data.query('trial_type=="stop"').ssd.unique())
-	cond = depends_on.values()[0]; nc=len(data[cond].unique())
-	popt_cols=sum([['ix'], ['cond'], ['chi'], inits.keys()], [])
-	qp_cols=['ix', 'cond', 'ttype', '5q', '25q', '50q', '75q', '95q', 'prespond']
-	pstop_cols=sum([['ix'], ['cond'], delays],[])
-
-	index = np.arange(len(indx))
-	pstop_df=pd.DataFrame(columns=pstop_cols, index=index)
-	gqp_df=pd.DataFrame(columns=qp_cols, index=index)
-	eqp_df=pd.DataFrame(columns=qp_cols, index=index)
-	popt_df=pd.DataFrame(columns=popt_cols, index=index)
-
-	for i, ix in enumerate(indx):
-		if 'bootstrap': y = resample_reactive(data)
-		else: y = rangl_re(data[data['idx']==ix])
-
-		params, yhat = run_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
-                    depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0)
-
-		# get predictions and store optimized parameter set
-		params['ix']=ix; params['cond']=cond
-		# fill df: [cond] [go/ssgo], [cor/err rt quantiles], [prob corr/err response]
-		gqp_df.loc[i,:] = sum([[ix], [cond], ['go'], list(yhat[:5]*.1), [yhat[9]+.05*yhat[9]]], [])
-		eqp_df.loc[i,:] = sum([[ix], [cond], ['stop'], list(yhat[10:15]*.1), [yhat[19]+.05*yhat[19]]], [])
-		pstop_df.loc[i,:] = sum([[ix], [cond], list(yhat[20:25])], [])
-		popt_df.loc[i]=pd.Series({k:params[k] for k in popt_df.columns})
-
-    return pd.concat([gqp_df, eqp_df]), pstop_df, popt_df
-
-def run_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0):
+def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
 
     if 'pGo' in inits.keys(): del inits['pGo']
     if 'ssd' in inits.keys(): del inits['ssd']
@@ -54,7 +20,7 @@ def run_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, 
 
     popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials),
         fcn_kws={'model':model}, method='Nelder-Mead')
-    popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=True)
+    popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
 
     params={k: p[k].value for k in p.keys()}
     params['chi']=popt.chisqr
@@ -73,8 +39,8 @@ def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[], intervar=False
 
 	for ssd in delays:
 		theta['ssd']=ssd
-		df = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
-		dflist.append(df)
+		simdf = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
+		dflist.append(simdf)
 
 	yhat = rangl_re(pd.concat(dflist))
 
@@ -91,10 +57,10 @@ def simulate(theta, ntrials=2000, tb=.650, model='radd', intervar=False, return_
 	if return_traces:
 		return dvg, dvs
 
-	return analyze_reactive_trials(dvg, dvs, theta, model=model)
+	return gen_resim_df(dvg, dvs, theta, tb=tb, model=model)
 
 
-def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
+def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
 	nss=len(DVs)
 	ngo=len(DVg) - nss
@@ -126,7 +92,7 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
                 ssrt = upper_rt(a, DVs)
 
 	# Prepare and return simulations df
-        # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
+    # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
 	stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
 	response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
 	# Add "choice" column to pad for error in later stages
@@ -137,11 +103,13 @@ def analyze_reactive_trials(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 	# Take the shorter of the ert and ssrt list, concatenate with grt
 	rt=np.append(np.fmin(ert,ssrt), grt)
 
-	df = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes})
+	simdf = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes})
 	# calculate accuracy for both trial_types
-	df['acc'] = np.where(df['trial_type']==df['choice'], 1, 0)
-	df.rt.replace(999, np.nan, inplace=True)
-	return df
+	simdf['acc'] = np.where(simdf['trial_type']==simdf['choice'], 1, 0)
+	simdf.rt.replace(999, np.nan, inplace=True)
+
+	return simdf
+
 
 def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):
 	ssdlist = np.array(ssdlist)*.001
