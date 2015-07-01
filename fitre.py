@@ -29,7 +29,7 @@ def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, 
     return params, yhat
 
 
-def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[], intervar=False):
+def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[]):
 
 	try:
 		theta={k:p[k].value for k in p.keys()}
@@ -38,26 +38,14 @@ def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[], intervar=False
 	theta['pGo']=.5; delays=np.arange(0.200, 0.450, .05)
 
 	for ssd in delays:
-		theta['ssd']=ssd
-		simdf = simulate(theta, ntrials, tb=tb, model=model, intervar=intervar)
-		dflist.append(simdf)
+            theta['ssd']=ssd
+            dvg, dvs = RADD.run(theta, ntrials=ntrials, model=model, tb=tb)
+            simdf = gen_resim_df(dvg, dvs, theta, tb=tb, model=model)
+            dflist.append(simdf)
 
 	yhat = rangl_re(pd.concat(dflist))
 
 	return yhat - y
-
-
-def simulate(theta, ntrials=2000, tb=.650, model='radd', intervar=False, return_traces=False):
-
-	if intervar:
-		theta=get_intervar_ranges(theta)
-
-	dvg, dvs = RADD.run(theta, ntrials=ntrials, model=model, tb=tb)
-
-	if return_traces:
-		return dvg, dvs
-
-	return gen_resim_df(dvg, dvs, theta, tb=tb, model=model)
 
 
 def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
@@ -65,8 +53,7 @@ def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 	nss=len(DVs)
 	ngo=len(DVg) - nss
 
-	theta=update_params(theta)
-	tr=theta['tt'];	a=theta['a']; ssd=theta['ssd']
+	tr=theta['tr']; a=theta['a']; ssd=theta['ssd']
 	#define RT functions for upper and lower bound processes
 	upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
 	lower_rt = lambda DV: np.array([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
@@ -92,7 +79,7 @@ def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
                 ssrt = upper_rt(a, DVs)
 
 	# Prepare and return simulations df
-    # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
+      # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
 	stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
 	response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
 	# Add "choice" column to pad for error in later stages

@@ -76,16 +76,18 @@ class Model(object):
         nlabels = len(labels)
         index = range(nlabels*len(indx))
         popt_cols=sum([['indx'], [cond], ['chi'], inits.keys()], [])
-        qp_cols=['indx', cond, 'ttype', '5q', '25q', '50q', '75q', '95q', 'prespond']
+        qp_cols=['indx', cond, 'ttype', '5q', '25q', '50q', '75q', '95q', 'presp']
 
         self.gqp_fits = pd.DataFrame(columns=qp_cols, index=index)
         self.popt = pd.DataFrame(columns=popt_cols, index=index)
 
         if self.kind=='reactive':
-            self.eqp_fits = pd.DataFrame(columns=qp_cols, index=index)
             delays = list(data.query('trial_type=="stop"').ssd.unique())
             pstop_cols=sum([['indx'], [cond], delays],[])
+            self.eqp_fits = pd.DataFrame(columns=qp_cols, index=index)
             self.pstop_fits = pd.DataFrame(columns=pstop_cols, index=index)
+
+
 
     def run_model(self, save=False, savepth='./', live_update=True, disp=False):
 
@@ -107,25 +109,34 @@ class Model(object):
 
     def fit_indx(self, cdata, label, savepth='./', disp=False):
 
-        data = cdata; inits = self.inits; model=self.model; depends=self.depends;
+        cdf = cdata.copy(); inits = self.inits; model=self.model; depends=self.depends;
         ntrials, ftol, xtol, maxfun, niter = self.get_fitparams()
 
         for i, indxi in enumerate(self.indx):
 
+
+
+
             if self.kind=='reactive':
-                if 'bootstrap': y = utils.resample_reactive(data)
-                else: y = utils.rangl_re(data[data['idx']==indxi])
+                if 'bootstrap': y = utils.resample_reactive(cdf)
+                else: y = utils.rangl_re(cdf[cdf['idx']==indxi])
                 params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
                         depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
                 self.store_recost(indxi, label, params, yhat)
 
+
+
+
             elif self.kind=='proactive':
-                inits['pGo']=data.pGo.mean()
-                if 'bootstrap': y = utils.resample_proactive(data)
-                else: y = utils.rangl_pro(data[data['idx']==indxi])
+                inits['pGo']=cdf.pGo.mean()
+                if 'bootstrap': y = utils.resample_proactive(cdf)
+                #else: y = utils.rangl_pro(cdf[cdf['idx']==indxi])
                 params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model,
                         depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
                 self.store_procost(indxi, label, params, yhat)
+
+
+
 
             if self.live_update:
                 self.gqp_fits.to_csv(savepth+self.model+"_gqp.csv", index=False)
@@ -136,12 +147,14 @@ class Model(object):
                     self.pstop_fits.to_csv(savepth+self.model+"_pstop.csv", index=False)
 
 
+
+
     def store_recost(self, indxi, label, params, yhat):
         # get predictions and store optimized parameter set
         params['indx']=indxi; params[self.cond]=label
-        gqpi = sum([[indxi], [label], ['go'], list(yhat[:5]*.1), [yhat[9]+.05*yhat[9]]], [])
-        eqpi = sum([[indxi], [label], ['stop'], list(yhat[10:15]*.1), [yhat[19]+.05*yhat[19]]], [])
-        pstopi = sum([[indxi], [label], list(yhat[20:25])], [])
+        gqpi = sum([[indxi], [label], ['go'], list(yhat[:5]*.1), list(yhat[5])], [])
+        eqpi = sum([[indxi], [label], ['stop'], list(yhat[6:10]*.1), list(yhat[10])], [])
+        pstopi = sum([[indxi], [label], list(yhat[11:])], [])
         popti = pd.Series({k:params[k] for k in self.popt.columns})
 
         # fill df: [cond] [go/ssgo], [cor/err rt quantiles], [prob corr/err response]
@@ -154,7 +167,7 @@ class Model(object):
     def store_procost(self, indxi, label, params, yhat):
         # get predictions and store optimized parameter set
         params['indx']=indxi; params[self.cond]=label
-        gqpi = sum([[indxi], [label], ['go'], list(yhat[:5]*.1), [yhat[9]+.05*yhat[9]]], [])
+        gqpi = sum([[indxi], [label], ['go'], list(yhat[:5]*.1), yhat[5]], [])
         popti = pd.Series({k:params[k] for k in self.popt.columns})
 
         # fill df: [cond] [go/ssgo], [cor/err rt quantiles], [prob corr/err response]

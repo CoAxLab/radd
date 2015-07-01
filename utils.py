@@ -16,7 +16,7 @@ def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
 	gotrials = data.query('response==1 & acc==1')
 	sigresp = data.query('response==1 & acc==0')
 
-	pcor, perr = data.groupby('trial_type').mean()['response'].values
+	pg_cor, pg_err = data.groupby('trial_type').mean()['response'].values
 	wcor = prob*pcor
 	werr = prob*perr
 
@@ -25,16 +25,32 @@ def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
 
 	pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
 
-	return np.array([gq*10, wcor, eq*10, werr, pstop]).flatten()
+	return np.hstack([gq*10, pg_cor, eq*10, pg_err, pstop])
 
 
-def rangl_pro(df, tb=.560, rt_cutoff=.54502, prob=np.array([.05,.25,.50,.75,.95])):
+def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([.0275, .1, .15, .30, .50, .70, .85, .975])):
 
-    gotrials = df.query('response==1')
-    pgo = df.response.mean()*prob
-    gq = mq(gotrials[gotrials.rt<=rt_cutoff].rt, prob=pgo)
+	godf = data.query('response==1')
+	gotrials=godf[godf.rt<=rt_cutoff]
+	pgo = data.response.mean()
+	gp = pgo*prob
+	gq = mq(gotrials.rt, prob=gp)
+	gmu = gotrials.rt.mean()
+	return np.hstack([gq*10, gp, gmu, pgo])
 
-    return np.array([gq*10, pgo]).flatten()
+
+def kde_fit_quantiles(rtquants, nsamples=1000):
+	"""
+	takes quantile estimates and fits cumulative density function
+	returns samples to pass to sns.kdeplot()
+	"""
+
+	kdefit = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(rtquants)
+
+	samples = kdefit.sample(n_samples=nsamples).flatten()
+
+	return samples
+
 
 
 def aic(model):
@@ -97,39 +113,21 @@ def rwr(X, get_index=False, n=None):
 	else:
 		return X_resample
 
-def update_params(theta):
+def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):
 
-	if 't_hi' in theta.keys():
-		theta['tt'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
-	else:
-		theta['tt']=theta['t']
+	if not type(theta)==dict:
+		theta=theta.to_dict()['mean']
 
-	if 'z_hi' in theta.keys():
-		theta['zz'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
-	else:
-		theta['zz']=theta['z']
+	keep=['a', 'z', 'v', 't', 'ssv', 'ssd']
+	keep.pop(keep.index(dep))
 
-	if 'sv' in theta.keys():
-		theta['vv'] = theta['sv'] * np.random.randn() + theta['v']
-	else:
-		theta['vv']=theta['v']
+	pdict={pg:theta[dep+str(pg)] for pg in pgo}
 
-	return theta
+	for k in theta.keys():
+		if k not in keep:
+			theta.pop(k)
 
-
-def get_intervar_ranges(theta):
-	"""
-	:args:
-		parameters (dict):	dictionary of theta (Go/NoGo Signal Parameters)
-					and sp (Stop Signal Parameters)
-	"""
-	if 'st' in theta.keys():
-		theta['t_lo'] = theta['t'] - theta['st']/2
-		theta['t_hi'] = theta['t'] + theta['st']/2
-	if 'sz' in theta.keys():
-		theta['z_lo'] = theta['z'] - theta['sz']/2
-		theta['z_hi'] = theta['z'] + theta['sz']/2
-	return theta
+	return theta, pdict
 
 
 def pstop_mquant(df, filt_rts=True, quantp=[.1,.3,.5,.7,.9]):
@@ -165,23 +163,6 @@ def pstop_meanrt(df, filt_rts=True):
         return pstop, go_rt*10
 
 
-def get_params_from_flatp(theta, dep='v', pgo=np.arange(0,120,20)):
-
-	if not type(theta)==dict:
-		theta=theta.to_dict()['mean']
-
-	keep=['a', 'z', 'v', 't', 'ssv', 'ssd', 'pGo']
-	keep.pop(keep.index(dep))
-
-	plist=[theta[dep+str(pg)] for pg in pgo]
-
-	for k in theta.keys():
-		if k not in keep:
-			theta.pop(k)
-
-	return theta, plist
-
-
 def remove_outliers(df, sd=1.95):
 
 	print "len(df) = %s \n\n" % (str(len(df)))
@@ -197,6 +178,40 @@ def remove_outliers(df, sd=1.95):
 	print "cutoff_go = %s \nlen(df_go) = %i\n len(df_go_new) = %i\n" % (str(cutoff_go), len(df_go), len(df_go))
 
 	return df_trimmed
+
+def update_params(theta):
+
+	if 't_hi' in theta.keys():
+		theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
+	else:
+		theta['tr']=theta['tr']
+
+	if 'z_hi' in theta.keys():
+		theta['z'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
+	else:
+		theta['z']=theta['z']
+
+	if 'sv' in theta.keys():
+		theta['v'] = theta['sv'] * np.random.randn() + theta['v']
+	else:
+		theta['v']=theta['v']
+
+	return theta
+
+
+def get_intervar_ranges(theta):
+	"""
+	:args:
+		parameters (dict):	dictionary of theta (Go/NoGo Signal Parameters)
+					and sp (Stop Signal Parameters)
+	"""
+	if 'st' in theta.keys():
+		theta['t_lo'] = theta['tr'] - theta['st']/2
+		theta['t_hi'] = theta['tr'] + theta['st']/2
+	if 'sz' in theta.keys():
+		theta['z_lo'] = theta['z'] - theta['sz']/2
+		theta['z_hi'] = theta['z'] + theta['sz']/2
+	return theta
 
 
 def sigmoid(p,x):
@@ -280,20 +295,6 @@ def scurves(lines=[], task='ssRe', pstop=.5, ax=None, linestyles=None, colors=No
 	ax.set_xlabel(xxlabel, fontsize=18); ax.set_ylabel(yylabel, fontsize=18)
 	ax.legend(loc=0)
 	return np.array(pse)
-
-
-def kde_fit_quantiles(rtquants, nsamples=1000):
-	"""
-	takes quantile estimates and fits cumulative density function
-	returns samples to pass to sns.kdeplot()
-	"""
-
-	kdefit = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(rtquants)
-
-	samples = kdefit.sample(n_samples=nsamples).flatten()
-
-	return samples
-
 
 
 

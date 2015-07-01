@@ -367,7 +367,7 @@ def plot_chi_dist(chi, bins=15, labels=['Drift', 'Onset'], rug=False, norm=False
 def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.5451, cg='Green', cr='Red'):
 
     f,ax=plt.subplots(1,figsize=(8,5))
-    tr=sim_theta['t']; a=sim_theta['a']; z=sim_theta['z']; ssd=sim_theta['ssd']
+    tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z']; ssd=sim_theta['ssd']
     for i, igo in enumerate(DVg):
         plt.plot(np.arange(tr, tb, tau), igo, color=cg, alpha=.1, linewidth=.5)
         if i<len(DVs):
@@ -460,7 +460,7 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
         rtheta['pGo']=.5
         rtheta['ssv']=-abs(rtheta['ssv'])
         #animation only works if tr<=ssd
-        rtheta['t']=np.min(ssdlist)-.001
+        rtheta['tr']=np.min(ssdlist)-.001
 
         for ssd in ssdlist:
                 rtheta['ssd'] = ssd
@@ -546,7 +546,7 @@ def pro_animate(i, x, protraces, prolines):
 def plot_npsim_traces(DVg=[], DVs=[], theta={}, tau=.0005, tb=.5451, cg='Green', cr='Red' ):
 
         f,ax=plt.subplots(1,figsize=(8,5))
-        tr=theta['t']; a=theta['a']; z=theta['z']; ssd=theta['ssd']
+        tr=theta['tr']; a=theta['a']; z=theta['z']; ssd=theta['ssd']
         for i, igo in enumerate(DVg):
                 plt.plot(np.arange(tr, tb, tau), igo, color=cg, alpha=.1, linewidth=.5)
                 if i<len(DVs) and DVs!=[]:

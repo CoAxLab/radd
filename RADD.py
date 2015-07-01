@@ -5,38 +5,41 @@ from radd.utils import update_params
 import numpy as np
 
 
-def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd'):
+def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='re'):
 
 	"""
 	DVg is instantiated for all trials. DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta).
 
 	"""
 
-	theta=update_params(theta)
-	tr=theta['tt']; mu=theta['vv']; a=theta['a'];
-	z=theta['zz']; ssd=theta['ssd']
+	tr=theta['tr']; mu=theta['v']; a=theta['a'];
+	z=theta['z']; ssd=theta['ssd']
+
+	if 'si' in theta.keys():
+		si=theta['si']
+
+	dx=np.sqrt(si*tau)
+
+	Pg=0.5*(1 + mu*dx/si)
+	Tg=np.ceil((tb-tr)/tau)
+
+	#generate random probability vectors [nGo Trials x nTimesteps TR -> TB]
+	trials=np.random.random_sample((ntrials, Tg))
+	#simulate all go signal paths
+	DVg = z + np.cumsum(np.where(trials<Pg, dx, -dx), axis=1)
+
+	if kind=='pro' or 'ssv' not in theta.keys():
+		return DVg, np.array([999])
+
 
 	if model in ['radd', 'ipb', 'abias']:
 		ssv=-abs(theta['ssv'])
 	else:
 		ssv=abs(theta['ssv'])
 
-	if 'si' in theta.keys():
-		si=theta['si']
-
 	nSS=int(ntrials*(1-theta['pGo']))
-
-	dx=np.sqrt(si*tau)
-	Pg=0.5*(1 + mu*dx/si)
 	Ps=0.5*(1 + ssv*dx/si)
-
-	Tg=np.ceil((tb-tr)/tau)
 	Ts=np.ceil((tb-ssd)/tau)
-
-	#generate random probability vectors [nGo Trials x nTimesteps TR -> TB]
-	trials=np.random.random_sample((ntrials, Tg))
-	#simulate all go signal paths
-	DVg = z + np.cumsum(np.where(trials<Pg, dx, -dx), axis=1)
 
 	if tr<ssd and model in ['abias', 'radd']:
 		IXs = Tg - Ts

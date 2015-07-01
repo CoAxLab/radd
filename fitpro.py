@@ -42,27 +42,16 @@ def sspro_minfunc(p, y, ntrials, PGO, SSD, model='radd', tb=.560, rt_cutoff=.545
 		theta=p.copy()
 
 	theta['pGo']=PGO; theta['ssd']=SSD
-	simdf = simulate(theta, ntrials=ntrials, tb=tb, rt_cutoff=rt_cutoff)
+
+	dvg, dvs = RADD.run(theta, ntrials=ntrials, tb=tb)
+	simdf = gen_prosim_df(dvg, theta, tb=tb)
 	yhat = utils.rangl_pro(simdf, tb=tb, rt_cutoff=rt_cutoff)
 
 	return y-yhat
 
-def simulate(theta, ntrials=2000, tb=.560, rt_cutoff=.54502, rtfunc='mean', intervar=False, return_traces=False, **kwargs):
-
-	if intervar:
-		theta=fitfx.get_intervar_ranges(theta)
-
-	dvg, dvs = RADD.run(theta, ntrials=ntrials, tb=tb)
-
-	if return_traces:
-		return dvg, dvs
-
-	return gen_prosim_df(dvg, theta, tb=tb)
-
 def gen_prosim_df(DVg, theta, tb=.560, dt=.0005):
 
-	theta=utils.update_params(theta)
-	tr=theta['tt'];	a=theta['a']; ssd=.450
+	tr=theta['tr']; a=theta['a']; ssd=.450
 
 	upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
 
@@ -74,6 +63,7 @@ def gen_prosim_df(DVg, theta, tb=.560, dt=.0005):
 	simdf = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt})
 	simdf.rt.replace(999, np.nan, inplace=True)
 	return simdf
+
 
 def simple_prosim(theta, bias_vals, bias='v', pgo=np.arange(0, 1.2, .2)):
 

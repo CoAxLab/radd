@@ -91,8 +91,8 @@ def rise(theta, model='radd', tb=.560, ttype='go', tau=.0005, si=.01, task='pro'
 
 	theta=update_params(theta)
 
-	tr=theta['tt']; mu=theta['vv'];
-	a=theta['a']; z=theta['zz'];
+	tr=theta['tr']; mu=theta['v'];
+	a=theta['a']; z=theta['z'];
 	ssd=theta['ssd']; ssv=-abs(theta['ssv'])
 
 	a=a-z
