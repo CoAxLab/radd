@@ -17,11 +17,11 @@ def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
 	sigresp = data.query('response==1 & acc==0')
 
 	pg_cor, pg_err = data.groupby('trial_type').mean()['response'].values
-	wcor = prob*pcor
-	werr = prob*perr
+	wcor = prob*pg_cor
+	werr = prob*pg_err
 
-	gq = mq(gotrials.rt.values, prob=wcor)
-	eq = mq(sigresp.rt.values, prob=werr)
+	gq = mq(gotrials.rt.values, prob=prob)#wcor)
+	eq = mq(sigresp.rt.values, prob=prob)#werr)
 
 	pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
 
@@ -66,7 +66,7 @@ def bic(model):
 	return -2 * logp + k * np.log(n)
 
 
-def resample_reactive(data, n=None):
+def resample_reactive(data, n=120):
 
 	df=data.copy(); bootlist=list()
 	if n==None: n=len(df)
@@ -81,7 +81,7 @@ def resample_reactive(data, n=None):
 	#concatenate and return all resampled conditions
 	return rangl_re(pd.concat(bootlist))
 
-def resample_proactive(data, n=None, rt_cutoff=.54502):
+def resample_proactive(data, n=120, rt_cutoff=.54502):
 
 	df=data.copy(); bootdf_list=list()
 	if n==None: nlist=len(df)
@@ -118,7 +118,7 @@ def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):
 	if not type(theta)==dict:
 		theta=theta.to_dict()['mean']
 
-	keep=['a', 'z', 'v', 't', 'ssv', 'ssd']
+	keep=['a', 'z', 'v', 'tr', 'ssv', 'ssd']
 	keep.pop(keep.index(dep))
 
 	pdict={pg:theta[dep+str(pg)] for pg in pgo}

@@ -570,7 +570,7 @@ def plot_thalamus_bold_mean_traces(df=pd.DataFrame, outpath="./", pgo=np.arange(
                 tlist=[tr]*len(pgo)
                 bias='v'
         else:
-                bias='t'
+                bias='tr'
 
         tlist=[int(t*1000) for t in tlist]
 

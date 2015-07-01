@@ -187,7 +187,7 @@ def decay(thalamus, ithalamus, baseline, t, mu, ssv, decay_coeff=-1.6587, si=.01
 	#1.6484
 	dx=np.sqrt(si*tau)
 	decay_coeff=-1.8; #1.96919679429205063
-	if 'e' in task or bias=='t':
+	if 'e' in task or bias=='tr':
 		decay_coeff=-abs(mu)
 		#ssv_decay=True
 
