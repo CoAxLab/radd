@@ -7,9 +7,12 @@ from scipy.stats.mstats import mquantiles as mq
 from scipy import optimize
 from scipy.io import loadmat
 from radd import fitre, fitpro, utils
+from numba import double
+from numba.decorators import jit, autojit
 
 class Model(object):
-
+      from numba import double
+      from numba.decorators import jit, autojit
       from radd import fitre, fitpro, utils
       from scipy.stats.mstats import mquantiles
 
@@ -31,7 +34,6 @@ class Model(object):
                   self.indx=range(niter)
             elif self.fit=='subjects':
                   self.indx=list(self.data.idx.unique())
-
 
 
 
@@ -104,15 +106,15 @@ class Model(object):
                         ifx = utils.rangl_pro
 
                   #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
-                  self.dat = np.vstack([[ifx(idxdf) for idx, idxdf in cdf.groupby('idx')] for c, cdf in     self.data.groupby(self.cond)])
+                  self.dat = np.vstack([[ifx(idxdf) for idx, idxdf in cdf.groupby('idx')] for c, cdf in self.data.groupby(self.cond)])
 
             # STORE THE DATA OBJECTS IN PANDAS PANEL/DF FOR CONVENIENT FUTURE REFERENCE
             lalist=sum([[lbl]*len(indx) for lbl in labels], [])
-            #self.qp.gqp_obs.loc[:, '5q':] = dat[:, :6]
-            self.qp.gqp_obs.loc[:,:] = np.hstack([np.array([lalist, indx*nlabels]).T,  self.dat[:, :6]])
-            self.qp.eqp_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T,  self.dat[:, 6:12]])
+            self.qp.gqp_obs.loc[:,:] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, :6]])
+            self.qp.eqp_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, 6:12]])
             self.pstop.pstop_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, 12:]])
             self.popt.iloc[:, :2] =  np.vstack([lalist, indx*nlabels]).T
+            self.isprepared = True
 
 
 
@@ -140,6 +142,7 @@ class Model(object):
 
 
 
+
       def run_model(self, save=False, savepth='./', live_update=True, disp=False, prepare=False, **kwargs):
 
             if "depends_on" in kwargs.keys():
@@ -147,17 +150,37 @@ class Model(object):
                   self.depends = self.depends_on.keys()
                   self.cond = self.depends_on.values()[0]
 
+            inits = self.inits; model=self.model; depends=self.depends;
+            ntrials, ftol, xtol, maxfun, niter = self.get_fitparams()
+
             if not self.isprepared:
                   # initialize data storage objects
                   self.prepare_fit()
 
-            for label, cdf in self.data.groupby(self.cond):
-                  self.fit_indx(cdata=cdf, indx=indx, label=label, savepth=savepth, live_update=live_update, disp=disp)
+            for i, y in enumerate(self.dat):
+
+                  if self.kind=='reactive':
+                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
+                        self.store_recost(indx[i], label, params, yhat)
+
+                  elif self.kind=='proactive':
+                        inits['pGo']=cdf.pGo.mean()
+                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
+                        self.store_procost(indx[i], label, params, yhat)
+
+                  if live_update:
+                        self.qp.gqp_fits.to_csv(savepth+model+"_gqp.csv", index=False)
+                        self.popt.to_csv(savepth+model+"_popt.csv", index=False)
+
+                        if self.kind=='reactive':
+                              self.qp.eqp_fits.to_csv(savepth+model+"_eqp.csv", index=False)
+                              self.pstop.pstop_fits.to_csv(savepth+model+"_pstop.csv", index=False)
 
             if save:
                   self.qp.gqp_fits.to_csv(savepth+model+"_qpfits.csv", index=False)
                   self.pstop.pstop_fits.to_csv(savepth+self.model+"_scurve.csv", index=False)
                   self.popt.to_csv(savepth+model+"_popt.csv")
+
 
 
 
@@ -187,7 +210,32 @@ class Model(object):
 
 
 
+      def get_observed(df, prob=np.array([10, 30, 50, 70, 90])):
 
+            rt = df.rt
+
+            inter_prob = [prob[0]-0] + [prob[i] - prob[i-1] for i in range(1,len(prob))] + [100 - prob[-1]]
+            rtquant = mq(rt, prob=prob*.01)
+            observed = np.ceil(np.array(inter_prob)*.01*len(rt)).astype(int)
+            n_obs = np.sum(observed)
+
+            return [observed, rtquant, n_obs]
+
+
+      def get_expected(simdf, obs_quant, n_obs):
+
+            simrt = simdf.rt
+            q = obs_quant
+
+            first = np.array([len(simrt[simrt.between(simrt.min(), q[0])])/len(simrt)])*n_obs
+            middle = np.array([len(simrt[simrt.between(q[i-1], q[i])])/len(simrt) for i in range(1,len(q))])*n_obs
+            last = np.array([len(simrt[simrt.between(q[-1], simrt.max())])/len(simrt)])*n_obs
+
+            expected = np.ceil(np.hstack([first, middle, last]))
+            return expected
+
+
+      @autojit
       def store_recost(self, indxi, label, params, yhat):
             # get predictions and store optimized parameter set
             popti = pd.Series({k:params[k] for k in self.popt.columns})
@@ -200,8 +248,7 @@ class Model(object):
             self.i+=1
 
 
-
-
+      @autojit
       def store_procost(self, indxi, label, params, yhat):
             # get predictions and store optimized parameter set
 

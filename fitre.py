@@ -5,31 +5,35 @@ import pandas as pd
 from lmfit import Parameters, Minimizer
 from radd.utils import *
 from radd import RADD
+from numba import jit, autojit
 
 def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
 
-    if 'pGo' in inits.keys(): del inits['pGo']
-    if 'ssd' in inits.keys(): del inits['ssd']
+      if 'pGo' in inits.keys(): del inits['pGo']
+      if 'ssd' in inits.keys(): del inits['ssd']
 
-    p=Parameters()
-    for key, val in inits.items():
-        if key in depends:
-            p.add(key, value=val, vary=1)
-            continue
-        p.add(key, value=val, vary=all_params)
+      if model in ['radd', 'ipb', 'abias']:
+            inits['ssv']=-abs(inits['ssv'])
+      else:
+            inits['ssv']=abs(inits['ssv'])
 
-    popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials),
-        fcn_kws={'model':model}, method='Nelder-Mead')
-    popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+      p=Parameters()
+      for key, val in inits.items():
+            if key in depends:
+                  p.add(key, value=val, vary=1)
+                  continue
+            p.add(key, value=val, vary=all_params)
 
-    params={k: p[k].value for k in p.keys()}
-    params['chi']=popt.chisqr
-    resid=popt.residual; yhat=y+resid
+      popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials), fcn_kws={'model':model}, method='Nelder-Mead')
+      popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
 
-    return params, yhat
+      params={k: p[k].value for k in p.keys()}
+      params['chi']=popt.chisqr
+      resid=popt.residual; yhat=y+resid
+      return params, yhat
 
 
-def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[]):
+def ssre_minfunc(p, y, ntrials=2000, model='radd', tb=.650, dflist=[]):
 
 	try:
 		theta={k:p[k].value for k in p.keys()}
@@ -50,52 +54,49 @@ def ssre_minfunc(p, y, ntrials, model='radd', tb=.650, dflist=[]):
 
 def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
-	nss=len(DVs)
-	ngo=len(DVg) - nss
+      nss=len(DVs)
+      ngo=len(DVg) - nss
+      tr=theta['tr']; a=theta['a']; ssd=theta['ssd']
+      #define RT functions for upper and lower bound processes
+      upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
+      lower_rt = lambda DV: np.array([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
+      #check for and record go trial RTs
+      grt = upper_rt(a, DVg[nss:, :])
+      if model=='abias':
+            ab=a+theta['ab']
+            delay = np.ceil((tb-tr)/dt) - np.ceil((tb-ssd)/dt)
+            #check for and record SS-Respond RTs that occur before boundary shift
+            ert_pre = upper_rt(a, DVg[:nss, :delay])
+            #check for and record SS-Respond RTs that occur POST boundary shift (t=ssd)
+            ert_post = upper_rt(ab, DVg[:nss, delay:])
+            #SS-Respond RT equals the smallest value
+            ert = np.fmin(ert_pre, ert_post)
+      else:
+            #check for and record SS-Respond RTs
+            ert = upper_rt(a, DVg[:nss, :])
 
-	tr=theta['tr']; a=theta['a']; ssd=theta['ssd']
-	#define RT functions for upper and lower bound processes
-	upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
-	lower_rt = lambda DV: np.array([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
+      if model=='ipa':
+            ssrt = upper_rt(a, DVs)
+      else:
+            ssrt = lower_rt(DVs)
 
-	#check for and record go trial RTs
-	grt = upper_rt(a, DVg[nss:, :])
-	if model=='abias':
-		ab=a+theta['ab']
-		delay = np.ceil((tb-tr)/dt) - np.ceil((tb-ssd)/dt)
-		#check for and record SS-Respond RTs that occur before boundary shift
-		ert_pre = upper_rt(a, DVg[:nss, :delay])
-		#check for and record SS-Respond RTs that occur POST boundary shift (t=ssd)
-		ert_post = upper_rt(ab, DVg[:nss, delay:])
-		#SS-Respond RT equals the smallest value
-		ert = np.fmin(ert_pre, ert_post)
-	else:
-		#check for and record SS-Respond RTs
-		ert = upper_rt(a, DVg[:nss, :])
-
-        if model in ['radd', 'ipb','abias']:
-                ssrt = lower_rt(DVs)
-        else:
-                ssrt = upper_rt(a, DVs)
-
-	# Prepare and return simulations df
+      # Prepare and return simulations df
       # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
-	stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
-	response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
-	# Add "choice" column to pad for error in later stages
-	choice=np.where(response==1, 'go', 'stop')
-	# Condition
-	ssdlist = [int(ssd*1000)]*nss+[1000]*ngo
-	ttypes=['stop']*nss+['go']*ngo
-	# Take the shorter of the ert and ssrt list, concatenate with grt
-	rt=np.append(np.fmin(ert,ssrt), grt)
+      stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
+      response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
+      # Add "choice" column to pad for error in later stages
+      choice=np.where(response==1, 'go', 'stop')
+      # Condition
+      ssdlist = [int(ssd*1000)]*nss+[1000]*ngo
+      ttypes=['stop']*nss+['go']*ngo
+      # Take the shorter of the ert and ssrt list, concatenate with grt
+      rt=np.append(np.fmin(ert,ssrt), grt)
 
-	simdf = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes})
-	# calculate accuracy for both trial_types
-	simdf['acc'] = np.where(simdf['trial_type']==simdf['choice'], 1, 0)
-	simdf.rt.replace(999, np.nan, inplace=True)
-
-	return simdf
+      simdf = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes})
+      # calculate accuracy for both trial_types
+      simdf['acc'] = np.where(simdf['trial_type']==simdf['choice'], 1, 0)
+      simdf.rt.replace(999, np.nan, inplace=True)
+      return simdf
 
 
 def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):
@@ -105,7 +106,7 @@ def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):
 	for ssd in ssdlist:
 		theta['ssd'] = ssd
 		dvg, dvs = RADD.run(theta, tb=.650, ntrials=ntrials)
-		df = analyze_reactive_trials(dvg, dvs, theta)
+		df = gen_resim_df(dvg, dvs, theta)
 		dflist.append(df)
 
 	return pd.concat(dflist)

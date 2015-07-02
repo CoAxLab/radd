@@ -11,7 +11,7 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
+def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
 
 	gotrials = data.query('response==1 & acc==1')
 	sigresp = data.query('response==1 & acc==0')
@@ -23,12 +23,11 @@ def rangl_re(data, cutoff=.650, prob=np.array([.05,.25,.50,.75,.95])):
 	gq = mq(gotrials.rt.values, prob=prob)#wcor)
 	eq = mq(sigresp.rt.values, prob=prob)#werr)
 
-	pstop = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
-
-	return np.hstack([gq*10, pg_cor, eq*10, pg_err, pstop])
+	return np.hstack([gq, pg_cor, eq, pg_err, pstop])
 
 
-def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([.0275, .1, .15, .30, .50, .70, .85, .975])):
+
+def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([1, 3, 5, 7, 9])):
 
 	godf = data.query('response==1')
 	gotrials=godf[godf.rt<=rt_cutoff]
