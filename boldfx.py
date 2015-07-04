@@ -91,7 +91,7 @@ def rise(theta, model='radd', tb=.560, ttype='go', tau=.0005, si=.01, task='pro'
 
 	theta=update_params(theta)
 
-	tr=theta['tr']; mu=theta['v'];
+	tr=theta['tr']; vtheta['v'];
 	a=theta['a']; z=theta['z'];
 	ssd=theta['ssd']; ssv=-abs(theta['ssv'])
 
@@ -172,7 +172,7 @@ def rise(theta, model='radd', tb=.560, ttype='go', tau=.0005, si=.01, task='pro'
 
 		thalamus.append(ithalamus)
 
-	thalamus=decay(thalamus, ithalamus, baseline=z, t=t, mu=mu, ssv=ssv, task=task, ssv_decay=ssv_decay, bias=bias)
+	thalamus=decay(thalamus, ithalamus, baseline=z, t=t, vmu, ssv=ssv, task=task, ssv_decay=ssv_decay, bias=bias)
 
 	if choice==ttype:
 		acc=1.00

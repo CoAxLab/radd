@@ -22,10 +22,9 @@ def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
 
 	gq = mq(gotrials.rt.values, prob=prob)#wcor)
 	eq = mq(sigresp.rt.values, prob=prob)#werr)
+	sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
 
-	return np.hstack([gq, pg_cor, eq, pg_err, pstop])
-
-
+	return np.hstack([gq, pg_cor, eq, pg_err, sacc])
 
 def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([1, 3, 5, 7, 9])):
 

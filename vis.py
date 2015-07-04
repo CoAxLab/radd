@@ -693,10 +693,10 @@ def plot_bold_manuscript(df=pd.DataFrame, pgo=np.arange(0, 1.25, .25), task='pro
 	go_cond_ix=[pgo[:-3], pgo[-3:-1], [pgo[-1]]]
 	ng_cond_ix=[[pgo[0]], [pgo[1]], pgo[2:]]
 
-	g_mu=[np.mean(gdf.ix[gdf['pGo'].isin(ii), 'mag']) for ii in go_cond_ix]
+	g_v[np.mean(gdf.ix[gdf['pGo'].isin(ii), 'mag']) for ii in go_cond_ix]
 	g_sem=[scp.stats.sem(gdf.ix[gdf['pGo'].isin(ii), 'mag'])*1.96 for ii in go_cond_ix]
 
-	ng_mu=[np.mean(ngdf.ix[ngdf['pGo'].isin(ii), 'mag']) for ii in ng_cond_ix]
+	ng_v[np.mean(ngdf.ix[ngdf['pGo'].isin(ii), 'mag']) for ii in ng_cond_ix]
 	ng_sem=[scp.stats.sem(ngdf.ix[ngdf['pGo'].isin(ii), 'mag'])*1.96 for ii in ng_cond_ix]
 
 	#PLOTTING

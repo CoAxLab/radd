@@ -1,15 +1,14 @@
 #!/usr/local/bin/env python
 from __future__ import division
-import os
-from radd.utils import update_params
-import numpy as np
-
+#from radd.utils import update_params
+from numpy import cumsum, where, ceil, array, sqrt, nan
+from numpy.random import random_sample as rs
 
 def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='reactive'):
 
 	"""
-	DVg is instantiated for all trials. DVs contains traces for a subset of those trials in which a SS occurs (proportional to pGo provided in theta).
-
+	DVg is instantiated for all trials. DVs contains traces for a subset of
+	those trials in which a SS occurs (proportional to pGo provided in theta).
 	"""
 
 	tr=theta['tr']; mu=theta['v']; a=theta['a'];
@@ -19,33 +18,67 @@ def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='re
 	else:
 		ssv=-abs(theta['ssv'])
 
-	dx=np.sqrt(si*tau)
+	dx = sqrt(si*tau)
 
-	Pg=0.5*(1 + mu*dx/si)
-	Tg=np.ceil((tb-tr)/tau)
+	Pg = 0.5*(1 + mu*dx/si)
+	Tg = ceil((tb-tr)/tau)
 
 	#generate random probability vectors [nGo Trials x nTimesteps TR -> TB]
-	trials=np.random.random_sample((ntrials, Tg))
+	trials = rs((ntrials, Tg))
 	#simulate all go signal paths
-	DVg = z + np.cumsum(np.where(trials<Pg, dx, -dx), axis=1)
+	DVg = z + cumsum(where(trials<Pg, dx, -dx), axis=1)
 
 	if kind=='proactive':
-		return DVg, np.array([999])
+		return DVg, array([999])
 
-	nSS=int(ntrials*(1-theta['pGo']))
-	Ps=0.5*(1 + ssv*dx/si)
-	Ts=np.ceil((tb-ssd)/tau)
+	nSS = int(ntrials*(1-theta['pGo']))
+	Ps = 0.5*(1 + ssv*dx/si)
+	Ts = ceil((tb-ssd)/tau)
 
 	if tr<ssd:
 		IXs = Tg - Ts
 		init_ss = DVg[:nSS, IXs]
-		init_ss[init_ss>a] = np.nan
+		init_ss[init_ss>a] = nan
 	else:
-		init_ss = np.array([z]*nSS)
+		init_ss = array([z]*nSS)
 
 	#generate random probability vectors [nSS Trials x nTimesteps SSD -> TB]
-	sstrials = np.random.random_sample((nSS, Ts))
+	sstrials =  rs((nSS, Ts))
 	#simulate all ss signal paths
-	DVs = init_ss[:, None] + np.cumsum(np.where(sstrials<Ps, dx, -dx), axis=1)
+	DVs = init_ss[:, None] + cumsum(where(sstrials<Ps, dx, -dx), axis=1)
+
+	return DVg, DVs
+
+
+def run_reactive(a, tr, v, ssv, z, ssd, pGo=.5, ntrials=2000, tb=0.650, tau=.0005, si=.01):
+
+	"""
+	DVg is instantiated for all trials. DVs contains traces for a subset of
+	those trials in which a SS occurs (proportional to pGo provided in theta).
+	"""
+
+	nSS=int(ntrials*(1-pGo))
+
+
+	dx=sqrt(si*tau)
+	#Ps = 0.5*(1 + ssv*dx/si)
+	#Pg = 0.5*(1 + mu*dx/si)
+	#Tg = ceil((tb-tr)/tau)
+	#Ts = ceil((tb-ssd)/tau)
+
+	#generate random probability vectors [nGo Trials x nTimesteps TR -> TB]
+	#trials= random.random_sample((ntrials,  ceil((tb-ssd)/tau)))
+	#simulate all go signal paths
+	DVg = z + cumsum(where(rs((ntrials, ceil((tb-ssd)/tau)))<(0.5*(1 + mu*dx/si)), dx, -dx), axis=1)
+	if tr<ssd: init_ss = DVg[:int(ntrials*(1-pGo)), ceil((tb-tr)/tau) - ceil((tb-ssd)/tau)]
+	else: init_ss = array([z]*int(ntrials*(1-pGo)))
+	DVs = init_ss[:, None] + cumsum(where(rs((nSS, ceil((tb-ssd)/tau)))<(0.5*(1 + ssv*dx/si)), dx, -dx), axis=1)
+	#IXs = Tg - Ts
+	#init_ss[init_ss>a] =  nan
+
+
+	#generate random probability vectors [nSS Trials x nTimesteps SSD -> TB]
+	#sstrials = rs((nSS, Ts))
+	#simulate all ss signal paths
 
 	return DVg, DVs
