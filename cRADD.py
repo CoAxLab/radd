@@ -14,6 +14,13 @@ This module is essentially an optimized version of the
 effective fitting functions in fitre.py and the
 model simulations in RADD.py
 
+RUNTIME TESTS:
+------------------------------------------
+50 iterations of simulating 10,000 trials:
+------------------------------------------
+fitre + RADD:           1m21s
+cRADD:                  31s
+-----------------------------------------
 """
 
 
@@ -64,7 +71,8 @@ def simulate_reactive(a, tr, v, ssv, z, ssd, nss, ntot=2000, tb=0.650, tau=.0005
 
 
 @jit
-def upper_rt_compiled(tr, ulim, DV, tb=.650, dt=.0005):
+def upper_rt(tr, ulim, DV, tb=.650, dt=.0005):
+
       trial_end = []
       for DVi in DV:
             if np.any(DVi>=ulim):
@@ -76,7 +84,7 @@ def upper_rt_compiled(tr, ulim, DV, tb=.650, dt=.0005):
 
 
 @jit
-def lower_rt_compiled(ssd, DV, tb=.650, dt=.0005):
+def lower_rt(ssd, DV, tb=.650, dt=.0005):
 
       trial_end = []
       for DVi in DV:
@@ -91,18 +99,17 @@ def lower_rt_compiled(ssd, DV, tb=.650, dt=.0005):
 @jit
 def sim_quantile_accuracy(DVg, DVs, a,  ssd, tr, nss, tb=.650, dt=.0005, p=np.array([.1, .3, .5, .7, .9])):
 
-      #check for and record go trial RTs
-      #grt = upper_rt(tr, a, DVg[nss:, :])
-      grt = upper_rt_compiled(tr, a, DVg[nss:, :])
-      #ert = upper_rt(ssd, a, DVg[:nss, :])
-      ert = upper_rt_compiled(ssd, a, DVg[:nss, :])
-      #ssrt = lower_rt(ssd, DVs)
-      ssrt = lower_rt_compiled(ssd, DVs)
+      # check for and record cor, err, and ss RTs
+      grt = upper_rt(DVg[nss:, :], tr, a)
+      ert = upper_rt(DVg[:nss, :], ssd, a)
+      ssrt = lower_rt(ssd, DVs)
 
-      response = np.append(np.where(ert<=ssrt,1,0), np.where(grt<tb,1,0))
-
+      # compute RT quantiles for correct and error resp.
       cg_quant = mq(grt[grt<tb], prob=p)
       eg_quant = mq(np.extract(ert<=ssrt, ert), prob=p)
+
+      # Get response and stop accuracy information
+      response = np.append(np.where(ert<=ssrt,1,0), np.where(grt<tb,1,0))
       gac = response[nss:].mean()
       sac = abs(1-response[:nss]).mean()
 
