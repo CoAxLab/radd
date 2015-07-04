@@ -10,11 +10,14 @@ from radd import fitre, fitpro, utils
 from numba import double
 from numba.decorators import jit, autojit
 
+
 class Model(object):
+
       from numba import double
       from numba.decorators import jit, autojit
       from radd import fitre, fitpro, utils
       from scipy.stats.mstats import mquantiles
+
 
       def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, depends_on={'xx':'XX'}, fit='bootstrap', niter=50, *args, **kwargs):
 
@@ -142,7 +145,6 @@ class Model(object):
 
 
 
-
       def run_model(self, save=False, savepth='./', live_update=True, disp=False, prepare=False, **kwargs):
 
             if "depends_on" in kwargs.keys():
@@ -183,33 +185,6 @@ class Model(object):
 
 
 
-
-      def fit_indx(self, cdata, indx, label, savepth='./', disp=False, live_update=True):
-
-            cdf = cdata.copy(); inits = self.inits; model=self.model; depends=self.depends;
-            ntrials, ftol, xtol, maxfun, niter = self.get_fitparams()
-
-            for i, y in enumerate(self.dat):
-
-                  if self.kind=='reactive':
-                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
-                        self.store_recost(indx[i], label, params, yhat)
-
-                  elif self.kind=='proactive':
-                        inits['pGo']=cdf.pGo.mean()
-                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
-                        self.store_procost(indx[i], label, params, yhat)
-
-                  if live_update:
-                        self.qp.gqp_fits.to_csv(savepth+model+"_gqp.csv", index=False)
-                        self.popt.to_csv(savepth+model+"_popt.csv", index=False)
-
-                        if self.kind=='reactive':
-                              self.qp.eqp_fits.to_csv(savepth+model+"_eqp.csv", index=False)
-                              self.pstop.pstop_fits.to_csv(savepth+model+"_pstop.csv", index=False)
-
-
-
       def get_observed(df, prob=np.array([10, 30, 50, 70, 90])):
 
             rt = df.rt
@@ -235,6 +210,7 @@ class Model(object):
             return expected
 
 
+
       @autojit
       def store_recost(self, indxi, label, params, yhat):
             # get predictions and store optimized parameter set
@@ -246,6 +222,7 @@ class Model(object):
             self.qp.eqp_fits.iloc[self.i, 2:] = yhat[6:12]
             self.pstop.pstop_fits.iloc[self.i, 2:] = yhat[12:]
             self.i+=1
+
 
 
       @autojit

@@ -5,7 +5,7 @@ import pandas as pd
 from lmfit import Parameters, Minimizer
 from radd.utils import *
 from radd import RADD
-from numba import jit, autojit
+#from numba import jit, autojit
 
 def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
 

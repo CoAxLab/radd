@@ -3,11 +3,8 @@ from __future__ import division
 import os
 from radd.utils import update_params
 import numpy as np
-from numba import double
-from numba.decorators import jit, autojit
-from numba import double
 
-@autojit
+
 def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='reactive'):
 
 	"""
@@ -16,7 +13,11 @@ def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='re
 	"""
 
 	tr=theta['tr']; mu=theta['v']; a=theta['a'];
-	z=theta['z']; ssd=theta['ssd']; ssv=theta['ssv']
+	z=theta['z']; ssd=theta['ssd'];
+	if model=='ipa':
+		ssv=abs(theta['ssv'])
+	else:
+		ssv=-abs(theta['ssv'])
 
 	dx=np.sqrt(si*tau)
 

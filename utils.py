@@ -44,7 +44,7 @@ def kde_fit_quantiles(rtquants, nsamples=1000):
 	returns samples to pass to sns.kdeplot()
 	"""
 
-	kdefit = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(rtquants)
+	kdefit = KernelDensity(kernel='gaussian', bandwidth=0.01).fit(rtquants)
 
 	samples = kdefit.sample(n_samples=nsamples).flatten()
 
