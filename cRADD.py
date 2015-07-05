@@ -1,116 +1,99 @@
 #!/usr/local/bin/env python
 from __future__ import division
-from numpy import cumsum, where, ceil, array, sqrt, nan
+import numpy as np
 from numpy.random import random_sample as rs
 from scipy.stats.mstats import mquantiles as mq
-from numba import jit, autojit
 
 """
 Working code for fitting reactive data:
-all functions are jit compiled to c  using numba.
-NOTE: numba does not support list comprehensions
-
 This module is essentially an optimized version of the
-effective fitting functions in fitre.py and the
+core fitting functions in fitre.py and the
 model simulations in RADD.py
 
 RUNTIME TESTS:
 ------------------------------------------
 50 iterations of simulating 10,000 trials:
 ------------------------------------------
-fitre + RADD:           1m21s
-cRADD:                  31s
+fitre + RADD:
+1 loops, best of 3: 1min 32s per loop
+
+cRADD:
+1 loops, best of 3: 12.9 s per loop
 -----------------------------------------
 """
 
 
+def sim_conditions(theta, nsims=50, ssd=np.arange(.2, .45, .05)):
 
-@jit
-def ssre_minfunc(p, y, nsims=50, nss=1000, ntot=2000):
+      if not type(theta)==dict:
+            theta={k:theta[k].value for k in theta.keys()}
 
-        """
-        still need to write a proper cost function that
-        applies the weights and does the summation
-        """
+      a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
+      yhat = []
 
-        a, tr, v, ssv, z  = p['a'], p['tr'], p['v'], p['ssv'],  p['z']
-        yhat = []
-        for ssd in np.arange(.2,.45,.05):
-                dvg, dvs = simulate_reactive(a, tr, v, ssv, z, ssd, nss=1000, ntot=2000)
-                gac, sac, cg_quant, eg_quant = sim_quantile_accuracy(dvg, dvs, a,  ssd, tr, nss=1000)
-                yhat.append([gac, sac, cg_quant, eg_quant])
+      for i in range(nsims):
+            dvg, dvs = simulate_reactive(a, tr, v, ssv, z, ssd, nss=1000, ntot=2000)
+            yhat.append(sim_quantile_accuracy(dvg, dvs, a, tr, ssd, nss=1000))
 
       return yhat
 
 
-@jit
-def simulate_reactive(a, tr, v, ssv, z, ssd, nss, ntot=2000, tb=0.650, tau=.0005, si=.01):
+def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, tau=.0005, si=.01):
+      """
 
+      This is an optimized version of RADD.run() which is used during the
+      fitting routine to vectorize all simulated trials and timepoints.
+
+      In contrast to RADD.run(), which simulates a single SSD condition, this function
+      simulates all SSD conditions simultaneously
+
+      args:
+
+            a, tr, v, ssv, z (float):     model parameters
+            ssd  (np array):              full set of stop signal delays
+            nss  (int):                   number of stop trials
+            ntot (int):                   number of total trials
+            tb :                          time boundary
+
+      returns:
+
+            DVg:  2d array (ntrials x ntimepoints) for all trials
+
+            DVs:  3d array (Num SSD x nSS trials x ntimepoints) for all stop signal trials
+                  All nss SS trials for all SSD conditions (DVs). All ss decision traces
+                  are initiated from DVg(t=SSD) if SSD<tr
+
+      Output can be passed to sim quantile accuracy for summary measures
       """
-      DVg is instantiated for all trials. DVs contains traces for a subset of
-      those trials in which a SS occurs (proportional to pGo provided in theta).
-      """
-      dx=sqrt(si*tau)
+
+      nssd=len(ssd);
+      dx=np.sqrt(si*tau)
 
       Pg = 0.5*(1 + v*dx/si)
-      Tg = ceil((tb-tr)/tau)
+      Tg = np.ceil((tb-tr)/tau).astype(int)
 
       Ps = 0.5*(1 + ssv*dx/si)
-      Ts = ceil((tb-ssd)/tau)
+      Ts = np.ceil((tb-ssd)/tau).astype(int)
 
-      DVg = z + cumsum(where(rs((ntot, Tg))<Pg, dx, -dx), axis=1)
+      DVg = z + np.cumsum(np.where(rs((ntot, Tg))<Pg, dx, -dx), axis=1)
 
-      if tr<ssd:
-            init_ss = DVg[:nss, Tg - Ts]
-      else:
-            init_ss = array([z]*nss)
-
-      DVs = init_ss[:, None] + cumsum(where(rs((nss, Ts))<Ps, dx, -dx), axis=1)
-
+      init_ss = np.array([DVg[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
+      DVs = init_ss[:, :, None] + np.cumsum(np.where(rs((nssd, nss, Ts.max()))<Ps, dx, -dx), axis=2)
       return DVg, DVs
 
 
-@jit
-def upper_rt(tr, ulim, DV, tb=.650, dt=.0005):
+def analyze_reactive(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.array([.1, .3, .5, .7, .9])):
 
-      trial_end = []
-      for DVi in DV:
-            if np.any(DVi>=ulim):
-                  trial_end.append(tr + np.argmax(DVi>=ulim)*dt)
-            else:
-                  trial_end.append(999)
+      grt = np.where(DVg[nss:, :].max(axis=1)>=a, tr + np.argmax(DVg[nss:, :]>=a, axis=1)*tau, np.nan)
+      ert = np.where(DVg[:nss, :].max(axis=1)>=a, tr + np.argmax(DVg[:nss, :]>=a, axis=1)*tau, np.nan)
+      ssrt = np.where(np.any(DVs<=0, axis=2), ssd[:, None]+np.argmax(DVs<=0, axis=2)*tau, np.nan)
 
-      return np.array(trial_end)
-
-
-@jit
-def lower_rt(ssd, DV, tb=.650, dt=.0005):
-
-      trial_end = []
-      for DVi in DV:
-            if np.any(DVi<=0):
-                  trial_end.append(ssd + np.argmax(DVi<=0)*dt)
-            else:
-                  trial_end.append(999)
-
-      return np.array(trial_end)
-
-
-@jit
-def sim_quantile_accuracy(DVg, DVs, a,  ssd, tr, nss, tb=.650, dt=.0005, p=np.array([.1, .3, .5, .7, .9])):
-
-      # check for and record cor, err, and ss RTs
-      grt = upper_rt(DVg[nss:, :], tr, a)
-      ert = upper_rt(DVg[:nss, :], ssd, a)
-      ssrt = lower_rt(ssd, DVs)
-
-      # compute RT quantiles for correct and error resp.
+      # comute RT quantiles for correct and error respself.
       cg_quant = mq(grt[grt<tb], prob=p)
-      eg_quant = mq(np.extract(ert<=ssrt, ert), prob=p)
+      eg_quant = mq(np.hstack([np.extract(ert<ssi, ert) for ssi in ssrt]), prob=p)
 
       # Get response and stop accuracy information
-      response = np.append(np.where(ert<=ssrt,1,0), np.where(grt<tb,1,0))
-      gac = response[nss:].mean()
-      sac = abs(1-response[:nss]).mean()
+      gac = np.where(grt<tb,1,0).mean()
+      sacc = 1 - np.where(ert<ssrt, 1, 0).mean(axis=1)
 
-      return gac, sac, cg_quant, eg_quant
+      return [gac, sacc, cg_quant, eg_quant]
