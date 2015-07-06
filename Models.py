@@ -7,17 +7,10 @@ from scipy.stats.mstats import mquantiles as mq
 from scipy import optimize
 from scipy.io import loadmat
 from radd import fitre, fitpro, utils
-from numba import double
-from numba.decorators import jit, autojit
+from numba.decorators import jit
 
 
 class Model(object):
-
-      from numba import double
-      from numba.decorators import jit, autojit
-      from radd import fitre, fitpro, utils
-      from scipy.stats.mstats import mquantiles
-
 
       def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, depends_on={'xx':'XX'}, fit='bootstrap', niter=50, *args, **kwargs):
 
@@ -90,8 +83,8 @@ class Model(object):
             labels = data[cond].unique(); nlabels = len(labels);
             index = range(nlabels*len(indx))
 
-            delays = list(data.query('trial_type=="stop"').ssd.unique())
-            self.build_stores(data, cond, inits, index, delays)
+            delays = sorted(data.query('trial_type=="stop"').ssd.unique().astype(np.int))
+            #self.build_stores(data, cond, inits, index, delays)
 
             if self.fit=='bootstrap':
                   if self.kind=='reactive':
@@ -109,38 +102,61 @@ class Model(object):
                         ifx = utils.rangl_pro
 
                   #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
-                  self.dat = np.vstack([[ifx(idxdf) for idx, idxdf in cdf.groupby('idx')] for c, cdf in self.data.groupby(self.cond)])
+                  self.dat = np.vstack([[ifx(idxdf) for idx, idxdf in cdf.groupby('idx')] for c, cdf in self.data.groupby(self.cond)]).astype(np.float32)
+
+            popt_cols = np.hstack(['chi', inits.keys()])
+            qp_cols = ['GoAcc']+delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
+            ixdf = pd.concat([pd.DataFrame({'indx': indx, 'cond':c}, columns=['indx', 'cond']) for c in labels]).reset_index(drop=True)
+
+            self.observed = pd.concat([ixdf, pd.DataFrame(self.dat, columns=qp_cols)], axis=1)
+            self.fit = pd.concat([ixdf, pd.DataFrame(np.zeros_like(self.dat), columns=qp_cols)], axis=1)
+            self.popt = pd.concat([ixdf, pd.DataFrame(columns=popt_cols, index=ixdf.index)], axis=1)
+            #self.fit = pd.DataFrame(columns=qp_cols, index=index)
+            #pstop_df = pd.DataFrame(columns=pstop_cols, index=index)
+
+            #qpitems = ['obs', 'fit']
+            # STORE THE DATA OBJECTS IN PANDAS PANEL/DF FOR CONVENIENT FUTURE REFERENCE
+            #lalist=sum([[lbl]*len(indx) for lbl in labels], [])
+            #self.qp.gqp_obs.loc[:,:] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, :6]])
+            #self.qp.eqp_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, 6:12]])
+            #self.pstop.pstop_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, 12:]])
+            #self.popt.iloc[:, :2] =  np.vstack([lalist, indx*nlabels]).T
+            #self.isprepared = True
 
             # STORE THE DATA OBJECTS IN PANDAS PANEL/DF FOR CONVENIENT FUTURE REFERENCE
-            lalist=sum([[lbl]*len(indx) for lbl in labels], [])
-            self.qp.gqp_obs.loc[:,:] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, :6]])
-            self.qp.eqp_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, 6:12]])
-            self.pstop.pstop_obs.loc[:, :] = np.hstack([np.array([lalist, indx*nlabels]).T, self.dat[:, 12:]])
-            self.popt.iloc[:, :2] =  np.vstack([lalist, indx*nlabels]).T
+            #lalist=sum([[lbl]*len(indx) for lbl in labels], [])
+            #tmp = pd.DataFrame(np.vstack([indx*nlabels, lalist]).T)
+            #self.observed.iloc[:,2:] = self.dat
+            #self.observed = pd.DataFrame(self.dat, columns=qp_cols, index=index)
+            #self.popt = pd.DataFrame(columns=popt_cols, index=index)
+            #self.popt.iloc[:, :2] =  np.vstack([lalist, indx*nlabels]).T
             self.isprepared = True
-
-
 
       def build_stores(self, data, cond, inits, index, delays):
 
-            popt_cols = np.hstack(['indx', cond, 'chi', inits.keys()])
-            qp_cols = ['indx', cond, '5q', '25q', '50q', '75q', '95q', 'presp']
-            pstop_cols = np.hstack(['indx', cond, delays])
+            #popt_cols = np.hstack(['indx', cond, 'chi', inits.keys()])
+            #qp_cols = ['indx', cond, '5q', '25q', '50q', '75q', '95q', 'presp']
+            #pstop_cols = np.hstack(['indx', cond, delays])
+            #qp_cols = ['indx', 'cond', 'GoAcc'] + delays + ['c5', 'c25', 'c50', 'c75', 'c95'] + ['e5', 'e25', 'e50', 'e75', 'e95']
+            #qp_df = pd.DataFrame(columns=qp_cols, index=index)
+            #pstop_df = pd.DataFrame(columns=pstop_cols, index=index)
 
-            qp_df = pd.DataFrame(columns=qp_cols, index=index)
-            pstop_df = pd.DataFrame(columns=pstop_cols, index=index)
+            #qpitems = ['obs', 'fit']
+            #psitems = ['pstop_obs', 'pstop_fit']
+            #self.qp = pd.Panel.from_dict({item: qp_df.copy() for item in qpitems}, orient='items')
 
-            if self.kind=='reactive':
-                  qpitems = ['gqp_obs', 'eqp_obs', 'gqp_fit', 'eqp_fit']
-                  psitems = ['pstop_obs', 'pstop_fit']
-                  self.qp = pd.Panel.from_dict({item: qp_df.copy() for item in qpitems}, orient='items')
-                  self.pstop = pd.Panel.from_dict({item: pstop_df.copy() for item in psitems}, orient='items')
+            #if self.kind=='reactive':
+                  #qpitems = ['gqp_obs', 'eqp_obs', 'gqp_fit', 'eqp_fit']
+                  #qpitems = ['qp_obs', 'qp_fit']
+                  #psitems = ['pstop_obs', 'pstop_fit']
+                  #self.qp = pd.Panel.from_dict({item: qp_df.copy() for item in qpitems}, orient='items')
+                  #self.pstop = pd.Panel.from_dict({item: pstop_df.copy() for item in psitems}, orient='items')
 
-            elif self.kind=='proactive':
-                  qpitems = ['gqp_obs', 'gqp_fit']
-                  self.qp = pd.Panel.from_dict({item: qp_df.copy() for item in qpitems}, orient='items')
+            #elif self.kind=='proactive':
+                  #qpitems = ['gqp_obs', 'gqp_fit']
+                  #self.qp = pd.Panel.from_dict({item: qp_df.copy() for item in qpitems}, orient='items')
 
-            self.popt = pd.DataFrame(columns=popt_cols, index=index)
+            #self.popt = pd.DataFrame(columns=popt_cols, index=index)
             self.isprepared = True
 
 
@@ -211,7 +227,7 @@ class Model(object):
 
 
 
-      @autojit
+      @jit
       def store_recost(self, indxi, label, params, yhat):
             # get predictions and store optimized parameter set
             popti = pd.Series({k:params[k] for k in self.popt.columns})
@@ -225,7 +241,7 @@ class Model(object):
 
 
 
-      @autojit
+      @jit
       def store_procost(self, indxi, label, params, yhat):
             # get predictions and store optimized parameter set
 

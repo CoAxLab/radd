@@ -23,19 +23,18 @@ cRADD:
 """
 
 
-def sim_conditions(theta, nsims=50, ssd=np.arange(.2, .45, .05)):
+def recost(theta, y, ntrials=2000, pGo=.5, ssd=np.arange(.2, .45, .05)):
 
       if not type(theta)==dict:
             theta={k:theta[k].value for k in theta.keys()}
-
       a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
-      yhat = []
 
-      for i in range(nsims):
-            dvg, dvs = simulate_reactive(a, tr, v, ssv, z, ssd, nss=1000, ntot=2000)
-            yhat.append(sim_quantile_accuracy(dvg, dvs, a, tr, ssd, nss=1000))
+      nss = int((1-pGo)*ntrials)
 
-      return yhat
+      dvg, dvs = run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
+      yhat = analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
+
+      return y - yhat
 
 
 def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, tau=.0005, si=.01):
@@ -96,4 +95,4 @@ def analyze_reactive(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.a
       gac = np.where(grt<tb,1,0).mean()
       sacc = 1 - np.where(ert<ssrt, 1, 0).mean(axis=1)
 
-      return [gac, sacc, cg_quant, eg_quant]
+      return np.hstack([gac, sacc, cg_quant, eg_quant])
