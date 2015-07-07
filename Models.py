@@ -118,7 +118,6 @@ class Model(object):
             self.observed = pd.concat([ixdf, pd.DataFrame(self.dat, columns=qp_cols)], axis=1)
             self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(self.dat), columns=qp_cols)], axis=1)
             self.popt = pd.concat([ixdf, pd.DataFrame(columns=popt_cols, index=ixdf.index)], axis=1)
-
             self.isprepared = True
 
 
@@ -203,6 +202,7 @@ class Model(object):
             return observed, obs_quant
 
 
+
       def get_exp_counts(simdf, obs_quant, n_obs, prob=np.array([.10, .30, .50, .70, .90])):
 
             if type(simdf) == pd.Series:
@@ -230,6 +230,7 @@ class Model(object):
             wt = (sdrt[np.ceil(len(sdrt)/2)]/sdrt)**2
 
             return wt
+
 
 
       @jit
