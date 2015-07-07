@@ -23,18 +23,41 @@ cRADD:
 """
 
 
-def recost(theta, y, ntrials=2000, pGo=.5, ssd=np.arange(.2, .45, .05)):
+def recost(theta, y, ntrials=2000, wts=None, pGo=.5, ssd=np.arange(.2, .45, .05)):
 
       if not type(theta)==dict:
-            theta={k:theta[k].value for k in theta.keys()}
+            theta = theta.valuesdict()#theta={k:theta[k].value for k in theta.keys()}
+
       a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
 
       nss = int((1-pGo)*ntrials)
+      dvg, dvs = cRADD.run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
+      yhat = cRADD.analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
 
-      dvg, dvs = run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
-      yhat = analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
+      if wts is None:
+            cost = (y-yhat).astype(np.float32)
+            #wtcost = cost[0]*wts[0],
+      else:
+            wta, wtc, wte = wts[0], wts[1], wts[2]
+            cost = np.hstack([wta*(y[:6]-yhat[:6]), wtc*y[0]*(y[6:11]-yhat[6:11]), wte*y(y[11:]-yhat[11:])]).astype(np.float32)
 
-      return y - yhat
+      return cost
+
+
+def recost_scipy(x0, y=None, wts=None, ntrials=2000, pGo=.5, ssd=np.arange(.2, .45, .05)):
+
+      a, tr, v, ssv, z  = p[0], p[1], p[2], p[3], p[4]
+      nss = int((1-pGo)*ntrials)
+      dvg, dvs = cRADD.run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
+      yhat = cRADD.analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
+
+      if wts is None:
+            cost=np.sum((y[0]-yhat[0])**2+(y[1:6]-yhat[1:6])**2+(y[6:11]-yhat[6:11])**2+(y[11:]-yhat[11:])**2)
+      else:
+            wta, wtc, wte = wts[0], wts[1], wts[2]
+            cost = np.hstack([wta*(y[:6]-yhat[:6]), wtc*y[0]*(y[6:11]-yhat[6:11]), wte*y(y[11:]-yhat[11:])]).astype(np.float32)
+
+      return cost
 
 
 def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, tau=.0005, si=.01):
@@ -96,3 +119,14 @@ def analyze_reactive(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.a
       sacc = 1 - np.where(ert<ssrt, 1, 0).mean(axis=1)
 
       return np.hstack([gac, sacc, cg_quant*10, eg_quant*10])
+
+
+def simulate(theta, ntrials=2000, nss=1000, pGo=.5, ssd=np.arange(.2, .45, .05)):
+
+        if not type(theta)==dict:
+              theta = theta.valuesdict()#theta={k:theta[k].value for k in theta.keys()}
+
+        a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
+        nss = int((1-pGo)*ntrials)
+        dvg, dvs = run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
+        return analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)

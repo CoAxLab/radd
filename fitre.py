@@ -3,12 +3,12 @@ from __future__ import division
 import numpy as np
 import pandas as pd
 from lmfit import Parameters, Minimizer
+from scipy.optimize import minimize
 from radd.utils import *
-from radd.cRADD import recost
+from radd.cRADD import recost, recost_scipy
 from radd import RADD
-#from numba import jit, autojit
 
-def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
+def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
 
       if 'pGo' in inits.keys(): del inits['pGo']
       if 'ssd' in inits.keys(): del inits['ssd']
@@ -18,19 +18,28 @@ def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, 
       else:
             inits['ssv']=abs(inits['ssv'])
 
-      p=Parameters()
-      for key, val in inits.items():
-            if key in depends:
-                  p.add(key, value=val, vary=1)
-                  continue
-            p.add(key, value=val, vary=all_params)
+      if use_lmfit:
+              p=Parameters()
+              for key, val in inits.items():
+                    if key in depends:
+                          p.add(key, value=val, vary=1)
+                          continue
+                    p.add(key, value=val, vary=all_params)
 
-      popt = Minimizer(recost, p, fcn_args=(y, ntrials), method='Nelder-Mead')
-      popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+              popt = Minimizer(recost, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts}, method='Nelder-Mead')
+              popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+              params={k: p[k].value for k in p.keys()}
+              params['chi']=popt.chisqr
+              resid=popt.residual; yhat=y+resid
 
-      params={k: p[k].value for k in p.keys()}
-      params['chi']=popt.chisqr
-      resid=popt.residual; yhat=y+resid
+      else:
+              a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
+              p=[a, tr, v, ssv, z]
+              popt = minimize(recost_nb, p, args=(y, wts, ntrials), method='Nelder-Mead', options={'disp':True, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfun})
+              a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
+              x0=[a, tr, v, ssv, z]
+              fit = mina(recost_scipy, x0, args=(y, wts, ntrials), method='Nelder-Mead', options={'disp':True, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfun})
+
       return params, yhat
 
 
@@ -54,6 +63,13 @@ def ssre_minfunc(p, y, ntrials=2000, model='radd', tb=.650, dflist=[]):
 
 
 def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
+
+      """
+      Takes Go (DVg) and Stop (DVs) decision traces from RADD.run() and
+      Generates a pandas DF with same naming conventions as data
+      (#TODO : See docs).
+      """
+
 
       nss=len(DVs)
       ngo=len(DVg) - nss
@@ -101,13 +117,22 @@ def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
 
 def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):
-	ssdlist = np.array(ssdlist)*.001
-	dflist = []
-	theta['pGo']=.5
-	for ssd in ssdlist:
-		theta['ssd'] = ssd
-		dvg, dvs = RADD.run(theta, tb=.650, ntrials=ntrials)
-		df = gen_resim_df(dvg, dvs, theta)
-		dflist.append(df)
 
-	return pd.concat(dflist)
+      """
+      wrapper for simulating ntrials with RADD.run()
+      for a range of SSDs in a reactive stopping task
+
+      outputs a dataframe with same structure as data
+      (#TODO : see docs) for further analysis
+      """
+
+      ssdlist = np.array(ssdlist)*.001
+      dflist = []
+      theta['pGo']=.5
+      for ssd in ssdlist:
+            theta['ssd'] = ssd
+            dvg, dvs = RADD.run(theta, tb=.650, ntrials=ntrials)
+            df = gen_resim_df(dvg, dvs, theta)
+            dflist.append(df)
+
+      return pd.concat(dflist)
