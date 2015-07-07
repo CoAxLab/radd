@@ -8,6 +8,13 @@ from scipy import optimize
 from scipy.io import loadmat
 from radd import fitre, fitpro, utils
 from numba.decorators import jit
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+rpal = lambda nc: sns.blend_palette(['#e88379', '#9e261b'], n_colors=nc)
+bpal = lambda nc: sns.blend_palette(['#81aedb', '#2a6095'], n_colors=nc)
+gpal = lambda nc: sns.blend_palette(['#65b88f', '#2c724f'], n_colors=nc)
+ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
 
 
 class Model(object):
@@ -77,10 +84,9 @@ class Model(object):
             y = self.dat.mean(axis=0)
 
             if self.kind=='reactive':
-                  self.inits, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
             elif self.kind=='proactive':
-                  self.inits, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
-
+                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
 
 
       def prepare_fit(self):
@@ -262,12 +268,7 @@ class Model(object):
 
 
 
-      def visualize_fits(self):
-
-            gacc = self.observed['GoAcc'].mean()
-            sacc = self.observed.loc[:, 200:400].mean()
-            fit_gacc = self.fits['GoAcc'].mean()
-            fit_sacc = self.fits.loc[:, 200:400].mean()
+      def visualize_fits(self, plot_acc=False):
 
             gq = self.observed.loc[:, 'c5':'c95'].mean()
             eq = self.observed.loc[:, 'e5':'e95'].mean()
@@ -295,7 +296,12 @@ class Model(object):
             ax1.set_ylim(-.05, 1.05)
             ax1.set_xticklabels(ax1.get_xticks()*.1)
 
-            # Plot observed and predicted stop curves
-            utils.scurves([y[20:25], yhat[20:25]], labels=['data Stop', 'model Stop'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
+            if plot_acc:
+                  gacc = self.observed['GoAcc'].mean()
+                  sacc = self.observed.loc[:, 200:400].mean()
+                  fit_gacc = self.fits['GoAcc'].mean()
+                  fit_sacc = self.fits.loc[:, 200:400].mean()
+                  # Plot observed and predicted stop curves
+                  utils.scurves([sacc, fit_sacc], labels=['data Stop', 'model Stop'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
             plt.tight_layout()
             sns.despine()

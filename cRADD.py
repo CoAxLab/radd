@@ -95,4 +95,4 @@ def analyze_reactive(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.a
       gac = np.where(grt<tb,1,0).mean()
       sacc = 1 - np.where(ert<ssrt, 1, 0).mean(axis=1)
 
-      return np.hstack([gac, sacc, cg_quant, eg_quant])
+      return np.hstack([gac, sacc, cg_quant*10, eg_quant*10])
