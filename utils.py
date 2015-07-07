@@ -13,18 +13,33 @@ from sklearn.neighbors.kde import KernelDensity
 
 def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
 
-	gotrials = data.query('response==1 & acc==1')
-	sigresp = data.query('response==1 & acc==0')
+	#gotrials = data.query('response==1 & acc==1')
+	#sigresp = data.query('response==1 & acc==0')
 
-	pg_cor, pg_err = data.groupby('trial_type').mean()['response'].values
-	wcor = prob*pg_cor
-	werr = prob*pg_err
+	#pg_cor, pg_err = data.groupby('trial_type').mean()['response'].values
+	#wcor = prob*pg_cor
+	#werr = prob*pg_err
 
-	gq = mq(gotrials.rt.values, prob=prob)#wcor)
-	eq = mq(sigresp.rt.values, prob=prob)#werr)
-	sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
+	#gq = mq(gotrials.rt.values, prob=prob)#wcor)
+	#eq = mq(sigresp.rt.values, prob=prob)#werr)
+	#sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
 
-	return np.hstack([gq, pg_cor, eq, pg_err, sacc])
+	#return np.hstack([gq, pg_cor, eq, pg_err, sacc])
+	#gotrials = data.query('response==1 & acc==1')
+
+	#pg_cor, pg_err = data.groupby('trial_type').mean()['response'].values
+	#wcor = prob*pg_cor
+	#werr = prob*pg_err
+
+	gac = data.query('trial_type=="go"').acc.mean()#.astype(np.float32)
+	sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values#.astype(np.float32)
+
+	grt = data.query('trial_type=="go" & acc==1').rt.values#.astype(np.float32)
+	ert = data.query('response==1 & acc==0').rt.values#.astype(np.float32)
+	gq = mq(grt, prob=prob)#.astype(np.float32)#wcor)
+	eq = mq(ert, prob=prob)#.astype(np.float32)#werr)
+
+	return np.hstack([gac, sacc, gq*10, eq*10]).astype(np.float32)
 
 def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([1, 3, 5, 7, 9])):
 

@@ -837,3 +837,30 @@ def ssgo_go_rts(data):
         axes[-1].plot(prob, qg, marker='o', color=greens[3])
         axes[-1].plot(prob, qsg, marker='o', color=reds[5])
         plt.tight_layout()
+
+def visualize_fits()
+      sns.set_context('notebook', font_scale=1.6)
+      f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
+
+      # Fit RT quantiles to KDE function in radd.utils
+      quant_list = [y[:5], yhat[:5], y[10:15], yhat[10:15]]
+      kdefits = [utils.kde_fit_quantiles(q) for q in quant_list]
+
+      sns.kdeplot(kdefits[0], cumulative=True, label='data gQP', linestyle='-', color=gpal(2)[0],ax=ax1, linewidth=3.5)
+
+      sns.kdeplot(kdefits[1], cumulative=True, label='model gQP', linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
+
+      sns.kdeplot(kdefits[2], cumulative=True, label='data eQP', linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
+
+      sns.kdeplot(kdefits[3], cumulative=True, label='model eQP', linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
+
+      ax1.set_xlim(4.3, 6.5)
+      ax1.set_ylabel('P(RT<t)')
+      ax1.set_xlabel('RT (s)')
+      ax1.set_ylim(-.05, 1.05)
+      ax1.set_xticklabels(ax1.get_xticks()*.1)
+
+      # Plot observed and predicted stop curves
+      utils.scurves([y[20:25], yhat[20:25]], labels=['data Stop', 'model Stop'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
+      plt.tight_layout()
+      sns.despine()

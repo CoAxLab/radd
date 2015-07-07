@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from lmfit import Parameters, Minimizer
 from radd.utils import *
+from radd.cRADD import recost
 from radd import RADD
 #from numba import jit, autojit
 
@@ -24,7 +25,7 @@ def fit_reactive_model(y, inits={}, depends=['xx'], model='radd', ntrials=5000, 
                   continue
             p.add(key, value=val, vary=all_params)
 
-      popt = Minimizer(ssre_minfunc, p, fcn_args=(y, ntrials), fcn_kws={'model':model}, method='Nelder-Mead')
+      popt = Minimizer(recost, p, fcn_args=(y, ntrials), method='Nelder-Mead')
       popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
 
       params={k: p[k].value for k in p.keys()}
