@@ -18,7 +18,7 @@ def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntri
       p=Parameters()
       if all_params:
             p.add('a', value=inits['a'], vary=1, min=lim['a'][0], max=lim['a'][1])
-            p.add('ssv', value=inits['ssv'], vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
+            p.add('ssv', value=-abs(inits['ssv']), vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
             p.add('v', value=inits['v'], vary=1, min=lim['v'][0], max=lim['v'][1])
             p.add('zperc', value=inits['z']/inits['a'], vary=1, min=.001, max=.99)
             p.add('tr', value=inits['tr'], vary=1, min=lim['tr'][0], max=lim['tr'][1])

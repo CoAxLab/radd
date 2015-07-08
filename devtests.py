@@ -24,48 +24,58 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
 
       sns.set_context('notebook', font_scale=1.4)
       htmin, htmax = [], []
-
       nsims=np.min([len(ols_update), len(wls_update)])
-      alpha = np.linspace(.15,.75, nsims)
+      alpha = np.linspace(.04,.08, nsims)
 
       for i in range(nsims):
 
             if track=='predictions':
                   wres = y-wls_update[i]
                   ores = y-ols_update[i]
+                  if i>0:
+                        wres_pre = y-wls_update[i-1]
+                        ores_pre = y-ols_update[i-1]
+
             else:
                   wres = wls_update[i]
                   ores = ols_update[i]
+                  if i>0:
+                        wres_pre = wls_update[i-1]
+                        ores_pre = ols_update[i-1]
 
-            plt.plot(wres, color='#4168B7', alpha=alpha[i], linestyle='--', lw=2)
-            plt.plot(ores, color='#c0392b', alpha=alpha[i], linestyle='--', lw=2)
 
+            plt.plot(wres, color='#3498db', alpha=alpha[i], linestyle='-', lw=.42)
+            plt.plot(ores, color='#e84b3a', alpha=alpha[i], linestyle='-', lw=.42)
+
+            if i!=0:
+                  wls_fill=plt.fill_between(np.arange(16), wres_pre, wres, facecolor='#3498db', alpha=alpha[i])
+                  ols_fill=plt.fill_between(np.arange(16), ores_pre, ores, facecolor='#e84b3a', alpha=alpha[i])
             htmin.append(np.hstack([ores, wres]).min())
             htmax.append(np.hstack([ores, wres]).max())
 
       ax = plt.gca()
-      ax.plot(wres, label='wls', color='#1268B7', alpha=1, linestyle='-', lw=2)
-      ax.plot(ores, label='ols', color='#f0392b', alpha=1, linestyle='-', lw=2)
+      ax.plot(wres, label='wls', color='#1270b9', alpha=1, linestyle='-', marker='o', ms=3, lw=2)
+      ax.plot(ores, label='ols', color='#c0392b', alpha=1, linestyle='-', marker='o', ms=3, lw=2)
 
       ht = np.array([np.min(htmin), np.max(htmax)])
-      ax.fill_betweenx(ht, x1=0, x2=5, color='k', alpha=.3)
-      ax.fill_betweenx(ht, x1=5, x2=10, color='k', alpha=.15)
-      ax.fill_betweenx(ht, x1=10, x2=15, color='k', alpha=.2)
-      ax.hlines(y=0, xmin=0, xmax=15, color='k', linestyle='-', lw=4, label='Data')
-      plt.setp(ax, xlim=(0,15), ylim=(ht[0], ht[1]), ylabel='residuals', xlabel='costfx units')
+      ax.fill_betweenx(ht, x1=0, x2=5, color='#2c3e50', alpha=.1)
+      ax.fill_betweenx(ht, x1=5, x2=10, color='#48647c', alpha=.1)
+      ax.fill_betweenx(ht, x1=10, x2=15, color='#2c3e50', alpha=.1)
+      ax.hlines(y=0, xmin=0, xmax=15, color='k', linestyle='-', lw=2, label='$Dat \'urz$')
+      plt.setp(ax, xlim=(0,15), ylim=(ht[0], ht[1]))
+      ax.set_xlabel('$Dont\/worry\/bout\/it..$', fontsize=20)
+      ax.set_ylabel("$The\/\chi\/ost\/F(x)$", fontsize=20)
       ax.set_xticklabels([])
       sns.despine()
       ax.legend(loc=0, fontsize=16)
 
-      ax.text(1.2, -.3, 'Stop Curve', fontsize=16)
-      ax.text(6.4, -.3, 'Go RTQ', fontsize=16)
-      ax.text(11.6, -.3, 'Err RTQ', fontsize=16)
+      ax.text(2., -.08, 'SPC', fontsize=20)
+      ax.text(6.9, -.08, 'GRQ', fontsize=20)
+      ax.text(12.0, -.08, 'ERQ', fontsize=20)
       plt.tight_layout()
 
-      if save:
-            plt.savefig('/home/dvnk/Dropbox/ols_wls_compare.png', dpi=600)
-
-      return plt.gcf()
+      plt.savefig('/Users/kyle/Dropbox/TheXostFx.png', dpi=900)
+      return [y, wls_update, ols_update]
 
 
 def track_optimization(y, inits={}, collector=[], track='residuals', depends=['xx'], wts=None, model='radd', ntrials=5000, maxfun=50, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True):
@@ -84,7 +94,7 @@ def track_optimization(y, inits={}, collector=[], track='residuals', depends=['x
 
       if all_params:
             p.add('a', value=inits['a'], vary=1, min=lim['a'][0], max=lim['a'][1])
-            p.add('ssv', value=inits['ssv'], vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
+            p.add('ssv', value=-abs(inits['ssv']), vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
             p.add('v', value=inits['v'], vary=1, min=lim['v'][0], max=lim['v'][1])
             p.add('zperc', value=inits['z']/inits['a'], vary=1, min=.01, max=.99)
             p.add('tr', value=inits['tr'], vary=1, min=lim['tr'][0], max=lim['tr'][1])

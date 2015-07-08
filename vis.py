@@ -10,51 +10,55 @@ from radd import utils
 from scipy.stats.mstats import mquantiles as mq
 sns.set(font='Helvetica')
 
-def scurves(lines=[], task='ssRe', pstop=.5, ax=None, linestyles=None, colors=None, labels=None):
+def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, labels=None):
 
       if len(lines[0])==6:
                 task='pro'
-	if ax is None:
-		f, ax = plt.subplots(1)
-	if colors is None:
-		colors=sns.color_palette('husl', n_colors=len(lines))
-		labels=['']*len(lines)
-		linestyles = ['-']*len(lines)
+
+      if ax is None:
+		f, ax = plt.subplots(1, figsize=(6,5))
+      if colors is None:
+            colors=sns.color_palette('husl', n_colors=len(lines))
+            labels=['']*len(lines)
+            linestyles = ['-']*len(lines)
 
       lines=[np.array(line) if type(line)==list else line for line in lines]
-	pse=[];
+      pse=[];
 
-	if 'Re' in task:
-		x=np.array([400, 350, 300, 250, 200], dtype='float')
-		xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
-		yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
-	else:
-		x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
-		xtls=x.copy()[::-1]; xsim=np.linspace(-5, 11, 10000)
-		yylabel='P(NoGo)'; scale_factor=100; xxlabel='P(Go)'; scale_factor=10
+      if 'Re' in task:
+            x=np.array([400, 350, 300, 250, 200], dtype='float')
+            xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
+            yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
+      else:
+            x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
+            xtls=x.copy()[::-1]; xsim=np.linspace(-5, 11, 10000)
+            yylabel='P(NoGo)'; scale_factor=100; xxlabel='P(Go)'; scale_factor=10
 
-	x=utils.res(-x,lower=x[-1]/10, upper=x[0]/10)
-	for i, yi in enumerate(lines):
+      x=utils.res(-x, lower=x[-1]/10, upper=x[0]/10)
+      for i, yi in enumerate(lines):
 
-		y=res(yi, lower=yi[-1], upper=yi[0])
-		p_guess=(np.mean(x),np.mean(y),.5,.5)
-		p, cov, infodict, mesg, ier = optimize.leastsq(utils.residuals, p_guess, args=(x,y), full_output=1, maxfev=5000, ftol=1.e-20)
-		x0,y0,c,k=p
-		xp = xsim
-		pxp=utils.sigmoid(p,xp)
-		idx = (np.abs(pxp - pstop)).argmin()
+            y=utils.res(yi, lower=yi[-1], upper=yi[0])
+            p_guess=(np.mean(x),np.mean(y),.5,.5)
+            p, cov, infodict, mesg, ier = optimize.leastsq(utils.residuals, p_guess, args=(x,y), full_output=1, maxfev=5000, ftol=1.e-20)
+            x0,y0,c,k=p
+            xp = xsim
+            pxp=utils.sigmoid(p,xp)
+            idx = (np.abs(pxp - pstop)).argmin()
 
-		pse.append(xp[idx]/scale_factor)
+            pse.append(xp[idx]/scale_factor)
 
-		# Plot the results
-		ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
-		pse.append(xp[idx]/scale_factor)
+            # Plot the results
+            if yerr!=[]:
+                  #ax.errorbar(x, y[i], yerr=yerr[i], color=colors[i], marker='o', elinewidth=2, ecolor='k')
+                  ax.errorbar(x, y, yerr=yerr[i], color=colors[i], ecolor=colors[i], capsize=0, lw=0, elinewidth=3)
+            ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
+            pse.append(xp[idx]/scale_factor)
 
-	plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.05, 1.05), yticks=[0, 1])
-	ax.set_xticklabels([int(xt) for xt in xtls], fontsize=18); ax.set_yticklabels([0.0, 1.0], fontsize=18)
-	ax.set_xlabel(xxlabel, fontsize=18); ax.set_ylabel(yylabel, fontsize=18)
-	ax.legend(loc=0)
-	return np.array(pse)
+      plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.05, 1.05), yticks=[0, 1])
+      ax.set_xticklabels([int(xt) for xt in xtls], fontsize=18); ax.set_yticklabels([0.0, 1.0], fontsize=18)
+      ax.set_xlabel(xxlabel, fontsize=18); ax.set_ylabel(yylabel, fontsize=18)
+      ax.legend(loc=0)
+      return np.array(pse)
 
 
 def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, return_exec_ss=False, pgo=np.arange(0, 1.2, .2)):
