@@ -2,44 +2,39 @@
 from __future__ import division
 import numpy as np
 import pandas as pd
-from lmfit import Parameters, Minimizer
+from lmfit import Parameters, Minimizer, report_fit, fit_report
 from scipy.optimize import minimize
 from radd.utils import *
-from radd.cRADD import recost, recost_scipy
+from radd.cRADD import recost
 from radd import RADD
 
 def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
 
+
+      lim = {'tr': (.001, .5), 'v': (.01, 4.),  'ssv': (-4., -.01),  'a' : (.01, .6)}
       if 'pGo' in inits.keys(): del inits['pGo']
       if 'ssd' in inits.keys(): del inits['ssd']
 
-      if model in ['radd', 'ipb', 'abias']:
-            inits['ssv']=-abs(inits['ssv'])
+      p=Parameters()
+      if all_params:
+            p.add('a', value=inits['a'], vary=1, min=lim['a'][0], max=lim['a'][1])
+            p.add('ssv', value=inits['ssv'], vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
+            p.add('v', value=inits['v'], vary=1, min=lim['v'][0], max=lim['v'][1])
+            p.add('zperc', value=inits['z']/inits['a'], vary=1, min=.001, max=.99)
+            p.add('tr', value=inits['tr'], vary=1, min=lim['tr'][0], max=lim['tr'][1])
+            p.add('z', expr="zperc*a")
       else:
-            inits['ssv']=abs(inits['ssv'])
+            for key, val in inits.items():
+                  if key in depends:
+                        p.add(key, value=val, vary=1, min=lim[key][0], max=lim[key][1])
+                        continue
+                  p.add(key, value=val, vary=all_params)
 
-      if use_lmfit:
-              p=Parameters()
-              for key, val in inits.items():
-                    if key in depends:
-                          p.add(key, value=val, vary=1)
-                          continue
-                    p.add(key, value=val, vary=all_params)
-
-              popt = Minimizer(recost, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts}, method='Nelder-Mead')
-              popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
-              params={k: p[k].value for k in p.keys()}
-              params['chi']=popt.chisqr
-              resid=popt.residual; yhat=y+resid
-
-      else:
-              a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
-              p=[a, tr, v, ssv, z]
-              popt = minimize(recost_nb, p, args=(y, wts, ntrials), method='Nelder-Mead', options={'disp':True, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfun})
-              a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
-              x0=[a, tr, v, ssv, z]
-              fit = mina(recost_scipy, x0, args=(y, wts, ntrials), method='Nelder-Mead', options={'disp':True, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfun})
-
+      popt = Minimizer(recost, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts}, method='Nelder-Mead')
+      popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+      params={k: p[k].value for k in p.keys()}
+      params['chi']=popt.chisqr
+      resid=popt.residual; yhat=y+resid
       return params, yhat
 
 

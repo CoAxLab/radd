@@ -100,15 +100,18 @@ class Model(object):
 
             popt_cols = np.hstack(['chi', inits.keys()])
             qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
-            ixdf = pd.concat([pd.DataFrame({'indx': indx, 'cond':c}, columns=['indx', 'cond']) for c in labels]).reset_index(drop=True)
+            ixdf = pd.concat([pd.DataFrame({'indx': indx, cond:c}, columns=['indx', cond]) for c in labels]).reset_index(drop=True)
 
             self.observed = pd.concat([ixdf, pd.DataFrame(self.dat, columns=qp_cols)], axis=1)
             self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(self.dat), columns=qp_cols)], axis=1)
             self.popt = pd.concat([ixdf, pd.DataFrame(columns=popt_cols, index=ixdf.index)], axis=1)
+
+            self.get_wts()
+
             self.isprepared = True
 
 
-      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfun=500, ntrials=2000, niter=500, fit_global=False, **kwargs):
+      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfun=500, ntrials=2000, niter=500, fit_global=False, fit_wls=True, **kwargs):
 
             if "depends_on" in kwargs.keys():
                   self.depends_on = kwargs['depends_on']
@@ -119,22 +122,19 @@ class Model(object):
             ntrials, ftol, xtol, maxfun, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfun=maxfun, ntrials=ntrials, niter=niter, get_params=True)
 
             if not self.isprepared:
+                  print "preparing %s model using %s method" % (self.kind, self.fit)
                   # initialize data & fit storage
                   self.prepare_fit()
 
             if fit_global:
                   global_opt()
 
-            if fit_wls:
-                    wtgc, wtsc, wtgq, wteq = self.get_wts(m.observed)
-                    wts = [wtgc, wtsc, wtgq, wteq]
-            else:
-                    wts = None
-
             for i, y in enumerate(self.dat):
 
+                  wt = self.wts[self.observed.iloc[self.i][self.cond]]
+
                   if self.kind=='reactive':
-                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wts, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wt, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
                   elif self.kind=='proactive':
                         inits['pGo']=cdf.pGo.mean()
@@ -169,31 +169,31 @@ class Model(object):
 
       def get_wts(self):
 
-              """
-              need to set up for different conditions
-              but this should be the final weighting policy
+            """
+            need to set up for different conditions
+            but this should be the final weighting policy
 
-              wtc (weights correct rt quantiles)
-                *P(Cor|NoSSD) * sd(.5cQ, ... .95cQ)
+            wtc (weights correct rt quantiles)
+            *P(Cor|NoSSD) * sd(.5cQ, ... .95cQ)
 
-              wte (weights error rt quantiles)
-                *P(Err|SSDall) * sd(.5eQ, ... .95eQ)
+            wte (weights error rt quantiles)
+            *P(Err|SSDall) * sd(.5eQ, ... .95eQ)
+            """
 
+            sd = self.observed.groupby(self.cond).std()
 
-              """
+            pc = self.data.query('trial_type=="go"').groupby(self.cond).response.mean().values
+            pe = self.data.query('trial_type=="stop"').groupby(self.cond).response.mean().values
 
-              sd = self.observed.std()
+            sdc = sd.loc[:,'c5':'c95'].values
+            sde = sd.loc[:,'e5':'e95'].values
 
-              half = int(len(m.dat)/len(m.data['Cond'].unique()))
+            lbls = self.data[self.cond].unique()
 
-              pc = m.dat[:half].mean(axis=0)[0]
-              pe = np.mean(1-m.dat[:half].mean(axis=0)[1:6])
+            wtc = np.array([p*(s.min()/s) for p, s in zip(pc, sdc)])
+            wte = np.array([p*(s.min()/s) for p, s in zip(pe, sde)])
 
-              wtc = sd.loc['c5':'c95'].values*pc
-              wte = sd.loc['e5':'e95'].values*pe
-
-              self.wts = [wt.min()/wt for wt in [wtc, wte]]
-
+            self.wts = {lbls[i]:[wtc[i], wte[i]] for i in range(len(lbls))}
 
       def plot_fits(self, bw=.1, plot_acc=False):
 
