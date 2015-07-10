@@ -33,21 +33,21 @@ def recost(theta, y, ntrials=2000, wts=None, pGo=.5, ssd=np.arange(.2, .45, .05)
       nss = int((1-pGo)*ntrials)
       dvg, dvs = run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
       yhat = analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
-
-      wtc, wte = wts[0], wts[1]
+      if wts:
+            wtc, wte = wts[0], wts[1]
+      else:
+            wtc, wte = [np.ones(5)]*2
       cost = np.hstack([y[:6]-yhat[:6], wtc*y[6:11]-wtc*yhat[6:11], wte*y[11:]-wte*yhat[11:]]).astype(np.float32)
+
+
       return cost
 
 
-
-def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, tau=.0005, si=.01):
+def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, tau=.0005, si=.01, depends=None):
       """
 
-      This is an optimized version of RADD.run() which is used during the
-      fitting routine to vectorize all simulated trials and timepoints.
-
-      In contrast to RADD.run(), which simulates a single SSD condition, this function
-      simulates all SSD conditions simultaneously
+      Simulates all SSD, trials, timepoints simultaneously
+      for a single condition
 
       args:
 
@@ -55,7 +55,7 @@ def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0
             ssd  (np array):              full set of stop signal delays
             nss  (int):                   number of stop trials
             ntot (int):                   number of total trials
-            tb :                          time boundary
+            tb (float):                   time boundary
 
       returns:
 
@@ -65,7 +65,7 @@ def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0
                   All nss SS trials for all SSD conditions (DVs). All ss decision traces
                   are initiated from DVg(t=SSD) if SSD<tr
 
-      Output can be passed to sim quantile accuracy for summary measures
+      Output can be passed to  <analyze_reactive()>  for summary measures
       """
 
       nssd=len(ssd);
@@ -77,28 +77,112 @@ def run(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0
       Ps = 0.5*(1 + ssv*dx/si)
       Ts = np.ceil((tb-ssd)/tau).astype(int)
 
-      DVg = z + np.cumsum(np.where(rs((ntot, Tg))<Pg, dx, -dx), axis=1)
-
-      init_ss = np.array([DVg[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
+      # SINGLE CONDITION, ALL SSD
+      DVg = z + np.cumsum(np.where(rs((ntot, Tg)) < Pg, dx, -dx), axis=1)
+      init_ss = np.array([DVg[:, :nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
       DVs = init_ss[:, :, None] + np.cumsum(np.where(rs((nssd, nss, Ts.max()))<Ps, dx, -dx), axis=2)
+
       return DVg, DVs
+
+
+def run_full(a, tr, ssv, z, v=None, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, tau=.0005, si=.01):
+      """
+
+      Simulates all Conditions, SSD, trials, timepoints simultaneously by
+      treating drift-rate as a vector, containing a value for each condition.
+
+      args:
+            a, tr, ssv, z (float):        model parameters (excl 'v')
+            v (array):                    array of drift-rates (1/cond)
+            ssd  (array):                 full set of stop signal delays
+            nss  (int):                   number of stop trials
+            ntot (int):                   number of total trials
+            tb (float):                   time boundary
+
+      returns:
+
+            DVg:  3d array (ncond x ntrials x ntime) for all trials
+                  All conditions are simulated simultaneously (i.e., BSL & PNL)
+
+            DVs:  3d array (nSSD x nSS trials x ntime) for all stop signal trials
+                  All nss SS trials for all SSD conditions (DVs). All ss decision traces
+                  are initiated from DVg(t=SSD) if SSD<tr
+
+      Output can be passed to <analyze_reactive_full()> to extract
+      expected values to be entered into the cost f(x)
+      """
+
+      nssd=len(ssd);
+      dx=np.sqrt(si*tau)
+      ncond=len(v)
+
+      Pg = 0.5*(1 + v*dx/si)
+      Tg = np.ceil((tb-tr)/tau).astype(int)
+
+      Ps = 0.5*(1 + ssv*dx/si)
+      Ts = np.ceil((tb-ssd)/tau).astype(int)
+
+      # ALL CONDITIONS, ALL SSD
+      DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg)).T < Pg), dx, -dx).T, axis=2)
+      init_ss = np.array([np.array([DVc[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)]) for DVc in DVg])
+      DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((ncond, nssd, nss, Ts.max()))<Ps, dx, -dx), axis=3)
+
+      return DVg, DVs
+
 
 
 def analyze_reactive(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.array([.1, .3, .5, .7, .9])):
 
+      """
+      Takes Go and Stop process vectors from run() output and
+      extracts Go/Stop Accuracy, and Correct and Incorrect RT Quantiles
+      for the single condition simulated in run(), including all SSDs
+
+      """
+
+      # SINGLE CONDITION, ALL SSD
       grt = np.where(DVg[nss:, :].max(axis=1)>=a, tr + np.argmax(DVg[nss:, :]>=a, axis=1)*tau, np.nan)
       ert = np.where(DVg[:nss, :].max(axis=1)>=a, tr + np.argmax(DVg[:nss, :]>=a, axis=1)*tau, np.nan)
       ssrt = np.where(np.any(DVs<=0, axis=2), ssd[:, None]+np.argmax(DVs<=0, axis=2)*tau, np.nan)
 
-      # comute RT quantiles for correct and error respself.
-      cg_quant = mq(grt[grt<tb], prob=p)
-      eg_quant = mq(np.hstack([np.extract(ert<ssi, ert) for ssi in ssrt]), prob=p)
+      # compute RT quantiles for correct and error resp.
+      gq = mq(grt[grt<tb], prob=p)
+      eq = mq(np.hstack([np.extract(ert<ssi, ert) for ssi in ssrt]), prob=p)
 
       # Get response and stop accuracy information
       gac = np.where(grt<tb,1,0).mean()
       sacc = 1 - np.where(ert<ssrt, 1, 0).mean(axis=1)
 
-      return np.hstack([gac, sacc, cg_quant*10, eg_quant*10])
+      return np.hstack([gac, sacc, gq*10, eq*10])
+
+
+
+def analyze_reactive_full(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.array([.1, .3, .5, .7, .9])):
+
+      """
+      Takes Go and Stop process vectors from run_full() output and
+      extracts Go/Stop Accuracy, and Correct and Incorrect RT Quantiles
+      for all conditions, SSDs simulated in run_full()
+
+      """
+
+      # ALL CONDITIONS, ALL SSD
+      grt = np.where(DVg[:, nss:, :].max(axis=2)>=a, tr + np.argmax(DVg[:, nss:, :]>=a, axis=2)*tau, np.nan)
+      ert = np.where(DVg[:, :nss, :].max(axis=2)>=a, tr + np.argmax(DVg[:, :nss, :]>=a, axis=2)*tau, np.nan)
+      ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*tau, np.nan)
+
+      #collapse across SSD and get average ssrt vector for each condition
+      c_ssrt = ssrt.mean(axis=1)
+
+      # compute RT quantiles for correct and error resp.
+      gq = np.vstack([mq(rtc[rtc<tb], prob=p) for rtc in grt])
+      eq = [mq(np.extract(ert[i]<c_ssrt[i], ert[i]), prob=p) for i in range(ncond)]
+
+      # Get response and stop accuracy information
+      gac = np.where(grt<tb, 1, 0).mean(axis=1)
+      sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
+
+
 
 
 def simulate(theta, ntrials=2000, nss=1000, pGo=.5, ssd=np.arange(.2, .45, .05)):

@@ -1,40 +1,56 @@
 #!/usr/local/bin/env python
 from __future__ import division
+import time
 import numpy as np
 import pandas as pd
-from lmfit import Parameters, Minimizer, report_fit, fit_report
-from scipy.optimize import minimize
+from lmfit import Parameters, minimize, fit_report
 from radd.utils import *
 from radd.cRADD import recost
 from radd import RADD
 
-def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntrials=5000, maxfun=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
+def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False, fitid=None, method='nelder'):
 
-
-      lim = {'tr': (.001, .5), 'v': (.01, 4.),  'ssv': (-4., -.01),  'a' : (.01, .6)}
-      if 'pGo' in inits.keys(): del inits['pGo']
-      if 'ssd' in inits.keys(): del inits['ssd']
+      ip = inits.copy()
+      lim = {'tr': (.001, .5), 'v': (.01, 4.),  'ssv': (-4., -.01),  'a' : (.01, .6), 'z':(.001, .9)}
+      if 'pGo' in ip.keys(): del ip['pGo']
+      if 'ssd' in ip.keys(): del ip['ssd']
+      ip['ssv']=-abs(ip['ssv'])
 
       p=Parameters()
-      if all_params:
-            p.add('a', value=inits['a'], vary=1, min=lim['a'][0], max=lim['a'][1])
-            p.add('ssv', value=-abs(inits['ssv']), vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
-            p.add('v', value=inits['v'], vary=1, min=lim['v'][0], max=lim['v'][1])
-            p.add('zperc', value=inits['z']/inits['a'], vary=1, min=.001, max=.99)
-            p.add('tr', value=inits['tr'], vary=1, min=lim['tr'][0], max=lim['tr'][1])
-            p.add('z', expr="zperc*a")
+      if not all_params:
+            d0 = [p.add(d, value=ip.pop(d), vary=1, min=lim[d][0], max=lim[d][1]) for d in depends]
+            vary=0
       else:
-            for key, val in inits.items():
-                  if key in depends:
-                        p.add(key, value=val, vary=1, min=lim[key][0], max=lim[key][1])
-                        continue
-                  p.add(key, value=val, vary=all_params)
+            vary=1
 
-      popt = Minimizer(recost, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts}, method='Nelder-Mead')
-      popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
-      params={k: p[k].value for k in p.keys()}
+      if method=='differential_evolution':
+            pass
+      else:
+            aval = ip.pop('a'); zval = ip.pop('z')
+            p.add('a', value=aval, vary=1, min=lim['a'][0], max=lim['a'][1])
+            p.add('zperc', value=zval/aval, vary=1)
+            p.add('z', expr="zperc*a")
+
+      p0 = [p.add(k, value=v, vary=vary, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
+
+      popt = minimize(recost, p, args=(y, ntrials), method=method, kws={'wts':wts}, options={'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev':maxfev})
+
+      params = p.valuesdict()
       params['chi']=popt.chisqr
-      resid=popt.residual; yhat=y+resid
+      params['rchi']=popt.redchi
+      params['AIC']=popt.aic
+      params['BIC']=popt.bic
+      yhat = y + popt.residual
+
+      if fitid is None:
+            fitid = time.strftime('%H:%M:%S')
+
+      with open('fit_report.txt', 'a') as f:
+            f.write(str(fitid)+'\n')
+            f.write(fit_report(popt, show_correl=False)+'\n')
+            f.write('AIC: %.8f' % popt.aic)
+            f.write('BIC: %.8f' % popt.bic)
+            f.write('--'*20+'\n\n')
       return params, yhat
 
 

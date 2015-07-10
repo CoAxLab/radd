@@ -19,7 +19,7 @@ ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
 
 class Model(object):
 
-      def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, depends_on={'xx':'XX'}, fit='bootstrap', niter=50, *args, **kwargs):
+      def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, fit='subjects', depends_on={'v':'Cond'}, niter=50, *args, **kws):
 
             self.model = model
             self.inits = inits
@@ -34,15 +34,16 @@ class Model(object):
             self.prob=np.array([.1, .3, .5, .7, .9])
             self.i = 0
             self.fit = fit
+            self.isprepared=False
             if self.fit=='bootstrap':
                   self.indx=range(niter)
             elif self.fit=='subjects':
                   self.indx=list(self.data.idx.unique())
 
 
-      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfun=500, niter=500, get_params=False):
+      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfev=500, niter=500, get_params=False):
 
-            self.fitparams = {'ntrials':ntrials, 'maxfun':maxfun, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
 
             if self.fit=='bootstrap':
                   self.indx=range(self.fitparams['niter'])
@@ -50,23 +51,23 @@ class Model(object):
             fitp = self.fitparams
 
             if get_params:
-                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfun'], fitp['niter']
+                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfev'], fitp['niter']
 
 
 
-      def global_opt(self, xtol=1.e-3, ftol=1.e-3, maxfun=500, ntrials=2000, niter=500):
+      def global_opt(self, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
 
             if not self.isprepared:
                   self.prepare_fit()
 
-            ntrials, ftol, xtol, maxfun, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfun=maxfun, ntrials=ntrials, niter=niter, get_params=True)
+            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
             inits = self.inits
             y = self.dat.mean(axis=0)
 
             if self.kind=='reactive':
-                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
             elif self.kind=='proactive':
-                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
 
 
 
@@ -98,7 +99,7 @@ class Model(object):
                   #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
                   self.dat = np.vstack([[ifx(idxdf) for idx, idxdf in cdf.groupby('idx')] for c, cdf in self.data.groupby(self.cond)]).astype(np.float32)
 
-            popt_cols = np.hstack(['chi', inits.keys()])
+            popt_cols = np.hstack([inits.keys(),'chi','rchi','aic','bic'])
             qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
             ixdf = pd.concat([pd.DataFrame({'indx': indx, cond:c}, columns=['indx', cond]) for c in labels]).reset_index(drop=True)
 
@@ -111,7 +112,7 @@ class Model(object):
             self.isprepared = True
 
 
-      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfun=500, ntrials=2000, niter=500, fit_global=False, fit_wls=True, **kwargs):
+      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500, fit_global=False, fit_wls=True, **kwargs):
 
             if "depends_on" in kwargs.keys():
                   self.depends_on = kwargs['depends_on']
@@ -119,7 +120,7 @@ class Model(object):
                   self.cond = self.depends_on.values()[0]
 
             inits = self.inits; model=self.model; depends=self.depends;
-            ntrials, ftol, xtol, maxfun, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfun=maxfun, ntrials=ntrials, niter=niter, get_params=True)
+            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
 
             if not self.isprepared:
                   print "preparing %s model using %s method" % (self.kind, self.fit)
@@ -134,12 +135,11 @@ class Model(object):
                   wt = self.wts[self.observed.iloc[self.i][self.cond]]
 
                   if self.kind=='reactive':
-                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wt, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wt, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
                   elif self.kind=='proactive':
                         inits['pGo']=cdf.pGo.mean()
-                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
-                        #self.store_procost(indx[i], label, params, yhat)
+                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
 
                   self.popt.iloc[self.i, 2:] = params
                   self.fits.iloc[self.i, 2:] = yhat

@@ -8,7 +8,7 @@ def Reactive(data, inits, depends_on={'xx':'XX'}, fit='boot', opt_global=False, 
 
 	if opt_global:
 		y = utils.rangl_re(data)
-		out, inits = fitre.run_reactive_model(y, inits, model=model, all_params=1, depends=depends_on.keys(), ntrials=nt, maxfun=mf, ftol=ftol, xtol=xtol)
+		out, inits = fitre.run_reactive_model(y, inits, model=model, all_params=1, depends=depends_on.keys(), ntrials=nt, maxfev=mf, ftol=ftol, xtol=xtol)
 
 	# initialize data storage objects
 	if fit=='bootstrap':
@@ -23,7 +23,7 @@ def Reactive(data, inits, depends_on={'xx':'XX'}, fit='boot', opt_global=False, 
 	popt_df=pd.DataFrame(columns=inits.keys(), index=np.arange(indx*nc))
 
 	for i, (c, cdf) in enumerate(data.groupby(cond)):
-		qp_df, pstop_df, popt_df, fit_info = fit_indx(cdf, inits, qp_df, pstop_df, popt_df, depends=depends_on.keys(), model=model, niter=indx, ntrials=ntrials, all_params=0, maxfun=maxfun, ftol=ftol, xtol=xtol)
+		qp_df, pstop_df, popt_df, fit_info = fit_indx(cdf, inits, qp_df, pstop_df, popt_df, depends=depends_on.keys(), model=model, niter=indx, ntrials=ntrials, all_params=0, maxfev=maxfev, ftol=ftol, xtol=xtol)
 
 
 	#qp_df.to_csv(prepend+"_qpfits.csv", index=False)

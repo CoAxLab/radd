@@ -8,7 +8,7 @@ from lmfit import Parameters, Minimizer
 from scipy.stats.mstats import mquantiles
 from radd import utils, RADD
 
-def fit_proactive_model(y, inits={}, depends=['xx'], model='radd', SSD=.450, tb=.560, rt_cutoff=.54502, ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
+def fit_proactive_model(y, inits={}, depends=['xx'], model='radd', SSD=.450, tb=.560, rt_cutoff=.54502, ntrials=2000, maxfev=500, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=False):
 
 	if 'pGo' in inits.keys():
 		PGO = inits['pGo']
@@ -27,7 +27,7 @@ def fit_proactive_model(y, inits={}, depends=['xx'], model='radd', SSD=.450, tb=
 		p.add(key, value=val, vary=all_params)
 
 	popt = Minimizer(sspro_minfunc, p, fcn_args=(y, ntrials, PGO, SSD), fcn_kws={'model':model, 'tb':tb, 'rt_cutoff':rt_cutoff}, method='Nelder-Mead')
-	popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+	popt.fmin(maxfev=maxfev, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
 	params={k: p[k].value for k in p.keys()}
 	params['chi']=popt.chisqr
 	resid=popt.residual; yhat=y+resid

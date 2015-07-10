@@ -5,7 +5,7 @@ import pandas as pd
 from radd import utils, fitpro
 
 
-def Proboot(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, tb=.560, disp=False, filt_rts=True, **kwargs):
+def Proboot(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntrials=2000, maxfev=500, ftol=1.e-3, xtol=1.e-3, tb=.560, disp=False, filt_rts=True, **kwargs):
 
 	fit_results=list()
 	pgolist=data[depends_on.values()].unique()
@@ -29,7 +29,7 @@ def Proboot(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntr
 
 		bx_data = resample_proactive(data, method='rwr', filt_rts=filt_rts)
 
-		fits_i, rts_i, ps_i = fitpro.run_proactive_model(pstop, rt, inits, filt_rts=filt_rts,					ntrials=ntrials, depends_on=depends_on, nx=i, simfx=simfx, tb=tb,maxfun=maxfun, ftol=ftol, xtol=xtol, pgolist=pgolist, disp=disp)
+		fits_i, rts_i, ps_i = fitpro.run_proactive_model(pstop, rt, inits, filt_rts=filt_rts,					ntrials=ntrials, depends_on=depends_on, nx=i, simfx=simfx, tb=tb,maxfev=maxfev, ftol=ftol, xtol=xtol, pgolist=pgolist, disp=disp)
 
 		ps_pred.loc[i,:]=np.array(ps_i)
 		rt_pred.loc[i,:]=np.array(rts_i)

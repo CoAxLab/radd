@@ -11,16 +11,15 @@ from radd.utils import *
 from scipy.optimize import minimize as mina
 
 
-def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predictions', depends=['xx'], model='radd', ntrials=5000, maxfun=50, ftol=1.e-3, xtol=1.e-3, all_params=1, disp=True):
+def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predictions', depends=['xx'], model='radd', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=1, disp=True):
 
       m = build.Model(data=data, inits=inits, depends_on={'v':'Cond'}, fit='subjects')
       m.prepare_fit()
-
       y = m.observed.query('Cond=="bsl"').mean().iloc[1:].values
 
-      wls_update = track_optimization(y, inits=inits, wts=m.wts['bsl'], collector=[], track=track, ntrials=ntrials, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params)
+      wls_update = track_optimization(y, inits=inits, wts=m.wts['bsl'], collector=[], track=track, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params)
 
-      ols_update = track_optimization(y, inits=inits, wts=np.ones_like(m.wts['bsl']), collector=[], track=track, ntrials=ntrials, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params)
+      ols_update = track_optimization(y, inits=inits, wts=np.ones_like(m.wts['bsl']), collector=[], track=track, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params)
 
       sns.set_context('notebook', font_scale=1.4)
       htmin, htmax = [], []
@@ -61,10 +60,10 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
       ax.fill_betweenx(ht, x1=0, x2=5, color='#2c3e50', alpha=.1)
       ax.fill_betweenx(ht, x1=5, x2=10, color='#48647c', alpha=.1)
       ax.fill_betweenx(ht, x1=10, x2=15, color='#2c3e50', alpha=.1)
-      ax.hlines(y=0, xmin=0, xmax=15, color='k', linestyle='-', lw=2, label='$Dat \'urz$')
+      ax.hlines(y=0, xmin=0, xmax=15, color='k', linestyle='-', lw=2, label='Perfect Fit')
       plt.setp(ax, xlim=(0,15), ylim=(ht[0], ht[1]))
-      ax.set_xlabel('$Dont\/worry\/bout\/it..$', fontsize=20)
-      ax.set_ylabel("$The\/\chi\/ost\/F(x)$", fontsize=20)
+      ax.set_xlabel('Contrast Vector', fontsize=17)
+      ax.set_ylabel("Residuals", fontsize=17)
       ax.set_xticklabels([])
       sns.despine()
       ax.legend(loc=0, fontsize=16)
@@ -73,12 +72,12 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
       ax.text(6.9, -.08, 'GRQ', fontsize=20)
       ax.text(12.0, -.08, 'ERQ', fontsize=20)
       plt.tight_layout()
-
-      plt.savefig('/Users/kyle/Dropbox/TheXostFx.png', dpi=900)
+      if save:
+            plt.savefig('~/Dropbox/TheXostFx.png', dpi=900)
       return [y, wls_update, ols_update]
 
 
-def track_optimization(y, inits={}, collector=[], track='residuals', depends=['xx'], wts=None, model='radd', ntrials=5000, maxfun=50, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True):
+def track_optimization(y, inits={}, collector=[], track='residuals', depends=['xx'], wts=None, model='radd', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True):
 
       """
       passess a list to the objective function (model) that
@@ -109,8 +108,12 @@ def track_optimization(y, inits={}, collector=[], track='residuals', depends=['x
       if wts is None:
             wts=np.ones_like(y)
 
-      popt = Minimizer(recost_collector, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts, 'collector':collector, 'track':track}, method='Nelder-Mead')
-      popt.fmin(maxfun=maxfun, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+      #popt = Minimizer(recost_collector, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts, 'collector':collector, 'track':track}, method='Nelder-Mead')
+      #popt.fmin(maxfev=maxfev, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
+
+      popt = Minimizer(recost, p, fcn_args=(y, ntrials), fcn_kws={'wts':m.wts['bsl']})
+      popt.scalar_minimize(maxfev=50, full_output=True, disp=True, method='differential_evolution')
+      popt.fmin(maxfev=maxfev, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
 
       return collector
 

@@ -4,11 +4,11 @@ import numpy as np
 import pandas as pd
 from radd import utils, fitre
 
-def Reactive(data, inits, depends_on={'xx':'XX'}, fit='bootstrap', global_opt=False, ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, savepth='./', model='radd', niter=500, live_update=False):
+def Reactive(data, inits, depends_on={'xx':'XX'}, fit='bootstrap', global_opt=False, ntrials=2000, maxfev=500, ftol=1.e-3, xtol=1.e-3, savepth='./', model='radd', niter=500, live_update=False):
 
 	if global_opt:
 		inits, yhat = run_reactive_model(y, inits=inits, ntrials=ntrials, model=model,
-                    depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+                    depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
 
 	# initialize data storage objects
 	if fit=='bootstrap': indx = range(niter)
@@ -17,7 +17,7 @@ def Reactive(data, inits, depends_on={'xx':'XX'}, fit='bootstrap', global_opt=Fa
 	qplist = []; sclist = []; plist=[]; cond = depends_on.values()[0];
 	for i, (c, cond_df) in enumerate(data.groupby(cond)):
 
-		qp_df, pstop_df, popt_df = fitre.fit_indx(cond_df, inits, cond=c, depends=depends_on.keys(), model=model, indx=indx, ntrials=ntrials, all_params=0, maxfun=maxfun, ftol=ftol, xtol=xtol, live_update=live_update, savepth=savepth)
+		qp_df, pstop_df, popt_df = fitre.fit_indx(cond_df, inits, cond=c, depends=depends_on.keys(), model=model, indx=indx, ntrials=ntrials, all_params=0, maxfev=maxfev, ftol=ftol, xtol=xtol, live_update=live_update, savepth=savepth)
 		qplist.append(qp_df); sclist.append(pstop_df); plist.append(popt_df)
 
 	qp_df = pd.concat(qplist); pstop_df = pd.concat(sclist); popt_df = pd.concat(plist)
@@ -30,7 +30,7 @@ def Reactive(data, inits, depends_on={'xx':'XX'}, fit='bootstrap', global_opt=Fa
 
 
 
-def Proactive(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntrials=2000, maxfun=500, ftol=1.e-3, xtol=1.e-3, tb=.560, disp=False, filt_rts=True, **kwargs):
+def Proactive(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntrials=2000, maxfev=500, ftol=1.e-3, xtol=1.e-3, tb=.560, disp=False, filt_rts=True, **kwargs):
 
 	fit_results=list()
 	pgolist=data[depends_on.values()].unique()
@@ -52,7 +52,7 @@ def Proactive(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", n
 
 		bx_data = resample_proactive(data, method='rwr', filt_rts=filt_rts)
 
-		fits_i, rts_i, ps_i = fitpro.run_proactive_model(pstop, rt, inits, filt_rts=filt_rts, ntrials=ntrials, depends_on=depends_on, nx=i, simfx=simfx, tb=tb,maxfun=maxfun, ftol=ftol, xtol=xtol, pgolist=pgolist, disp=disp)
+		fits_i, rts_i, ps_i = fitpro.run_proactive_model(pstop, rt, inits, filt_rts=filt_rts, ntrials=ntrials, depends_on=depends_on, nx=i, simfx=simfx, tb=tb,maxfev=maxfev, ftol=ftol, xtol=xtol, pgolist=pgolist, disp=disp)
 
 		ps_pred.loc[i,:]=np.array(ps_i)
 		rt_pred.loc[i,:]=np.array(rts_i)

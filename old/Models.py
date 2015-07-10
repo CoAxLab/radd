@@ -40,9 +40,9 @@ class Model(object):
                   self.indx=list(self.data.idx.unique())
 
 
-      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfun=500, niter=500, get_params=False):
+      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfev=500, niter=500, get_params=False):
 
-            self.fitparams = {'ntrials':ntrials, 'maxfun':maxfun, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
 
             if self.fit=='bootstrap':
                   self.indx=range(self.fitparams['niter'])
@@ -50,23 +50,23 @@ class Model(object):
             fitp = self.fitparams
 
             if get_params:
-                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfun'], fitp['niter']
+                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfev'], fitp['niter']
 
 
 
-      def global_opt(self, xtol=1.e-3, ftol=1.e-3, maxfun=500, ntrials=2000, niter=500):
+      def global_opt(self, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
 
             if not self.isprepared:
                   self.prepare_fit()
 
-            ntrials, ftol, xtol, maxfun, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfun=maxfun, ntrials=ntrials, niter=niter, get_params=True)
+            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
             inits = self.inits
             y = self.dat.mean(axis=0)
 
             if self.kind=='reactive':
-                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
             elif self.kind=='proactive':
-                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=1)
+                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
 
 
 
@@ -108,7 +108,7 @@ class Model(object):
             self.isprepared = True
 
 
-      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfun=500, ntrials=2000, niter=500, fit_global=False, **kwargs):
+      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500, fit_global=False, **kwargs):
 
             if "depends_on" in kwargs.keys():
                   self.depends_on = kwargs['depends_on']
@@ -116,7 +116,7 @@ class Model(object):
                   self.cond = self.depends_on.values()[0]
 
             inits = self.inits; model=self.model; depends=self.depends;
-            ntrials, ftol, xtol, maxfun, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfun=maxfun, ntrials=ntrials, niter=niter, get_params=True)
+            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
 
             if not self.isprepared:
                   # initialize data & fit storage
@@ -134,11 +134,11 @@ class Model(object):
             for i, y in enumerate(self.dat):
 
                   if self.kind=='reactive':
-                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wts, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wts, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
                   elif self.kind=='proactive':
                         inits['pGo']=cdf.pGo.mean()
-                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfun=maxfun, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
+                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
                         #self.store_procost(indx[i], label, params, yhat)
 
                   self.popt.iloc[self.i, 2:] = params
