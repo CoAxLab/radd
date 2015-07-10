@@ -101,12 +101,13 @@ def run_full(a, tr, ssv, z, v=None, ssd=np.arange(.2, .45, .05), nss=1000, ntot=
 
       returns:
 
-            DVg:  3d array (ncond x ntrials x ntime) for all trials
-                  All conditions are simulated simultaneously (i.e., BSL & PNL)
+            DVg (Go Process):       3d array for all conditions, trials, timepoints 
+                                    (i.e. DVg = [COND [NTrials [NTime]]] )
+                                    All conditions are simulated simultaneously (i.e., BSL & PNL)
 
-            DVs:  3d array (nSSD x nSS trials x ntime) for all stop signal trials
-                  All nss SS trials for all SSD conditions (DVs). All ss decision traces
-                  are initiated from DVg(t=SSD) if SSD<tr
+            DVs (Stop Process):     4d array for all conditions, SSD, SS trials, timepoints.
+                                    i.e. ( DVs = [COND [SSD [nSSTrials [NTime]]]] )
+                                    All ss decision traces are initiated from DVg[Cond](t=SSD | SSD<tr)
 
       Output can be passed to <analyze_reactive_full()> to extract
       expected values to be entered into the cost f(x)
