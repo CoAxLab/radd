@@ -12,14 +12,16 @@ This module is essentially an optimized version of the
 core fitting functions in fitre.py and the
 model simulations in RADD.py
 
-* All Cond and SSD are simulated simultaneously
-* a, tr, and v parameters can be initialized as
-      vectors , 1 x Ncond so that optimize()
-      fits the entire model all at once.
-* optimize returns AIC, BIC, or Chi2 values for the full
-      model fit, allowing different models to be
-      compared with standard complexity penalized
-      goodness-of-fit metrics
+      * All Cond and SSD are simulated simultaneously
+
+      * a, tr, and v parameters can be initialized as
+            vectors , 1 x Ncond so that optimize()
+            fits the entire model all at once.
+
+      * optimize returns AIC, BIC, or Chi2 values for the full
+            model fit, allowing different models to be
+            compared with standard complexity penalized
+            goodness-of-fit metrics
 
 RUNTIME TESTS:
 ------------------------------------------
@@ -27,12 +29,19 @@ RUNTIME TESTS:
 ------------------------------------------
 fitre + RADD:
 1 loops, best of 3: 1min 32s per loop
-...on i7 quadcore macbook pro
 
 fit:
-1 loops, best of 3: 6.11 s per loop
-...on my wimpy macbook air
+1 loops, best of 3: 12.9 s per loop
 -----------------------------------------
+
+------------------------------------------
+50 iterations of simulating, analyzing,
+storing, and executing cost function,
+each sim with 10,000 trials:
+
+1 loops, best of 3: 1min 2s per loop
+...on a wimpy macbook air
+------------------------------------------
 """
 
 def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True, fitid=None, log_fits=True, method='nelder'):
@@ -45,10 +54,12 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=
 
       popt=Parameters()
       if not all_params:
+            vary=0
             for bk in bias:
                   bv = ip.pop(bk)
-                  d0 = [popt.add(bk+str(i), value=bv, vary=1, min=lim[bk][0], max=lim[bk][1]) for i in range(ncond)]
-            vary=0
+                  mn = lim[bk][0]; mx = lim[bk][1]
+                  d0 = [popt.add(bk+str(i), value=bv, vary=1, min=mn, max=mx) for i in range(ncond)]
+
       else:
             vary=1
 
@@ -61,7 +72,10 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=
             popt.add('z', expr="zperc*a")
 
       p0 = [popt.add(k, value=v, vary=vary, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
-      optmod = minimize(recost, popt, args=(y, bias), method=method, kws={'wts':wts, 'ncond':ncond}, options={'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev':maxfev})
+
+      f_kws = {'wts':wts, 'ncond':ncond, 'ntrials':ntrials}
+      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev':maxfev}
+      optmod = minimize(recost, popt, args=(y, bias), method=method, kws=f_kws, options=opt_kws)
 
       params = popt.valuesdict()
       params['chi'] = optmod.chisqr
@@ -91,26 +105,28 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=
       return params, yhat
 
 
-def recost(theta, y, bias=['v'], ncond=2, ntrials=2000, wts=None, pGo=.5, ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
-
-      #if not type(theta)==dict:
-      #      theta = theta.valuesdict()
+def recost(theta, y, bias=['v'], ntrials=2000, wts=None):
 
       p = {k:theta[k] for k in theta.keys()}
 
-      for bk in bias:
-            p[bk] = np.array([p[bk+str(i)] for i in range(ncond)])
-      if 'tr' not in bias:
-            p['tr'] = np.asarray([p['tr']]*2)
+      ssd=np.arange(.2, .45, .05);
+      prob=np.array([.1, .3, .5, .7, .9])
 
-      yhat = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, nss=int(.5*ntrials), ntot=ntrials)
+      cond = {pk: p.pop(pk) for pk in p.keys() if pk[-1].isdigit()}
+      ncond = len(cond.keys())
+      for i in range(ncond):
+            p[cond.keys()[i][:-1]] = np.array(cond.values())
+
+      if 'tr' not in bias:
+            p['tr'] = np.array([p['tr']]*2)
+
+      yhat = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
       #wtc, wte = wts[0], wts[1]
-      y=np.vstack(y)
-      cost = np.vstack(y) - yhat
+      #y=np.vstack(y)
+      #cost = np.vstack(y) - yhat
       #cost = np.hstack([y[:6]-yhat[:6], wtc*y[6:11]-wtc*yhat[6:11], wte*y[11:]-wte*yhat[11:]]).astype(np.float32)
 
-      return cost
-
+      return yhat
 
 
 def set_bounds(a=(.01, .6), tr=(.001, .5), v=(.01, 4.), z=(.001, .9), ssv=(-4., -.01)):
@@ -119,7 +135,7 @@ def set_bounds(a=(.01, .6), tr=(.001, .5), v=(.01, 4.), z=(.001, .9), ssv=(-4., 
 
 
 
-def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, dt=.0005, si=.01):
+def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
       """
 
       Simulates all Conditions, SSD, trials, timepoints simultaneously.
@@ -149,7 +165,8 @@ def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3
       """
 
 
-      nssd=len(ssd)
+      nssd = len(ssd)
+      nss = int(.5*ntot)
       dx=np.sqrt(si*dt)
       Pg = 0.5*(1 + v*dx/si)
       Tg = np.ceil((tb-tr)/dt).astype(int)
@@ -175,7 +192,7 @@ def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3
       eq = np.array([mq(np.extract(ert[i]<c_ssrt[i], ert[i]), prob=prob)*10 for i in range(ncond)])
 
       # Get response and stop accuracy information
-      gac = np.where(grt<tb, 1, 0).mean(axis=1)
+      gac = np.mean(np.where(grt<tb, 1, 0), axis=1)
       sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
 
       yhat = [gac, sacc, gq, eq]
@@ -215,11 +232,9 @@ def sim_vbias_full():
 
 def resim_only(theta, bias='v', ncond=1, ntrials=2000, wts=None, pGo=.5, ssd=np.arange(.2, .45, .05), p=np.array([.1, .3, .5, .7, .9])):
 
-      if not type(theta)==dict:
-            theta = theta.valuesdict()
-      print theta.keys()
-      print theta.items()
-      theta[bias] = np.array([theta[bias+str(i)] for i in range(ncond)])
+      p = {k:theta[k] for k in theta.keys()}
+
+      p[bias] = np.array([theta[bias+str(i)] for i in range(ncond)])
       a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
 
       nss = int((1-pGo)*ntrials)
