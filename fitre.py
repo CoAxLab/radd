@@ -67,8 +67,6 @@ def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
 	return np.hstack([gac, sacc, gq*10, eq*10]).astype(np.float32)
 
 
-
-
 def ssre_minfunc(p, y, ntrials=2000, model='radd', tb=.650, dflist=[]):
 
 	try:

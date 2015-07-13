@@ -7,7 +7,7 @@ from numpy.random import random_sample as rs
 from scipy.stats.mstats import mquantiles as mq
 
 """
-Working code for fitting reactive data:
+Main code for fitting reactive data:
 This module is essentially an optimized version of the
 core fitting functions in fitre.py and the
 model simulations in RADD.py
@@ -24,27 +24,113 @@ model simulations in RADD.py
             goodness-of-fit metrics
 
 RUNTIME TESTS:
-------------------------------------------
-50 iterations of simulating 10,000 trials:
-------------------------------------------
-fitre + RADD:
-1 loops, best of 3: 1min 32s per loop
+------------------------------------------------------------------
+10 iterations of simulating 10,000 trials:
+==================================================================
 
-fit:
-1 loops, best of 3: 12.9 s per loop
------------------------------------------
+fitre + RADD: first loop iterates 10 runs, second loop iterates
+conditions, ssre_minfunc iterates over 5 SSD's with a for loop
+------------------------------------------------------------------
+# get param dict and make an array for drift-rates for two cond
 
-------------------------------------------
-50 iterations of simulating, analyzing,
-storing, and executing cost function,
-each sim with 10,000 trials:
 
-1 loops, best of 3: 1min 2s per loop
-...on a wimpy macbook air
-------------------------------------------
+      p = {k:v for k,v in redf_store['rebsl_boot_popt'].items()}
+      v_cond = np.array([p['v']*1.05,  p['v']*.95])
+
+      ***********************************************************
+
+      '%''%'timeit
+      # 10 runs
+      for i in range(10):
+            # 2 Conditions
+            for i in range(2):
+                  #update drift-rate, sim 5000 trials
+                  p['v'] = v_cond[i]
+                  yhat2 = fitre.ssre_minfunc(p, y2, ntrials=5000)
+
+
+      <OUTPUT> 1 loops, best of 3: 1min 21s per loop
+
+      ***********************************************************
+
+
+==================================================================
+fit: first loop iterates 10 runs, recost calls fit.simulate_full
+which vectorizes Go and Stop processes across 2 conditions & 5 SSD
+------------------------------------------------------------------
+
+
+      # include drift-rate for two conditions in param dict
+      p = {k:v for k,v in redf_store['rebsl_boot_popt'].items()}
+      p['v0'], p['v1'] = np.array([p['v']*1.05,  p['v']*.95])
+
+      ***********************************************************
+
+      '%''%'timeit
+      # 10 runs
+      for i in range(10):
+            # 2 Conditions x 5000 trials
+            yhat = fit.recost(p, y, ntrials=10000)
+
+
+      <OUTPUT> 1 loops, best of 3: 7.82 s per loop
+
+      ***********************************************************
+
+
 """
 
-def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True, fitid=None, log_fits=True, method='nelder'):
+
+def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True, fitid=None, log_fits=True, method='nelder'):
+
+      """
+      The main function for optimizing parameters of reactive stop signal model.
+      Based on the parameters provided and parameters names included in "bias" list
+      this function will minimize a weighted cost function (see recost) comparing observed
+      and simulated Go accuracy, Stop accuracy (for each SSD condition), reaction time
+      quantiles (.10q, .30q, .50q, .70q, .90q) for correct and error responses for a set
+      of experimental conditions.
+
+      Reccommended use of this function is by initiating a build.Model object and executing
+      the fit_model() method.
+
+            Example:
+
+                  model = build.Model(data=pd.DataFrame, inits=param_dict, depends_on={'v': 'Cond'}, kind='reactive', prepare=1)
+                  model.fit_model(*args, **kwargs)
+
+      Based on specified parameter dependencies on task conditions (i.e. depends_on={param: cond})
+      in build.Model, the bias list will be populated with parameter ids ('a', 'tr', or 'v'). These id's will determine how the lmfit Parameters() class is populated, containing free parameters for each of <ncond> levels of cond i.e. bias=['v']; ncond=3; p=Parameters(); p['v0', 'v1', 'v3'] = inits['v']
+
+      When fitting, all instances of a bias parameter are initialized at the same value provided in inits dict.  The fitting routing will optimize each separately since each condition is simulated separately based on each of the <ncond> parameter id's in the Parameters() object, producing distinct vectors of the Go process, go rt, err rt, stop curve, etc.. (all values included in the cost function are represented separately for observed conditions and simulated conditions)
+
+      args:
+
+            y (np.array [nCondx16):             observed values entered into cost fx
+                                                see build.Model for format info
+
+            inits (dict):                       parameter dictionary including
+                                                keys: a, tr, v, ssv, z
+
+            bias (list):                        list containing parameter names that have
+                                                dependencies task conditions being simulated
+                                                can include a, tr, and/or v.
+
+            ncond (int):                        number of conditions; determines how many
+                                                instances of parameter id in bias list
+                                                are included in lmfit Parameters() object
+
+            wts (np.array [2x10])               weights to be applied (separately) to
+                                                correct and error RT quantiles. Can be estimated
+                                                using get_wts() method of build.Model object
+
+
+            all_params (bool):                  if True, parameter dependencies are ignored
+                                                and a model is fit by minimizing a cost function
+                                                on a 1D array (1x16) of observed inputs
+
+
+      """
 
       ip = inits.copy()
       lim = set_bounds()
@@ -74,23 +160,21 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=
       p0 = [popt.add(k, value=v, vary=vary, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 
       f_kws = {'wts':wts, 'ncond':ncond, 'ntrials':ntrials}
-      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev':maxfev}
+      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol}#, 'maxfev':maxfev}
       optmod = minimize(recost, popt, args=(y, bias), method=method, kws=f_kws, options=opt_kws)
 
       params = popt.valuesdict()
       params['chi'] = optmod.chisqr
       params['rchi'] = optmod.redchi
-
+      
       try:
             params['AIC']=optmod.aic
             params['BIC']=optmod.bic
-
       except Exception:
-
             params['AIC']=1000.0
             params['BIC']=1000.0
 
-      yhat = np.vstack(y) + optmod.residual
+      yhat =  np.vstack(y) + optmod.residual.reshape(ncond, int(len(optmod.residual)/ncond))
 
       if log_fits:
             if fitid is None:
@@ -107,6 +191,28 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, model='radd', ntrials=
 
 def recost(theta, y, bias=['v'], ntrials=2000, wts=None):
 
+      """
+      simulate data via <simulate_full> and return weighted
+      cost between observed (y) and simulated values (yhat).
+
+      returned vector is implicitly used by lmfit minimize
+      routine invoked in <optimize> which then submits the
+      SSE of the already weighted cost to a Nelder-Mead Simplex
+      optimization.
+
+
+      args:
+            theta (dict):           param dict
+            y (np.array):           NCond x 16 array of observed
+                                    values entered into cost f(x)
+            wts (np.array)          weights separately applied to
+                                    correct and error RT quantile
+                                    comparison
+      returns:
+            cost:                   weighted difference bw
+                                    observed (y) and simulated (yhat)
+      """
+
       p = {k:theta[k] for k in theta.keys()}
 
       ssd=np.arange(.2, .45, .05);
@@ -121,21 +227,26 @@ def recost(theta, y, bias=['v'], ntrials=2000, wts=None):
             p['tr'] = np.array([p['tr']]*2)
 
       yhat = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
-      #wtc, wte = wts[0], wts[1]
-      #y=np.vstack(y)
-      #cost = np.vstack(y) - yhat
-      #cost = np.hstack([y[:6]-yhat[:6], wtc*y[6:11]-wtc*yhat[6:11], wte*y[11:]-wte*yhat[11:]]).astype(np.float32)
 
-      return yhat
+      wtc, wte = m.wts.T[:5].T, m.wts.T[5:].T
+      y=np.vstack(y)
+      cost = np.hstack(np.hstack([y[:, :6] - yhat[:, :6], wtc*y[:, 6:11] - wtc*yhat[:, 6:11], wte*y[:, 11:] - wte*yhat[:, 11:]])).astype(np.float32)
+
+      return cost
 
 
 def set_bounds(a=(.01, .6), tr=(.001, .5), v=(.01, 4.), z=(.001, .9), ssv=(-4., -.01)):
+
+      """
+      set and return boundaries to limit search space
+      of parameter optimization in <optimize>
+      """
 
       return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
 
 
 
-def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
+def simulate_full(a, tr, v, ssv, z, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
       """
 
       Simulates all Conditions, SSD, trials, timepoints simultaneously.
@@ -149,35 +260,36 @@ def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3
             nss  (int):                         number of stop trials
             ntot (int):                         number of total trials
             tb (float):                         time boundary
+            ncond (int):                        number of conditions to simulate
 
       returns:
 
             DVg (Go Process):             3d array for all conditions, trials, timepoints
-                                          (i.e. DVg = [COND [NTrials [NTime]]] )
+                                          (i.e. DVg = [nCOND [NTrials [NTime]]] )
                                           All conditions are simulated simultaneously (i.e., BSL & PNL)
 
             DVs (Stop Process):           4d array for all conditions, SSD, SS trials, timepoints.
                                           i.e. ( DVs = [COND [SSD [nSSTrials [NTime]]]] )
                                           All ss decision traces are initiated from DVg[Cond](t=SSD | SSD<tr)
-
-      Output can be passed to <analyze_reactive_full()> to extract
-      expected values to be entered into the cost f(x)
       """
 
-
-      nssd = len(ssd)
-      nss = int(.5*ntot)
       dx=np.sqrt(si*dt)
-      Pg = 0.5*(1 + v*dx/si)
-      Tg = np.ceil((tb-tr)/dt).astype(int)
 
+      nssd = len(ssd); nss = int(.5*ntot)
+
+      Pg = 0.5*(1 + v*dx/si)
       Ps = 0.5*(1 + ssv*dx/si)
+
+      Tg = np.ceil((tb-tr)/dt).astype(int)
       Ts = np.ceil((tb-ssd)/dt).astype(int)
 
       # a/tr/v Bias: ALL CONDITIONS, ALL SSD
       DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
       init_ss = np.array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
       DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
+
+      if return_traces:
+            return [DVg, DVs]
 
       # ALL CONDITIONS, ALL SSD
       grt = (tr + (np.where(DVg[:, nss:, :].max(axis=2)>=a, np.argmax(DVg[:, nss:, :]>=a, axis=2)*dt, np.nan).T)).T
@@ -195,14 +307,46 @@ def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3
       gac = np.mean(np.where(grt<tb, 1, 0), axis=1)
       sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
 
-      yhat = [gac, sacc, gq, eq]
-      yhat_grouped = np.array([np.hstack([i[ii] for i in yhat]) for ii in range(ncond)])
-
-      return yhat_grouped
+      return np.array([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
 
-def sim_trbias_full():
+def resim_yhat(theta, return_traces=False, bias=['v'], ntrials=2000, wts=None):
+
+      """
+      simulate multiple conditions, ssd (as in recost function)
+
+      args:
+            theta (dict):                 param dict
+            return_traces (bool):         return [DVg, DVs]
+
+      returns:
+            output:
+                  output is either simulated predictions (i.e. yhat)
+                        or Go and Stop traces in list (i.e. [DVg, DVs])
+
+      """
+
+
+      p = {k:theta[k] for k in theta.keys()}
+      ssd=np.arange(.2, .45, .05);
+      prob=np.array([.1, .3, .5, .7, .9])
+
+      cond = {pk: p.pop(pk) for pk in p.keys() if pk[-1].isdigit()}
+      ncond = len(cond.keys())
+      for i in range(ncond):
+            p[cond.keys()[i][:-1]] = np.array(cond.values())
+
+      if 'tr' not in bias:
+            p['tr'] = np.array([p['tr']]*2)
+
+      output = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials, return_traces=False)
+
+      return output
+
+
+
+def sim_trbias_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
 
       # Onset-Bias: ALL CONDITIONS, ALL SSD
 
@@ -215,8 +359,10 @@ def sim_trbias_full():
       ert = (tr + (np.where(DVg[:, :nss, :].max(axis=2)>=a, np.argmax(DVg[:, :nss, :]>=a, axis=2)*dt, np.nan).T)).T
       ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt, np.nan)
 
+      return grt, ert, ssrt
 
-def sim_vbias_full():
+
+def sim_vbias_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
 
       # Drift-Rate Bias: ALL CONDITIONS, ALL SSD
       DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg)).T < Pg), dx, -dx).T, axis=2)
@@ -228,21 +374,9 @@ def sim_vbias_full():
       ert = np.where(DVg[:, :nss, :].max(axis=2)>=a, tr + np.argmax(DVg[:, :nss, :]>=a, axis=2)*dt, np.nan)
       ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt, np.nan)
 
+      return grt, ert, ssrt
 
 
-def resim_only(theta, bias='v', ncond=1, ntrials=2000, wts=None, pGo=.5, ssd=np.arange(.2, .45, .05), p=np.array([.1, .3, .5, .7, .9])):
-
-      p = {k:theta[k] for k in theta.keys()}
-
-      p[bias] = np.array([theta[bias+str(i)] for i in range(ncond)])
-      a, tr, v, ssv, z  = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
-
-      nss = int((1-pGo)*ntrials)
-      yhat = simulate_full(a, tr, v, ssv, z, p=p, ncond=ncond, ssd=ssd, nss=nss, ntot=ntrials)
-      #wtc, wte = wts[0], wts[1]
-      #cost = np.hstack([y[:6]-yhat[:6], wtc*y[6:11]-wtc*yhat[6:11], wte*y[11:]-wte*yhat[11:]]).astype(np.float32)
-
-      return yhat
 
 
 #      def simulate(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000, tb=0.650, dt=.0005, si=.01):
@@ -284,6 +418,8 @@ def resim_only(theta, bias='v', ncond=1, ntrials=2000, wts=None, pGo=.5, ssd=np.
 #            init_ss = np.array([DVg[:, :nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
 #            DVs = init_ss[:, :, None] + np.cumsum(np.where(rs((nssd, nss, Ts.max()))<Ps, dx, -dx), axis=2)
 #
+
+
 #            return DVg, DVs
 #
 #

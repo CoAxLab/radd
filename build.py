@@ -4,7 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
-from radd import fit
+from radd import fit, fit_flat
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -27,14 +27,12 @@ def rangl_data(data, cutoff=.650, kind='reactive', prob=np.array([.1, .3, .5, .7
             return np.hstack([gac, sacc, gq*10, eq*10]).astype(np.float32)
 
       elif kind=='proactive':
-
             godf = data.query('response==1')
             gotrials=godf[godf.rt<=rt_cutoff]
             pgo = data.response.mean()
             gp = pgo*prob
             gq = mq(gotrials.rt, prob=gp)
             gmu = gotrials.rt.mean()
-
             return np.hstack([gq*10, gp, gmu, pgo])
 
 
@@ -64,17 +62,18 @@ def resample_data(data, n=120, kind='reactive'):
 
 class Model(object):
 
-      def __init__(self, kind='reactive', model='radd', inits=None, data=pd.DataFrame, fit='subjects', depends_on=None, niter=50, cond=None, prepare=False,  *args, **kws):
+      def __init__(self, kind='reactive', model='radd', inits=None, data=pd.DataFrame, fit='subjects', depends_on=None, niter=50, cond=None, prepare=False, wls=True, *args, **kws):
 
             self.model = model
             self.inits = inits
             self.kind = kind
             self.data = data
             self.niter = niter
+            self.wls=wls
 
-            if depends_on is None:
+            if depends_on is None or fit=='flat':
                   self.is_flat=True
-                  ncond=0
+                  self.ncond=1
             else:
                   self.is_flat=False
                   self.depends_on = depends_on
@@ -100,13 +99,32 @@ class Model(object):
             #if self.depends_on == None:
             #	self.depends_on = {}
 
-
-
       def prepare_fit(self):
 
-            print "preparing %s model to fit on %s" % (self.kind, self.fit)
+            if self.is_flat:
+                  self.__prepare_flat_model__()
+            else:
+                  self.__prepare_indx_model__()
+
+      def __prepare_flat_model__(self):
+
+            print "preparing %s model to fit on %s data" % (self.kind, self.fit)
+
+            data=self.data.copy(); delays = self.delays;
+            datdf = data.groupby(['idx']).apply(rangl_data, kind=self.kind)
+            self.dat = datdf.mean(axis=0)
+
+            qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
+            ixdf = pd.DataFrame({'idx': data.idx.unique(), 'flat': 'flat'}, columns=['idx', 'flat'])
+            self.observed = pd.concat([ixdf, pd.DataFrame(data=np.vstack(datdf.values), columns=qp_cols)], axis=1)
+
+            self.get_wts(self.wls)
+            self.isprepared=True
 
 
+      def __prepare_indx_model__(self):
+
+            print "preparing %s model to fit on %s data" % (self.kind, self.fit)
 
             if self.inits is None:
                   self.load_default_inits()
@@ -116,15 +134,11 @@ class Model(object):
 
             # create idx df grouped by cond and store cost vectors
             # this is executed for storing idx data regardless of fit type
-            if self.is_flat:
-                  grouped = data.groupby(['idx'])
-                  cond = 'flat'
-            else:
-                  depends_on = self.depends_on
-                  depends = self.depends
-                  cond = self.cond;
-                  labels = self.labels;
-                  grouped = data.groupby(['idx', cond])
+            depends_on = self.depends_on
+            depends = self.depends
+            cond = self.cond;
+            labels = self.labels;
+            grouped = data.groupby(['idx', cond])
 
             datdf = grouped.apply(rangl_data, kind=self.kind)
 
@@ -142,6 +156,7 @@ class Model(object):
 
             indx_vals = np.sort(np.hstack(indx*ncond))
             cond_vals = np.array(labels*len(indx))
+
             params = sorted(self.inits.keys())
             for d in depends:
                   params.remove(d[0])
@@ -155,10 +170,12 @@ class Model(object):
             self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(np.vstack(datdf.values)), columns=qp_cols)], axis=1)
             self.popt = pd.concat([ixdf, pd.DataFrame(columns=self.infolabels, index=indx)], axis=1)
 
+            self.get_wts(self.wls)
+
             self.isprepared = True
 
 
-      def fit_model(self, save=False, savepth='./', live_update=True, log_fits=True, fit_average=False, all_params=0, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500, wls=True):
+      def fit_model(self, save=False, savepth='./', live_update=True, log_fits=True, fit_average=False, all_params=0, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
 
             ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
 
@@ -166,9 +183,9 @@ class Model(object):
                   self.prepare_fit()
             self.get_wts(wls)
 
-            if fit_average:
+            if self.is_flat:
                   y = np.mean(self.dat, axis=0)
-                  params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+                  params, yhat = fit_flat.optimize_flat(y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
                   return params, yhat
 
@@ -177,8 +194,8 @@ class Model(object):
                   params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
                   self.popt.loc[i]=pd.Series({info: params[info] for info in self.infolabels})
-                  self.fits.iloc[self.i: self.i+1, 2:] = yhat
-                  self.i+=1
+                  self.fits.iloc[self.i: self.i+ncond, ncond:] = yhat
+                  self.i+=self.ncond
 
                   if save and live_update:
                         self.fits.to_csv(savepth+model+"_fits.csv", index=False)
@@ -234,7 +251,6 @@ class Model(object):
 
             self.inits = {'a': 0.44, 'ssv': 0.947, 'tr': 0.3049, 'v': 1.1224, 'z': 0.15}
 
-
       def get_wts(self, fit_wls=True):
 
             """
@@ -248,9 +264,24 @@ class Model(object):
             *P(Err|SSDall) * sd(.5eQ, ... .95eQ)
             """
 
-            ncond = len(self.data[self.cond].unique())
+            ncond = self.ncond#len(self.data[self.cond].unique())
 
-            if fit_wls:
+            if fit_wls and self.is_flat:
+                  sd = self.observed.std()
+
+                  pc = self.data.query('trial_type=="go"').response.mean()
+                  pe = self.data.query('trial_type=="stop"').response.mean()
+
+                  sdc = sd.loc['c5':'c95'].values
+                  sde = sd.loc['e5':'e95'].values
+
+                  wtc = (pc*(sdc.min(axis=0)/sdc.T)).T
+                  wte = (pe*(sde.min(axis=0)/sde.T)).T
+
+                  self.wts = np.array([wtc, wte])
+
+            elif fit_wls and not self.is_flat:
+
                   sd = self.observed.groupby(self.cond).std()
 
                   pc = self.data.query('trial_type=="go"').groupby(self.cond).response.mean().values
@@ -263,6 +294,7 @@ class Model(object):
                   wte = (pe*(sde.min(axis=1)/sde.T)).T
 
                   self.wts = np.array([wtc, wte]).reshape(10,ncond).T
+
 
             else:
 
