@@ -11,128 +11,100 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
-
-	gac = data.query('trial_type=="go"').acc.mean()
-	sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
-
-	grt = data.query('trial_type=="go" & acc==1').rt.values
-	ert = data.query('response==1 & acc==0').rt.values
-	gq = mq(grt, prob=prob)
-	eq = mq(ert, prob=prob)
-
-	return np.hstack([gac, sacc, gq*10, eq*10]).astype(np.float32)
-
-
-def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([1, 3, 5, 7, 9])):
-
-	godf = data.query('response==1')
-	gotrials=godf[godf.rt<=rt_cutoff]
-	pgo = data.response.mean()
-	gp = pgo*prob
-	gq = mq(gotrials.rt, prob=gp)
-	gmu = gotrials.rt.mean()
-	return np.hstack([gq*10, gp, gmu, pgo])
-
 
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
-	"""
-	takes quantile estimates and fits cumulative density function
-	returns samples to pass to sns.kdeplot()
-	"""
+      """
+      takes quantile estimates and fits cumulative density function
+      returns samples to pass to sns.kdeplot()
+      """
 
-	kdefit = KernelDensity(kernel='gaussian', bandwidth=bw).fit(rtquants)
+      kdefit = KernelDensity(kernel='gaussian', bandwidth=bw).fit(rtquants)
 
-	samples = kdefit.sample(n_samples=nsamples).flatten()
+      samples = kdefit.sample(n_samples=nsamples).flatten()
 
-	return samples
+      return samples
 
 
 
 def aic(model):
-	k = len(model.get_stochasticts())
-	logp = sum([x.logp for x in model.get_observeds()['node']])
-	return 2 * k - 2 * logp
+      k = len(model.get_stochasticts())
+      logp = sum([x.logp for x in model.get_observeds()['node']])
+      return 2 * k - 2 * logp
 
 
 def bic(model):
-	k = len(model.get_stochastics())
-	n = len(model.data)
-	logp = sum([x.logp for x in model.get_observeds()['node']])
-	return -2 * logp + k * np.log(n)
+      k = len(model.get_stochastics())
+      n = len(model.data)
+      logp = sum([x.logp for x in model.get_observeds()['node']])
+      return -2 * logp + k * np.log(n)
 
 
-def resample_reactive(data, n=120):
+def resample_data(data, n=120, kind='reactive'):
 
-	df=data.copy(); bootlist=list()
-	if n==None: n=len(df)
+      df=data.copy(); bootlist=list()
+      if n==None: n=len(df)
 
-	for ssd, ssdf in df.groupby('ssd'):
-		boots = ssdf.reset_index(drop=True)
-		orig_ix = np.asarray(boots.index[:])
-		resampled_ix = rwr(orig_ix, get_index=True, n=n)
-		bootdf = ssdf.irow(resampled_ix)
-		bootlist.append(bootdf)
+      if kind=='reactive':
+            for ssd, ssdf in df.groupby('ssd'):
+                  boots = ssdf.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = ssdf.irow(resampled_ix)
+                  bootlist.append(bootdf)
+                  #concatenate and return all resampled conditions
+                  return rangl_re(pd.concat(bootlist))
 
-	#concatenate and return all resampled conditions
-	return rangl_re(pd.concat(bootlist))
-
-def resample_proactive(data, n=120, rt_cutoff=.54502):
-
-	df=data.copy(); bootdf_list=list()
-	if n==None: nlist=len(df)
-
-	boots = df.reset_index(drop=True)
-	orig_ix = np.asarray(boots.index[:])
-	resampled_ix = rwr(orig_ix, get_index=True, n=n)
-	bootdf = df.irow(resampled_ix)
-	bootdf_list.append(bootdf)
-
-	return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
+      else:
+                  boots = df.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = df.irow(resampled_ix)
+                  bootdf_list.append(bootdf)
+                  return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 
 def rwr(X, get_index=False, n=None):
-	"""
-	Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
-	"""
+      """
+      Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
+      """
 
-	if isinstance(X, pd.Series):
-		X = X.copy()
-		X.index = range(len(X.index))
-	if n == None:
-		n = len(X)
+      if isinstance(X, pd.Series):
+            X = X.copy()
+            X.index = range(len(X.index))
+      if n == None:
+            n = len(X)
 
-	resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
-	X_resample = np.array(X[resample_i])
+      resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
+      X_resample = np.array(X[resample_i])
 
-	if get_index:
-		return resample_i
-	else:
-		return X_resample
+      if get_index:
+            return resample_i
+      else:
+            return X_resample
 
 
 def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):
 
-	if not type(theta)==dict:
-		theta=theta.to_dict()['mean']
+      if not type(theta)==dict:
+            theta=theta.to_dict()['mean']
 
-	keep=['a', 'z', 'v', 'tr', 'ssv', 'ssd']
-	keep.pop(keep.index(dep))
+      keep=['a', 'z', 'v', 'tr', 'ssv', 'ssd']
+      keep.pop(keep.index(dep))
 
-	pdict={pg:theta[dep+str(pg)] for pg in pgo}
+      pdict={pg:theta[dep+str(pg)] for pg in pgo}
 
-	for k in theta.keys():
-		if k not in keep:
-			theta.pop(k)
+      for k in theta.keys():
+            if k not in keep:
+                  theta.pop(k)
 
-	return theta, pdict
+      return theta, pdict
 
 
 def pstop_meanrt(df, filt_rts=True):
 
         pstop=1-df.groupby('pGo').mean()['response'].values
         if filt_rts:
-        	godf=df.query("response==1 and rt<=.5451")
+              godf=df.query("response==1 and rt<=.5451")
         else:
                 godf=df.query('response==1')
         go_rt=godf.groupby('pGo').mean()['rt'].values
@@ -142,76 +114,76 @@ def pstop_meanrt(df, filt_rts=True):
 
 def remove_outliers(df, sd=1.95):
 
-	print "len(df) = %s \n\n" % (str(len(df)))
+      print "len(df) = %s \n\n" % (str(len(df)))
 
-	df_ss=df[df['choice']=='stop']
-	df_go=df[df['choice']=='go']
-	cutoff_go=df_go['rt'].std()*sd + (df_go['rt'].mean())
-	df_go_new=df_go[df_go['rt']<cutoff_go]
+      df_ss=df[df['choice']=='stop']
+      df_go=df[df['choice']=='go']
+      cutoff_go=df_go['rt'].std()*sd + (df_go['rt'].mean())
+      df_go_new=df_go[df_go['rt']<cutoff_go]
 
-	df_trimmed=pd.concat([df_go_new, df_ss])
-	df_trimmed.sort('trial', inplace=True)
+      df_trimmed=pd.concat([df_go_new, df_ss])
+      df_trimmed.sort('trial', inplace=True)
 
-	print "cutoff_go = %s \nlen(df_go) = %i\n len(df_go_new) = %i\n" % (str(cutoff_go), len(df_go), len(df_go))
+      print "cutoff_go = %s \nlen(df_go) = %i\n len(df_go_new) = %i\n" % (str(cutoff_go), len(df_go), len(df_go))
 
-	return df_trimmed
+      return df_trimmed
 
 def update_params(theta):
 
-	if 't_hi' in theta.keys():
-		theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
-	else:
-		theta['tr']=theta['tr']
+      if 't_hi' in theta.keys():
+            theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
+      else:
+            theta['tr']=theta['tr']
 
-	if 'z_hi' in theta.keys():
-		theta['z'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
-	else:
-		theta['z']=theta['z']
+      if 'z_hi' in theta.keys():
+            theta['z'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
+      else:
+            theta['z']=theta['z']
 
-	if 'sv' in theta.keys():
-		theta['v'] = theta['sv'] * np.random.randn() + theta['v']
-	else:
-		theta['v']=theta['v']
+      if 'sv' in theta.keys():
+            theta['v'] = theta['sv'] * np.random.randn() + theta['v']
+      else:
+            theta['v']=theta['v']
 
-	return theta
+      return theta
 
 
 def get_intervar_ranges(theta):
-	"""
-	:args:
-		parameters (dict):	dictionary of theta (Go/NoGo Signal Parameters)
-					and sp (Stop Signal Parameters)
-	"""
-	if 'st' in theta.keys():
-		theta['t_lo'] = theta['tr'] - theta['st']/2
-		theta['t_hi'] = theta['tr'] + theta['st']/2
-	if 'sz' in theta.keys():
-		theta['z_lo'] = theta['z'] - theta['sz']/2
-		theta['z_hi'] = theta['z'] + theta['sz']/2
-	return theta
+      """
+      :args:
+            parameters (dict):	dictionary of theta (Go/NoGo Signal Parameters)
+                              and sp (Stop Signal Parameters)
+      """
+      if 'st' in theta.keys():
+            theta['t_lo'] = theta['tr'] - theta['st']/2
+            theta['t_hi'] = theta['tr'] + theta['st']/2
+      if 'sz' in theta.keys():
+            theta['z_lo'] = theta['z'] - theta['sz']/2
+            theta['z_hi'] = theta['z'] + theta['sz']/2
+      return theta
 
 
 def sigmoid(p,x):
-	x0,y0,c,k=p
-	y = c / (1 + np.exp(k*(x-x0))) + y0
-	return y
+      x0,y0,c,k=p
+      y = c / (1 + np.exp(k*(x-x0))) + y0
+      return y
 
 def residuals(p,x,y):
-	return y - sigmoid(p,x)
+      return y - sigmoid(p,x)
 
 def res(arr,lower=0.0,upper=1.0):
-	arr=arr.copy()
-	if lower>upper: lower,upper=upper,lower
-	arr -= arr.min()
-	arr *= (upper-lower)/arr.max()
-	arr += lower
-	return arr
+      arr=arr.copy()
+      if lower>upper: lower,upper=upper,lower
+      arr -= arr.min()
+      arr *= (upper-lower)/arr.max()
+      arr += lower
+      return arr
 
 def get_intersection(iter1, iter2):
 
-	intersect_set = set(iter1).intersection(set(iter2))
+      intersect_set = set(iter1).intersection(set(iter2))
 
-	return np.array([i for i in intersect_set])
+      return np.array([i for i in intersect_set])
 
 
 
@@ -285,13 +257,13 @@ def calc_quant_weights(rtvec, quants):
 
 def ssrt_calc(df, avgrt=.3):
 
-	dfstp = df.query('trial_type=="stop"')
-	dfgo = df.query('choice=="go"')
+      dfstp = df.query('trial_type=="stop"')
+      dfgo = df.query('choice=="go"')
 
-	pGoErr = np.array([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
-	nlist = [int(pGoErr[i]*len(idf)) for i, (ix, idf) in enumerate(df.groupby('idx'))]
+      pGoErr = np.array([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
+      nlist = [int(pGoErr[i]*len(idf)) for i, (ix, idf) in enumerate(df.groupby('idx'))]
 
-	GoRTs = np.array([idf.rt.sort(inplace=False).values for ix, idf in dfgo.groupby('idx')])
-	ssrt_list = np.array([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
+      GoRTs = np.array([idf.rt.sort(inplace=False).values for ix, idf in dfgo.groupby('idx')])
+      ssrt_list = np.array([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
 
-	return ssrt_list
+      return ssrt_list

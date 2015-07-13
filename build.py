@@ -4,10 +4,7 @@ import os
 import numpy as np
 import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
-from scipy import optimize
-from scipy.io import loadmat
-from radd import fitre, fitpro, utils
-from numba.decorators import jit
+from radd import fit
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -17,132 +14,171 @@ gpal = lambda nc: sns.blend_palette(['#65b88f', '#2c724f'], n_colors=nc)
 ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
 
 
+def rangl_data(data, cutoff=.650, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
+
+      if kind == 'reactive':
+            gac = data.query('trial_type=="go"').acc.mean()
+            sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
+            grt = data.query('trial_type=="go" & acc==1').rt.values
+            ert = data.query('response==1 & acc==0').rt.values
+            gq = mq(grt, prob=prob)
+            eq = mq(ert, prob=prob)
+
+            return np.hstack([gac, sacc, gq*10, eq*10]).astype(np.float32)
+
+      elif kind=='proactive':
+
+            godf = data.query('response==1')
+            gotrials=godf[godf.rt<=rt_cutoff]
+            pgo = data.response.mean()
+            gp = pgo*prob
+            gq = mq(gotrials.rt, prob=gp)
+            gmu = gotrials.rt.mean()
+
+            return np.hstack([gq*10, gp, gmu, pgo])
+
+
+def resample_data(data, n=120, kind='reactive'):
+
+      df=data.copy(); bootlist=list()
+      if n==None: n=len(df)
+
+      if kind=='reactive':
+            for ssd, ssdf in df.groupby('ssd'):
+                  boots = ssdf.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = ssdf.irow(resampled_ix)
+                  bootlist.append(bootdf)
+                  #concatenate and return all resampled conditions
+                  return rangl_re(pd.concat(bootlist))
+
+      else:
+                  boots = df.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = df.irow(resampled_ix)
+                  bootdf_list.append(bootdf)
+                  return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
+
+
 class Model(object):
 
-      def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, fit='subjects', depends_on={'v':'Cond'}, niter=50, *args, **kws):
+      def __init__(self, kind='reactive', model='radd', inits=None, data=pd.DataFrame, fit='subjects', depends_on=None, niter=50, cond=None, prepare=False,  *args, **kws):
 
             self.model = model
             self.inits = inits
             self.kind = kind
             self.data = data
             self.niter = niter
-            self.depends_on = depends_on
-            self.depends = self.depends_on.keys()
-            self.cond = self.depends_on.values()[0]
-            self.fitparams = None
-            self.live_update = True
-            self.prob=np.array([.1, .3, .5, .7, .9])
+
+            if depends_on is None:
+                  self.is_flat=True
+                  ncond=0
+            else:
+                  self.is_flat=False
+                  self.depends_on = depends_on
+                  self.depends = depends_on.keys()
+                  self.cond = depends_on.values()[0]
+                  self.labels = list(data[self.cond].unique())
+                  self.ncond=len(self.labels)
+
             self.i = 0
             self.fit = fit
             self.isprepared=False
+
+            self.delays = sorted(data.query('trial_type=="stop"').ssd.unique().astype(np.int))
+
             if self.fit=='bootstrap':
                   self.indx=range(niter)
+                  self.ifx = resample_data
             elif self.fit=='subjects':
                   self.indx=list(self.data.idx.unique())
-
-
-      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfev=500, niter=500, get_params=False):
-
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
-
-            if self.fit=='bootstrap':
-                  self.indx=range(self.fitparams['niter'])
-
-            fitp = self.fitparams
-
-            if get_params:
-                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfev'], fitp['niter']
-
-
-
-      def global_opt(self, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
-
-            if not self.isprepared:
+                  self.ifx = rangl_data
+            if prepare:
                   self.prepare_fit()
-
-            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
-            inits = self.inits
-            y = self.dat.mean(axis=0)
-
-            if self.kind=='reactive':
-                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
-            elif self.kind=='proactive':
-                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
+            #if self.depends_on == None:
+            #	self.depends_on = {}
 
 
 
       def prepare_fit(self):
 
-            print "preparing %s model using %s method" % (self.kind, self.fit)
-
-            inits=self.inits; data=self.data; cond=self.cond; indx = self.indx
-            labels = data[cond].unique();
+            print "preparing %s model to fit on %s" % (self.kind, self.fit)
 
 
-            delays = sorted(data.query('trial_type=="stop"').ssd.unique().astype(np.int))
 
+            if self.inits is None:
+                  self.load_default_inits()
+
+            inits=self.inits; data=self.data.copy()
+            ncond=self.ncond; delays = self.delays; indx=self.indx
+
+            # create idx df grouped by cond and store cost vectors
+            # this is executed for storing idx data regardless of fit type
+            if self.is_flat:
+                  grouped = data.groupby(['idx'])
+                  cond = 'flat'
+            else:
+                  depends_on = self.depends_on
+                  depends = self.depends
+                  cond = self.cond;
+                  labels = self.labels;
+                  grouped = data.groupby(['idx', cond])
+
+            datdf = grouped.apply(rangl_data, kind=self.kind)
+
+            #CREATE ITERABLE OBJECT CONTAINING NITER of RESAMPLED DATA FOR FITTING
             if self.fit=='bootstrap':
-                  if self.kind=='reactive':
-                        ifx = utils.resample_reactive
-                  elif self.kind=='proactive':
-                        ifx = utils.resample_proactive
+                  if hasattr(self, 'cond'):
+                        boots = data.groupby([cond])
+                  else:
+                        boots = data
+                  self.dat = np.vstack([boots.apply(self.ifx, kind=self.kind).values for i in indx])
 
-                  #CREATE ITERABLE OBJECT CONTAINING NITER of RESAMPLED DATA FOR FITTING
-                  self.dat = np.vstack([[ifx(cdf) for i in indx] for c, cdf in self.data.groupby(self.cond)])
-
+            #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
             elif self.fit=='subjects':
-                  if self.kind=='reactive':
-                        ifx = utils.rangl_re
-                  elif self.kind=='proactive':
-                        ifx = utils.rangl_pro
+                  self.dat = np.array([np.vstack(cset) for cset in datdf.unstack().values])
 
-                  #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
-                  self.dat = np.vstack([[ifx(idxdf) for idx, idxdf in cdf.groupby('idx')] for c, cdf in self.data.groupby(self.cond)]).astype(np.float32)
+            indx_vals = np.sort(np.hstack(indx*ncond))
+            cond_vals = np.array(labels*len(indx))
+            params = sorted(self.inits.keys())
+            for d in depends:
+                  params.remove(d[0])
+                  params.extend([d+str(i) for i in range(ncond)])
 
-            popt_cols = np.hstack([inits.keys(),'chi','rchi','aic','bic'])
+            self.infolabels = np.hstack([params,'chi','rchi','AIC','BIC'])
             qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
-            ixdf = pd.concat([pd.DataFrame({'indx': indx, cond:c}, columns=['indx', cond]) for c in labels]).reset_index(drop=True)
+            ixdf = pd.DataFrame({'idx': indx_vals, cond: cond_vals}, columns=['idx', cond])
 
-            self.observed = pd.concat([ixdf, pd.DataFrame(self.dat, columns=qp_cols)], axis=1)
-            self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(self.dat), columns=qp_cols)], axis=1)
-            self.popt = pd.concat([ixdf, pd.DataFrame(columns=popt_cols, index=ixdf.index)], axis=1)
-
-            self.get_wts()
+            self.observed = pd.concat([ixdf, pd.DataFrame(data=np.vstack(datdf.values), columns=qp_cols)], axis=1)
+            self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(np.vstack(datdf.values)), columns=qp_cols)], axis=1)
+            self.popt = pd.concat([ixdf, pd.DataFrame(columns=self.infolabels, index=indx)], axis=1)
 
             self.isprepared = True
 
 
-      def run_model(self, save=False, savepth='./', live_update=True, all_params=0, disp=False, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500, fit_global=False, fit_wls=True, **kwargs):
+      def fit_model(self, save=False, savepth='./', live_update=True, log_fits=True, fit_average=False, all_params=0, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500, wls=True):
 
-            if "depends_on" in kwargs.keys():
-                  self.depends_on = kwargs['depends_on']
-                  self.depends = self.depends_on.keys()
-                  self.cond = self.depends_on.values()[0]
-
-            inits = self.inits; model=self.model; depends=self.depends;
             ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
 
             if not self.isprepared:
-                  print "preparing %s model using %s method" % (self.kind, self.fit)
-                  # initialize data & fit storage
                   self.prepare_fit()
+            self.get_wts(wls)
 
-            if fit_global:
-                  global_opt()
+            if fit_average:
+                  y = np.mean(self.dat, axis=0)
+                  params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+
+                  return params, yhat
 
             for i, y in enumerate(self.dat):
 
-                  wt = self.wts[self.observed.iloc[self.i][self.cond]]
+                  params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
-                  if self.kind=='reactive':
-                        params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wt, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
-
-                  elif self.kind=='proactive':
-                        inits['pGo']=cdf.pGo.mean()
-                        params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
-
-                  self.popt.iloc[self.i, 2:] = params
-                  self.fits.iloc[self.i, 2:] = yhat
+                  self.popt.loc[i]=pd.Series({info: params[info] for info in self.infolabels})
+                  self.fits.iloc[self.i: self.i+1, 2:] = yhat
+                  self.i+=1
 
                   if save and live_update:
                         self.fits.to_csv(savepth+model+"_fits.csv", index=False)
@@ -167,7 +203,39 @@ class Model(object):
                   self.rt_cutoff=rt_cutoff
 
 
-      def get_wts(self):
+      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfev=500, niter=500, get_params=False):
+
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
+
+            if self.fit=='bootstrap':
+                  self.indx=range(self.fitparams['niter'])
+
+            fitp = self.fitparams
+
+            if get_params:
+                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfev'], fitp['niter']
+
+
+      def global_opt(self, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
+
+            if not self.isprepared:
+                  self.prepare_fit()
+
+            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
+            inits = self.inits
+            y = self.dat.mean(axis=0)
+
+            if self.kind=='reactive':
+                  self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
+            elif self.kind=='proactive':
+                  self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
+
+      def load_default_inits(self):
+
+            self.inits = {'a': 0.44, 'ssv': 0.947, 'tr': 0.3049, 'v': 1.1224, 'z': 0.15}
+
+
+      def get_wts(self, fit_wls=True):
 
             """
             need to set up for different conditions
@@ -180,60 +248,72 @@ class Model(object):
             *P(Err|SSDall) * sd(.5eQ, ... .95eQ)
             """
 
-            sd = self.observed.groupby(self.cond).std()
+            ncond = len(self.data[self.cond].unique())
 
-            pc = self.data.query('trial_type=="go"').groupby(self.cond).response.mean().values
-            pe = self.data.query('trial_type=="stop"').groupby(self.cond).response.mean().values
+            if fit_wls:
+                  sd = self.observed.groupby(self.cond).std()
 
-            sdc = sd.loc[:,'c5':'c95'].values
-            sde = sd.loc[:,'e5':'e95'].values
+                  pc = self.data.query('trial_type=="go"').groupby(self.cond).response.mean().values
+                  pe = self.data.query('trial_type=="stop"').groupby(self.cond).response.mean().values
 
-            lbls = self.data[self.cond].unique()
+                  sdc = sd.loc[:,'c5':'c95'].values
+                  sde = sd.loc[:,'e5':'e95'].values
 
-            wtc = np.array([p*(s.min()/s) for p, s in zip(pc, sdc)])
-            wte = np.array([p*(s.min()/s) for p, s in zip(pe, sde)])
+                  wtc = (pc*(sdc.min(axis=1)/sdc.T)).T
+                  wte = (pe*(sde.min(axis=1)/sde.T)).T
 
-            self.wts = {lbls[i]:[wtc[i], wte[i]] for i in range(len(lbls))}
+                  self.wts = np.array([wtc, wte]).reshape(10,ncond).T
 
-      def plot_fits(self, bw=.1, plot_acc=False):
-
-
-            sns.set_context('notebook', font_scale=1.6)
-
-            gq = self.observed.loc[:, 'c5':'c95'].mean()
-            eq = self.observed.loc[:, 'e5':'e95'].mean()
-            fit_gq = self.fits.loc[:, 'c5':'c95'].mean()
-            fit_eq = self.fits.loc[:, 'e5':'e95'].mean()
-
-            if plot_acc:
-
-                  f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
-
-                  gacc = self.observed['Go'].mean()
-                  sacc = self.observed.loc[:, 200:400].mean()
-                  fit_gacc = self.fits['Go'].mean()
-                  fit_sacc = self.fits.loc[:, 200:400].mean()
             else:
-                  f, ax1 = plt.subplots(1, figsize=(5,5))
 
-            # Fit RT quantiles to KDE function in radd.utils
-            quant_list = [gq, fit_gq, eq, fit_eq]
-            kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
+                  self.wts = np.ones((2,10))
 
-            sns.kdeplot(kdefits[0], cumulative=True, label='data gQP', linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
-            sns.kdeplot(kdefits[1], cumulative=True, label='model gQP', linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
-            sns.kdeplot(kdefits[2], cumulative=True, label='data eQP', linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
-            sns.kdeplot(kdefits[3], cumulative=True, label='model eQP', linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
 
-            ax1.set_xlim(4.3, 6.5)
-            ax1.set_ylabel('P(RT<t)')
-            ax1.set_xlabel('RT (s)')
-            ax1.set_ylim(-.05, 1.05)
-            ax1.set_xticklabels(ax1.get_xticks()*.1)
 
-            if plot_acc:
-                  # Plot observed and predicted stop curves
-                  vis.scurves([sacc, fit_sacc], labels=['data Stop', 'model Stop'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
+def plot_fits(data, bw=.1, plot_acc=False):
 
-            plt.tight_layout()
-            sns.despine()
+      """
+
+      BROKEN
+
+      """
+
+      sns.set_context('notebook', font_scale=1.6)
+
+      #gq = self.observed.loc[:, 'c5':'c95'].mean()
+      #eq = self.observed.loc[:, 'e5':'e95'].mean()
+      #fit_gq = self.fits.loc[:, 'c5':'c95'].mean()
+      #fit_eq = self.fits.loc[:, 'e5':'e95'].mean()
+
+      if plot_acc:
+
+            f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
+
+            gacc = self.observed['Go'].mean()
+            sacc = self.observed.loc[:, 200:400].mean()
+            fit_gacc = self.fits['Go'].mean()
+            fit_sacc = self.fits.loc[:, 200:400].mean()
+      else:
+            f, ax1 = plt.subplots(1, figsize=(5,5))
+
+      # Fit RT quantiles to KDE function in radd.utils
+      quant_list = [gq, fit_gq, eq, fit_eq]
+      kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
+
+      sns.kdeplot(kdefits[0], cumulative=True, label='data gQP', linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[1], cumulative=True, label='model gQP', linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[2], cumulative=True, label='data eQP', linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[3], cumulative=True, label='model eQP', linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
+
+      ax1.set_xlim(4.3, 6.5)
+      ax1.set_ylabel('P(RT<t)')
+      ax1.set_xlabel('RT (s)')
+      ax1.set_ylim(-.05, 1.05)
+      ax1.set_xticklabels(ax1.get_xticks()*.1)
+
+      if plot_acc:
+            # Plot observed and predicted stop curves
+            vis.scurves([sacc, fit_sacc], labels=['data Stop', 'model Stop'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
+
+      plt.tight_layout()
+      sns.despine()

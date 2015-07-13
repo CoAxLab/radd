@@ -34,6 +34,21 @@ def fit_proactive_model(y, inits={}, depends=['xx'], model='radd', SSD=.450, tb=
 
 	return params, yhat
 
+
+
+
+def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([1, 3, 5, 7, 9])):
+
+	godf = data.query('response==1')
+	gotrials=godf[godf.rt<=rt_cutoff]
+	pgo = data.response.mean()
+	gp = pgo*prob
+	gq = mq(gotrials.rt, prob=gp)
+	gmu = gotrials.rt.mean()
+	return np.hstack([gq*10, gp, gmu, pgo])
+
+
+
 def sspro_minfunc(p, y, ntrials, PGO, SSD, model='radd', tb=.560, rt_cutoff=.54502):
 
 	try:

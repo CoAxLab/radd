@@ -13,6 +13,7 @@ def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='re
 
 	tr=theta['tr']; mu=theta['v']; a=theta['a'];
 	z=theta['z']; ssd=theta['ssd'];
+
 	if model=='ipa':
 		ssv=abs(theta['ssv'])
 	else:
