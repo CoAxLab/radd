@@ -128,7 +128,7 @@ def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3
       conditions differentiated by the value of one or more model parameters)
 
       args:
-            a, tr, v, ssv, z (float/array):     model parameters (excl 'v')
+            a, tr, v, ssv, z (float/array):     model parameters
             ssd  (array):                       full set of stop signal delays
             nss  (int):                         number of stop trials
             ntot (int):                         number of total trials
@@ -157,7 +157,7 @@ def simulate_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3
       Ps = 0.5*(1 + ssv*dx/si)
       Ts = np.ceil((tb-ssd)/dt).astype(int)
 
-      # Drift-Rate Bias: ALL CONDITIONS, ALL SSD
+      # a/tr/v Bias: ALL CONDITIONS, ALL SSD
       DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
       init_ss = np.array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
       DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
