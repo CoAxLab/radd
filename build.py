@@ -112,7 +112,7 @@ class Model(object):
 
             data=self.data.copy(); delays = self.delays;
             datdf = data.groupby(['idx']).apply(rangl_data, kind=self.kind)
-            self.dat = datdf.mean(axis=0)
+            self.dat = datdf.copy()
 
             qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
             ixdf = pd.DataFrame({'idx': data.idx.unique(), 'flat': 'flat'}, columns=['idx', 'flat'])
@@ -184,7 +184,7 @@ class Model(object):
             self.get_wts(wls)
 
             if self.is_flat:
-                  y = np.mean(self.dat, axis=0)
+                  y = self.dat.mean(axis=0)
                   params, yhat = fit_flat.optimize_flat(y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
                   return params, yhat
