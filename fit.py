@@ -139,15 +139,11 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
       ip['ssv']=-abs(ip['ssv'])
 
       popt=Parameters()
-      if not all_params:
-            vary=0
-            for bk in bias:
-                  bv = ip.pop(bk)
-                  mn = lim[bk][0]; mx = lim[bk][1]
-                  d0 = [popt.add(bk+str(i), value=bv, vary=1, min=mn, max=mx) for i in range(ncond)]
 
-      else:
-            vary=1
+      for bk in bias:
+            bv = ip.pop(bk)
+            mn = lim[bk][0]; mx = lim[bk][1]
+            d0 = [popt.add(bk+str(i), value=bv, vary=1, min=mn, max=mx) for i in range(ncond)]
 
       if method=='differential_evolution':
             pass
@@ -157,7 +153,7 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
             popt.add('zperc', value=zval/aval, vary=1)
             popt.add('z', expr="zperc*a")
 
-      p0 = [popt.add(k, value=v, vary=vary, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
+      p0 = [popt.add(k, value=v, vary=0, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 
       f_kws = {'wts':wts, 'ncond':ncond, 'ntrials':ntrials}
       opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol}#, 'maxfev':maxfev}
@@ -224,11 +220,14 @@ def recost(theta, y, bias=['v'], ntrials=2000, wts=None):
             p[cond.keys()[i][:-1]] = np.array(cond.values())
 
       if 'tr' not in bias:
-            p['tr'] = np.array([p['tr']]*2)
+            p['tr'] = np.array([p['tr']]*ncond)
 
       yhat = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
+      if wts is None:
+            wtc, wte = np.ones((ncond,10))
+      else:
+            wtc, wte = m.wts.T[:5].T, m.wts.T[5:].T
 
-      wtc, wte = m.wts.T[:5].T, m.wts.T[5:].T
       y=np.vstack(y)
       cost = np.hstack(np.hstack([y[:, :6] - yhat[:, :6], wtc*y[:, 6:11] - wtc*yhat[:, 6:11], wte*y[:, 11:] - wte*yhat[:, 11:]])).astype(np.float32)
 
@@ -375,7 +374,3 @@ def sim_vbias_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .
       ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt, np.nan)
 
       return grt, ert, ssrt
-
-
-
-      

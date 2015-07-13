@@ -120,7 +120,11 @@ def recost_flat(theta, y, ntrials=2000, wts=None):
 
       yhat = simulate_flat(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ssd=ssd, ntot=ntrials)
 
-      wtc, wte = m.wts[0], m.wts[1]
+      if wts is None:
+            wtc, wte = np.ones(5), np.ones(5)
+      else:
+            wtc, wte = wts[0], wts[1]
+
       cost = np.hstack(np.hstack([y[:6] - yhat[:6], wtc*y[6:11] - wtc*yhat[6:11], wte*y[11:] - wte*yhat[11:]])).astype(np.float32)
 
       return cost
