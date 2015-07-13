@@ -102,7 +102,7 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
       Based on specified parameter dependencies on task conditions (i.e. depends_on={param: cond})
       in build.Model, the bias list will be populated with parameter ids ('a', 'tr', or 'v'). These id's will determine how the lmfit Parameters() class is populated, containing free parameters for each of <ncond> levels of cond i.e. bias=['v']; ncond=3; p=Parameters(); p['v0', 'v1', 'v3'] = inits['v']
 
-      When fitting, all instances of a bias parameter are initialized at the same value provided in inits dict.  The fitting routing will optimize each separately since each condition is simulated separately based on each of the <ncond> parameter id's in the Parameters() object, producing distinct vectors of the Go process, go rt, err rt, stop curve, etc.. (all values included in the cost function are represented separately for observed conditions and simulated conditions)
+      When fitting, all instances of a bias parameter are initialized at the same value provided in inits dict.  The fitting routine will optimize each separately since each condition is simulated separately based on each of the <ncond> parameter id's in the Parameters() object, producing distinct vectors of the Go process, go rt, err rt, stop curve, etc.. (all values included in the cost function are represented separately for observed conditions and simulated conditions)
 
       args:
 
@@ -124,12 +124,6 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
                                                 correct and error RT quantiles. Can be estimated
                                                 using get_wts() method of build.Model object
 
-
-            all_params (bool):                  if True, parameter dependencies are ignored
-                                                and a model is fit by minimizing a cost function
-                                                on a 1D array (1x16) of observed inputs
-
-
       """
 
       ip = inits.copy()
@@ -144,14 +138,6 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
             bv = ip.pop(bk)
             mn = lim[bk][0]; mx = lim[bk][1]
             d0 = [popt.add(bk+str(i), value=bv, vary=1, min=mn, max=mx) for i in range(ncond)]
-
-      if method=='differential_evolution':
-            pass
-      else:
-            aval = ip.pop('a'); zval = ip.pop('z')
-            popt.add('a', value=aval, vary=1, min=lim['a'][0], max=lim['a'][1])
-            popt.add('zperc', value=zval/aval, vary=1)
-            popt.add('z', expr="zperc*a")
 
       p0 = [popt.add(k, value=v, vary=0, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 

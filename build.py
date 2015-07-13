@@ -175,7 +175,7 @@ class Model(object):
             self.isprepared = True
 
 
-      def fit_model(self, save=False, savepth='./', live_update=True, log_fits=True, fit_average=False, all_params=0, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
+      def fit_model(self, save=False, savepth='./', live_update=True, log_fits=True, fit_average=False, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
 
             ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
 
@@ -185,13 +185,13 @@ class Model(object):
 
             if self.is_flat:
                   y = self.dat.mean(axis=0)
-                  params, yhat = fit_flat.optimize_flat(y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+                  params, yhat = fit_flat.optimize_flat(y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
 
                   return params, yhat
 
             for i, y in enumerate(self.dat):
 
-                  params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
+                  params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
 
                   self.popt.loc[i]=pd.Series({info: params[info] for info in self.infolabels})
                   self.fits.iloc[self.i: self.i+ncond, ncond:] = yhat
