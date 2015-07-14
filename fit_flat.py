@@ -2,11 +2,24 @@
 from __future__ import division
 import time
 import numpy as np
+from copy import deepcopy
 from lmfit import Parameters, minimize, fit_report
 from numpy.random import random_sample as rs
 from scipy.stats.mstats import mquantiles as mq
 
-def optimize_flat(y, inits={}, wts=None, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, all_params=1, disp=True, fitid=None, log_fits=True, method='nelder'):
+
+def set_bounds(a=(.001, 5.000), tr=(.001, .650), v=(.0001, 10.0000), z=(.001, .900), ssv=(-10.000, -.0001)):
+
+      """
+      set and return boundaries to limit search space
+      of parameter optimization in <optimize_theta>
+      """
+
+      return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
+
+
+
+def optimize_theta_flat(y, inits={}, wts=None, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, fitid=None, log_fits=True, method='nelder'):
 
       """
       The main function for optimizing parameters of FLAT reactive stop signal model.
@@ -57,19 +70,22 @@ def optimize_flat(y, inits={}, wts=None, ntrials=5000, maxfev=5000, ftol=1.e-3, 
 
       p0 = [popt.add(k, value=v, vary=1, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 
-      f_kws = {'wts':wts, 'ntrials':ntrials}
-      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol}#, 'maxfev':maxfev}
-      optmod = minimize(recost_flat, popt, args=(y), method=method, kws=f_kws, options=opt_kws)
+      fcn_kws = {'y':y, 'wts':wts, 'ntrials':ntrials}
+      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev':maxfev}
+      optmod = minimize(recost_flat, popt, method=method, kws=fcn_kws, options=opt_kws)
 
-      params = popt.valuesdict()
-      params['chi'] = optmod.chisqr
-      params['rchi'] = optmod.redchi
+      optp = optmod.params
+      finfo = {k:optp[k].value for k in optp.keys()}
+      fitp = deepcopy(finfo)
+
+      finfo['chi'] = optmod.chisqr
+      finfo['rchi'] = optmod.redchi
       try:
-            params['AIC']=optmod.aic
-            params['BIC']=optmod.bic
+            finfo['AIC']=optmod.aic
+            finfo['BIC']=optmod.bic
       except Exception:
-            params['AIC']=1000.0
-            params['BIC']=1000.0
+            finfo['AIC']=1000.0
+            finfo['BIC']=1000.0
 
       yhat =  y + optmod.residual
 
@@ -77,17 +93,19 @@ def optimize_flat(y, inits={}, wts=None, ntrials=5000, maxfev=5000, ftol=1.e-3, 
             if fitid is None:
                   fitid = time.strftime('%H:%M:%S')
             with open('fit_report.txt', 'a') as f:
+                  f.write('=='*20+'\n')
                   f.write(str(fitid)+'\n')
+                  f.write('--'*20+'\n')
                   f.write(fit_report(optmod, show_correl=False)+'\n')
-                  f.write('AIC: %.8f' % optmod.aic)
-                  f.write('BIC: %.8f' % optmod.bic)
-                  f.write('--'*20+'\n\n')
+                  f.write('AIC: %.8f' % optmod.aic + '\n')
+                  f.write('BIC: %.8f' % optmod.bic + '\n')
+                  f.write('=='*20+'\n\n')
 
-      return params, yhat
+      return finfo, fitp, yhat
 
 
 
-def recost_flat(theta, y, ntrials=2000, wts=None):
+def recost_flat(theta, y=None, ntrials=2000, wts=None):
 
       """
       simulate and cost function for a flat model all params = 1
@@ -96,7 +114,7 @@ def recost_flat(theta, y, ntrials=2000, wts=None):
       cost between observed (y) and simulated values (yhat).
 
       returned vector is implicitly used by lmfit minimize
-      routine invoked in <optimize> which then submits the
+      routine invoked in <optimize_theta_flat> which then submits the
       SSE of the already weighted cost to a Nelder-Mead Simplex
       optimization.
 
@@ -128,18 +146,6 @@ def recost_flat(theta, y, ntrials=2000, wts=None):
       cost = np.hstack(np.hstack([y[:6] - yhat[:6], wtc*y[6:11] - wtc*yhat[6:11], wte*y[11:] - wte*yhat[11:]])).astype(np.float32)
 
       return cost
-
-
-
-def set_bounds(a=(.01, .6), tr=(.001, .5), v=(.01, 4.), z=(.001, .9), ssv=(-4., -.01)):
-
-      """
-      set and return boundaries to limit search space
-      of parameter optimization in <optimize>
-      """
-
-      return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
-
 
 
 

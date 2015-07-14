@@ -1,17 +1,13 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import os
+from copy import deepcopy
 import numpy as np
 import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
 from radd import fit, fit_flat
 import seaborn as sns
 import matplotlib.pyplot as plt
-
-rpal = lambda nc: sns.blend_palette(['#e88379', '#9e261b'], n_colors=nc)
-bpal = lambda nc: sns.blend_palette(['#81aedb', '#2a6095'], n_colors=nc)
-gpal = lambda nc: sns.blend_palette(['#65b88f', '#2c724f'], n_colors=nc)
-ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
 
 
 def rangl_data(data, cutoff=.650, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
@@ -62,7 +58,7 @@ def resample_data(data, n=120, kind='reactive'):
 
 class Model(object):
 
-      def __init__(self, kind='reactive', model='radd', inits=None, data=pd.DataFrame, fit='subjects', depends_on=None, niter=50, cond=None, prepare=False, wls=True, *args, **kws):
+      def __init__(self, kind='reactive', model='radd', inits=None, data=pd.DataFrame, fit_on='subjects', depends_on=None, niter=50, cond=None, prepare=False, wls=True, *args, **kws):
 
             self.model = model
             self.inits = inits
@@ -71,7 +67,7 @@ class Model(object):
             self.niter = niter
             self.wls=wls
 
-            if depends_on is None or fit=='flat':
+            if depends_on is None:
                   self.is_flat=True
                   self.ncond=1
             else:
@@ -83,15 +79,15 @@ class Model(object):
                   self.ncond=len(self.labels)
 
             self.i = 0
-            self.fit = fit
+            self.fit_on = fit_on
             self.isprepared=False
 
             self.delays = sorted(data.query('trial_type=="stop"').ssd.unique().astype(np.int))
 
-            if self.fit=='bootstrap':
+            if self.fit_on=='bootstrap':
                   self.indx=range(niter)
                   self.ifx = resample_data
-            elif self.fit=='subjects':
+            elif self.fit_on=='subjects' or self.fit_on=='average':
                   self.indx=list(self.data.idx.unique())
                   self.ifx = rangl_data
             if prepare:
@@ -108,7 +104,7 @@ class Model(object):
 
       def __prepare_flat_model__(self):
 
-            print "preparing %s model to fit on %s data" % (self.kind, self.fit)
+            print "preparing %s model to fit on %s data" % (self.kind, self.fit_on)
 
             data=self.data.copy(); delays = self.delays;
             datdf = data.groupby(['idx']).apply(rangl_data, kind=self.kind)
@@ -124,34 +120,35 @@ class Model(object):
 
       def __prepare_indx_model__(self):
 
-            print "preparing %s model to fit on %s data" % (self.kind, self.fit)
+            print "preparing %s model to fit on %s data" % (self.kind, self.fit_on)
 
             if self.inits is None:
                   self.load_default_inits()
 
-            inits=self.inits; data=self.data.copy()
-            ncond=self.ncond; delays = self.delays; indx=self.indx
-
-            # create idx df grouped by cond and store cost vectors
-            # this is executed for storing idx data regardless of fit type
+            inits=self.inits
+            data=self.data.copy()
+            ncond=self.ncond
+            delays = self.delays
+            indx=self.indx
             depends_on = self.depends_on
             depends = self.depends
             cond = self.cond;
-            labels = self.labels;
-            grouped = data.groupby(['idx', cond])
+            labels = self.labels
 
+            grouped = data.groupby(['idx', cond])
             datdf = grouped.apply(rangl_data, kind=self.kind)
 
-            #CREATE ITERABLE OBJECT CONTAINING NITER of RESAMPLED DATA FOR FITTING
-            if self.fit=='bootstrap':
+            if self.fit_on=='bootstrap':
                   if hasattr(self, 'cond'):
                         boots = data.groupby([cond])
                   else:
                         boots = data
+                  #CREATE ITERABLE OBJECT CONTAINING NITER of RESAMPLED DATA FOR FITTING
                   self.dat = np.vstack([boots.apply(self.ifx, kind=self.kind).values for i in indx])
 
-            #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
-            elif self.fit=='subjects':
+
+            else:
+                  #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
                   self.dat = np.array([np.vstack(cset) for cset in datdf.unstack().values])
 
             indx_vals = np.sort(np.hstack(indx*ncond))
@@ -162,38 +159,44 @@ class Model(object):
                   params.remove(d[0])
                   params.extend([d+str(i) for i in range(ncond)])
 
-            self.infolabels = np.hstack([params,'chi','rchi','AIC','BIC'])
+            self.infolabels = np.hstack([params,'nfev','chi','rchi','AIC','BIC','CNVRG'])
             qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
             ixdf = pd.DataFrame({'idx': indx_vals, cond: cond_vals}, columns=['idx', cond])
 
             self.observed = pd.concat([ixdf, pd.DataFrame(data=np.vstack(datdf.values), columns=qp_cols)], axis=1)
             self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(np.vstack(datdf.values)), columns=qp_cols)], axis=1)
-            self.popt = pd.concat([ixdf, pd.DataFrame(columns=self.infolabels, index=indx)], axis=1)
+            self.popt = pd.DataFrame(columns=self.infolabels, index=indx)
 
             self.get_wts(self.wls)
 
             self.isprepared = True
 
 
-      def fit_model(self, save=False, savepth='./', live_update=True, log_fits=True, fit_average=False, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
+      def optimize(self, save=False, savepth='./', live_update=True, log_fits=True, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
 
             ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
 
             if not self.isprepared:
                   self.prepare_fit()
-            self.get_wts(wls)
 
             if self.is_flat:
-                  y = self.dat.mean(axis=0)
-                  params, yhat = fit_flat.optimize_flat(y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+                  self.y = self.dat.mean(axis=0)
+                  self.finfo, self.fitp , self.yhat = fit_flat.optimize_theta_flat(self.y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
 
-                  return params, yhat
+                  return self.fitp, self.yhat
+
+            elif self.fit_on=='average':
+                  self.y = self.dat.mean(axis=0)
+                  self.finfo, self.fitp , self.yhat = fit.optimize_theta(self.y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+
+                  return self.fitp, self.yhat
 
             for i, y in enumerate(self.dat):
 
-                  params, yhat = fit.optimize(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+                  finfo, fitp , yhat = fit.optimize_theta(y, inits=self.inits, wts=self.wts, ncond=self.ncond, bias=self.depends, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
 
-                  self.popt.loc[i]=pd.Series({info: params[info] for info in self.infolabels})
+                  self.finfo = finfo; self.fitp=fitp; self.yhat=yhat
+                  self.popt.iloc[:, 2:]=pd.Series({info: finfo[info] for info in self.infolabels})
                   self.fits.iloc[self.i: self.i+ncond, ncond:] = yhat
                   self.i+=self.ncond
 
@@ -224,7 +227,7 @@ class Model(object):
 
             self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
 
-            if self.fit=='bootstrap':
+            if self.fit_on=='bootstrap':
                   self.indx=range(self.fitparams['niter'])
 
             fitp = self.fitparams
@@ -299,53 +302,3 @@ class Model(object):
             else:
 
                   self.wts = np.ones((2,10))
-
-
-
-def plot_fits(data, bw=.1, plot_acc=False):
-
-      """
-
-      BROKEN
-
-      """
-
-      sns.set_context('notebook', font_scale=1.6)
-
-      #gq = self.observed.loc[:, 'c5':'c95'].mean()
-      #eq = self.observed.loc[:, 'e5':'e95'].mean()
-      #fit_gq = self.fits.loc[:, 'c5':'c95'].mean()
-      #fit_eq = self.fits.loc[:, 'e5':'e95'].mean()
-
-      if plot_acc:
-
-            f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
-
-            gacc = self.observed['Go'].mean()
-            sacc = self.observed.loc[:, 200:400].mean()
-            fit_gacc = self.fits['Go'].mean()
-            fit_sacc = self.fits.loc[:, 200:400].mean()
-      else:
-            f, ax1 = plt.subplots(1, figsize=(5,5))
-
-      # Fit RT quantiles to KDE function in radd.utils
-      quant_list = [gq, fit_gq, eq, fit_eq]
-      kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
-
-      sns.kdeplot(kdefits[0], cumulative=True, label='data gQP', linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[1], cumulative=True, label='model gQP', linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[2], cumulative=True, label='data eQP', linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[3], cumulative=True, label='model eQP', linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
-
-      ax1.set_xlim(4.3, 6.5)
-      ax1.set_ylabel('P(RT<t)')
-      ax1.set_xlabel('RT (s)')
-      ax1.set_ylim(-.05, 1.05)
-      ax1.set_xticklabels(ax1.get_xticks()*.1)
-
-      if plot_acc:
-            # Plot observed and predicted stop curves
-            vis.scurves([sacc, fit_sacc], labels=['data Stop', 'model Stop'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
-
-      plt.tight_layout()
-      sns.despine()

@@ -8,7 +8,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from radd import utils
 from scipy.stats.mstats import mquantiles as mq
+
 sns.set(font='Helvetica')
+sns.set(rc={'text.color': '#222222', 'axes.labelcolor': '#222222', 'figure.facecolor': 'white'})
+
+
+rpal = lambda nc: sns.blend_palette(['#e88379', '#9e261b'], n_colors=nc)
+bpal = lambda nc: sns.blend_palette(['#81aedb', '#2a6095'], n_colors=nc)
+gpal = lambda nc: sns.blend_palette(['#65b88f', '#2c724f'], n_colors=nc)
+ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
+
 
 def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, labels=None):
 
@@ -19,7 +28,9 @@ def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, 
 		f, ax = plt.subplots(1, figsize=(6,5))
       if colors is None:
             colors=sns.color_palette('husl', n_colors=len(lines))
+      if labels is None:
             labels=['']*len(lines)
+      if linestyles is None:
             linestyles = ['-']*len(lines)
 
       lines=[np.array(line) if type(line)==list else line for line in lines]
@@ -57,8 +68,60 @@ def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, 
       plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.05, 1.05), yticks=[0, 1])
       ax.set_xticklabels([int(xt) for xt in xtls], fontsize=18); ax.set_yticklabels([0.0, 1.0], fontsize=18)
       ax.set_xlabel(xxlabel, fontsize=18); ax.set_ylabel(yylabel, fontsize=18)
-      ax.legend(loc=0)
+      ax.legend(loc=0, fontsize=16)
+
+      plt.tight_layout()
+      sns.despine()
+
       return np.array(pse)
+
+
+
+
+def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, savestr='fit_plot_rtq'):
+
+      sns.set_context('notebook', font_scale=1.6)
+
+      gq = y[6:11]
+      eq = y[11:]
+      fit_gq = yhat[6:11]
+      fit_eq = yhat[11:]
+
+      if plot_acc:
+
+            f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
+            savestr = savestr + "_acc"
+            gacc = y[0]
+            sacc = y[1:6]
+            fit_gacc = yhat[0]
+            fit_sacc = yhat[1:6]
+      else:
+            f, ax1 = plt.subplots(1, figsize=(5,5))
+
+      # Fit RT quantiles to KDE function in radd.utils
+      quant_list = [gq, fit_gq, eq, fit_eq]
+      kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
+
+      sns.kdeplot(kdefits[0], cumulative=True, label='Data RTc', linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[1], cumulative=True, label='Fit RTc', linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
+
+      sns.kdeplot(kdefits[2], cumulative=True, label='Data RTe', linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[3], cumulative=True, label='Fit RTe', linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
+
+      ax1.set_xlim(4.3, 6.5)
+      ax1.set_ylabel('P(RT<t)')
+      ax1.set_xlabel('RT (s)')
+      ax1.set_ylim(-.05, 1.05)
+      ax1.set_xticklabels(ax1.get_xticks()*.1)
+
+      if plot_acc:
+            # Plot observed and predicted stop curves
+            scurves([sacc, fit_sacc], labels=['Data SC', 'Fit SC'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
+
+      plt.tight_layout()
+      sns.despine()
+      if save:
+            plt.savefig(savestr+'.png', format='png', dpi=300)
 
 
 def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, return_exec_ss=False, pgo=np.arange(0, 1.2, .2)):

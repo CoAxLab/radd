@@ -1,8 +1,9 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import time
+from copy import deepcopy
 import numpy as np
-from lmfit import Parameters, minimize, fit_report
+from lmfit import Parameters, minimize, fit_report, Minimizer
 from numpy.random import random_sample as rs
 from scipy.stats.mstats import mquantiles as mq
 
@@ -15,10 +16,10 @@ model simulations in RADD.py
       * All Cond and SSD are simulated simultaneously
 
       * a, tr, and v parameters can be initialized as
-            vectors , 1 x Ncond so that optimize()
+            vectors , 1 x Ncond so that optimize_theta()
             fits the entire model all at once.
 
-      * optimize returns AIC, BIC, or Chi2 values for the full
+      * optimize_theta returns AIC, BIC, or Chi2 values for the full
             model fit, allowing different models to be
             compared with standard complexity penalized
             goodness-of-fit metrics
@@ -81,7 +82,17 @@ which vectorizes Go and Stop processes across 2 conditions & 5 SSD
 """
 
 
-def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True, fitid=None, log_fits=True, method='nelder'):
+def set_bounds(a=(.001, 5.000), tr=(.001, .650), v=(.0001, 10.0000), z=(.001, .900), ssv=(-10.000, -.0001)):
+
+      """
+      set and return boundaries to limit search space
+      of parameter optimization in <optimize_theta>
+      """
+
+      return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
+
+
+def optimize_theta(y, inits={}, bias=['xx'], wts=None, ncond=2, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, fitid=None, log_fits=True, method='nelder'):
 
       """
       The main function for optimizing parameters of reactive stop signal model.
@@ -132,29 +143,34 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
       if 'ssd' in ip.keys(): del ip['ssd']
       ip['ssv']=-abs(ip['ssv'])
 
+      wtc, wte = wts.T[:5].T, wts.T[5:].T
       popt=Parameters()
 
       for bk in bias:
             bv = ip.pop(bk)
             mn = lim[bk][0]; mx = lim[bk][1]
-            d0 = [popt.add(bk+str(i), value=bv, vary=1, min=mn, max=mx) for i in range(ncond)]
+            d0 = [popt.add(bk+str(i), value=bv, vary=True, min=mn, max=mx) for i in range(ncond)]
 
-      p0 = [popt.add(k, value=v, vary=0, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
+      p0 = [popt.add(k, value=v, vary=False, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 
-      f_kws = {'wts':wts, 'ncond':ncond, 'ntrials':ntrials}
-      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol}#, 'maxfev':maxfev}
-      optmod = minimize(recost, popt, args=(y, bias), method=method, kws=f_kws, options=opt_kws)
+      fcn_kws={'y':y.flatten(), 'bias':bias, 'wts': [wtc, wte], 'ntrials':ntrials, 'ncond':ncond}
+      opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfev}
+      optmod = minimize(recost, popt, method=method, kws=fcn_kws, options=opt_kws)
 
-      params = popt.valuesdict()
-      params['chi'] = optmod.chisqr
-      params['rchi'] = optmod.redchi
+      optp = optmod.params
+      finfo = {k:optp[k].value for k in optp.keys()}
+      fitp = deepcopy(finfo)
 
+      finfo['chi'] = optmod.chisqr
+      finfo['rchi'] = optmod.redchi
+      finfo['CNVRG'] = optmod.pop('success')
+      finfo['nfev'] = optmod.pop('nfev')
       try:
-            params['AIC']=optmod.aic
-            params['BIC']=optmod.bic
+            finfo['AIC']=optmod.aic
+            finfo['BIC']=optmod.bic
       except Exception:
-            params['AIC']=1000.0
-            params['BIC']=1000.0
+            finfo['AIC']=1000.0
+            finfo['BIC']=1000.0
 
       yhat =  np.vstack(y) + optmod.residual.reshape(ncond, int(len(optmod.residual)/ncond))
 
@@ -168,17 +184,17 @@ def optimize(y, inits={}, bias=['xx'], wts=None, ncond=1, ntrials=5000, maxfev=5
                   f.write('BIC: %.8f' % optmod.bic)
                   f.write('--'*20+'\n\n')
 
-      return params, yhat
+      return finfo, fitp, yhat
 
 
-def recost(theta, y, bias=['v'], ntrials=2000, wts=None):
+def recost(popt, y, bias=['v'], ncond=2, wts=None, ntrials=2000):
 
       """
       simulate data via <simulate_full> and return weighted
       cost between observed (y) and simulated values (yhat).
 
       returned vector is implicitly used by lmfit minimize
-      routine invoked in <optimize> which then submits the
+      routine invoked in <optimize_theta> which then submits the
       SSE of the already weighted cost to a Nelder-Mead Simplex
       optimization.
 
@@ -195,43 +211,36 @@ def recost(theta, y, bias=['v'], ntrials=2000, wts=None):
                                     observed (y) and simulated (yhat)
       """
 
-      p = {k:theta[k] for k in theta.keys()}
+      if type(popt)==dict:
+            p = {k:popt[k] for k in popt.keys()}
+      else:
+            p = popt.valuesdict()
 
-      ssd=np.arange(.2, .45, .05);
+      ssd=np.arange(.2, .45, .05)
       prob=np.array([.1, .3, .5, .7, .9])
 
       cond = {pk: p.pop(pk) for pk in p.keys() if pk[-1].isdigit()}
-      ncond = len(cond.keys())
       for i in range(ncond):
             p[cond.keys()[i][:-1]] = np.array(cond.values())
 
-      if 'tr' not in bias:
-            p['tr'] = np.array([p['tr']]*ncond)
+      a, tr, v, ssv, z = p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z']
 
-      yhat = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
-      if wts is None:
-            wtc, wte = np.ones((ncond,10))
-      else:
-            wtc, wte = m.wts.T[:5].T, m.wts.T[5:].T
+      if 'tr' not in bias & np.ndim(tr)==0:
+            tr = np.array([p['tr']]*ncond)
+      yhat = simulate_full(a, tr, v, ssv, z, wts=wts, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
 
-      y=np.vstack(y)
-      cost = np.hstack(np.hstack([y[:, :6] - yhat[:, :6], wtc*y[:, 6:11] - wtc*yhat[:, 6:11], wte*y[:, 11:] - wte*yhat[:, 11:]])).astype(np.float32)
+      # observed and simulated values are weighted by the same scalar values
+      # observed are weighted in optimize_theta() and simulated in simulate_full()
+      # Thus cost = already weighted difference between y & yhat
+      y, yhat = y.reshape(ncond, 16), yhat.reshape(ncond, 16)
+      cost = np.array([y[:, :6] - yhat[:, :6], wtc*y[:, 6:11] - wtc*yhat[:, 6:11], wte*y[:, 11:] - wte*yhat[:, 11:]]).astype(np.float32)
 
-      return cost
+      cost = y - yhat
 
-
-def set_bounds(a=(.01, .6), tr=(.001, .5), v=(.01, 4.), z=(.001, .9), ssv=(-4., -.01)):
-
-      """
-      set and return boundaries to limit search space
-      of parameter optimization in <optimize>
-      """
-
-      return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
+      return yhat
 
 
-
-def simulate_full(a, tr, v, ssv, z, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
+def simulate_full(a, tr, v, ssv, z, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
       """
 
       Simulates all Conditions, SSD, trials, timepoints simultaneously.
@@ -261,7 +270,7 @@ def simulate_full(a, tr, v, ssv, z, ncond=1, prob=np.array([.1, .3, .5, .7, .9])
       dx=np.sqrt(si*dt)
 
       nssd = len(ssd); nss = int(.5*ntot)
-
+      if np.ndim(tr)==0: tr=np.array([tr]*ncond)
       Pg = 0.5*(1 + v*dx/si)
       Ps = 0.5*(1 + ssv*dx/si)
 
@@ -276,7 +285,7 @@ def simulate_full(a, tr, v, ssv, z, ncond=1, prob=np.array([.1, .3, .5, .7, .9])
       if return_traces:
             return [DVg, DVs]
 
-      # ALL CONDITIONS, ALL SSD
+      #ALL CONDITIONS, ALL SSD
       grt = (tr + (np.where(DVg[:, nss:, :].max(axis=2)>=a, np.argmax(DVg[:, nss:, :]>=a, axis=2)*dt, np.nan).T)).T
       ert = (tr + (np.where(DVg[:, :nss, :].max(axis=2)>=a, np.argmax(DVg[:, :nss, :]>=a, axis=2)*dt, np.nan).T)).T
       ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt, np.nan)
@@ -285,15 +294,18 @@ def simulate_full(a, tr, v, ssv, z, ncond=1, prob=np.array([.1, .3, .5, .7, .9])
       c_ssrt = ssrt.mean(axis=1)
 
       # compute RT quantiles for correct and error resp.
-      gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*10 for rtc in grt])
+
+      # & APPLY GO CORRECT RT QUANTILE WEIGHTS
+      gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*10 for i, rtc in enumerate(grt)])
+
+      # & APPLY GO ERR RT QUANTILE WEIGHTS
       eq = np.array([mq(np.extract(ert[i]<c_ssrt[i], ert[i]), prob=prob)*10 for i in range(ncond)])
 
       # Get response and stop accuracy information
       gac = np.mean(np.where(grt<tb, 1, 0), axis=1)
       sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
 
-      return np.array([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
-
+      return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
 def resim_yhat(theta, return_traces=False, bias=['v'], ntrials=2000, wts=None):
