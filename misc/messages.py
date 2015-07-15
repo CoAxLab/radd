@@ -10,6 +10,6 @@ def get_one():
       "See it's not that Simplex, wait that's an oxymoron!",
       "Go to bed",
       "It'll probably work this time",
-      '"They Don’t Think It Be Like It Is, But It Do"\n-Oscar Gamble']
+      "'They dont think it be like it is, but it do' -Oscar Gamble"]
 
-      return randint(0, len(msgs)-1)
+      return msgs[randint(0, len(msgs))]
