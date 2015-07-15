@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
 from radd import fit, fit_flat
+from radd.misc import messages
 import seaborn as sns
 import matplotlib.pyplot as plt
 
@@ -105,14 +106,6 @@ class Model(object):
 
       def prepared_message(self):
 
-            msgs=["Optimize On, Wayne",
-            "Optimize On, Garth",
-            "May the Nelder be with you",
-            "I wish you a slippery gradient, and a happy Nature paper",
-            "See it's not that Simplex, wait that's an oxymoron!",
-            "Go to bed",
-            "It'll probably work this time"]
-
 
             if self.is_flat:
                   strings = (self.fit_on, self.kind)
@@ -136,8 +129,8 @@ class Model(object):
 
                   dep = self.depends_on.values()[0]
                   lbls = ', '.join(self.labels)
-                  ri = np.random.randint(0, len(msgs)-1)
-                  strings = (self.fit_on, self.kind, pdep, dep, lbls, msgs[ri])
+                  msg = messages.get_one()
+                  strings = (self.fit_on, self.kind, pdep, dep, lbls, msg)
 
                   print """
                   Model is prepared to fit on %s %s data,
