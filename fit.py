@@ -92,7 +92,7 @@ def set_bounds(a=(.001, 5.000), tr=(.001, .650), v=(.0001, 10.0000), z=(.001, .9
       return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
 
 
-def optimize_theta(y, inits={}, bias=['xx'], wts=None, ncond=2, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, fitid=None, log_fits=True, method='nelder'):
+def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, method='nelder'):
 
       """
       The main function for optimizing parameters of reactive stop signal model.
@@ -143,17 +143,15 @@ def optimize_theta(y, inits={}, bias=['xx'], wts=None, ncond=2, ntrials=5000, ma
       if 'ssd' in ip.keys(): del ip['ssd']
       ip['ssv']=-abs(ip['ssv'])
 
-      wtc, wte = wts.T[:5].T, wts.T[5:].T
       popt=Parameters()
-
-      for bk in bias:
-            bv = ip.pop(bk)
-            mn = lim[bk][0]; mx = lim[bk][1]
-            d0 = [popt.add(bk+str(i), value=bv, vary=True, min=mn, max=mx) for i in range(ncond)]
+      for pkey, pc_list in pc_map.items():
+            bv = ip.pop(pkey)
+            mn = lim[pkey][0]; mx = lim[pkey][1]
+            d0 = [popt.add(pc, value=bv, vary=True, min=mn, max=mx) for pc in pc_list]
 
       p0 = [popt.add(k, value=v, vary=False, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 
-      fcn_kws={'y':y.flatten(), 'bias':bias, 'wts': [wtc, wte], 'ntrials':ntrials, 'ncond':ncond}
+      fcn_kws={'y': y, 'pc_map': pc_map, 'wts': wts, 'ntrials': ntrials, 'ncond': ncond}
       opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfev}
       optmod = minimize(recost, popt, method=method, kws=fcn_kws, options=opt_kws)
 
@@ -172,22 +170,21 @@ def optimize_theta(y, inits={}, bias=['xx'], wts=None, ncond=2, ntrials=5000, ma
             finfo['AIC']=1000.0
             finfo['BIC']=1000.0
 
-      yhat =  np.vstack(y) + optmod.residual.reshape(ncond, int(len(optmod.residual)/ncond))
+      yhat = y + optmod.residual
 
       if log_fits:
-            if fitid is None:
-                  fitid = time.strftime('%H:%M:%S')
+            fitid = time.strftime('%H:%M:%S')
             with open('fit_report.txt', 'a') as f:
                   f.write(str(fitid)+'\n')
                   f.write(fit_report(optmod, show_correl=False)+'\n')
-                  f.write('AIC: %.8f' % optmod.aic)
-                  f.write('BIC: %.8f' % optmod.bic)
+                  f.write('AIC: %.8f' % optmod.aic + '\n')
+                  f.write('BIC: %.8f' % optmod.bic + '\n')
                   f.write('--'*20+'\n\n')
 
       return finfo, fitp, yhat
 
 
-def recost(popt, y, bias=['v'], ncond=2, wts=None, ntrials=2000):
+def recost(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
 
       """
       simulate data via <simulate_full> and return weighted
@@ -216,31 +213,19 @@ def recost(popt, y, bias=['v'], ncond=2, wts=None, ntrials=2000):
       else:
             p = popt.valuesdict()
 
-      ssd=np.arange(.2, .45, .05)
-      prob=np.array([.1, .3, .5, .7, .9])
+      for pkey, pkc in pc_map.items():
+            p[pkey] = np.array([p[pc] for pc in pkc])
 
-      cond = {pk: p.pop(pk) for pk in p.keys() if pk[-1].isdigit()}
-      for i in range(ncond):
-            p[cond.keys()[i][:-1]] = np.array(cond.values())
+      ncond = len(pkc)
+      yhat = simulate_full(p, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
 
-      a, tr, v, ssv, z = p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z']
+      c = y - yhat
+      c_wtd = np.hstack([np.hstack(c[:-5].reshape(2,11)[:, :6]), np.hstack(wts[:5]*c[:-5].reshape(2,11)[:,6:11]), wts[-5:]*c[-5:]])
 
-      if 'tr' not in bias & np.ndim(tr)==0:
-            tr = np.array([p['tr']]*ncond)
-      yhat = simulate_full(a, tr, v, ssv, z, wts=wts, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
-
-      # observed and simulated values are weighted by the same scalar values
-      # observed are weighted in optimize_theta() and simulated in simulate_full()
-      # Thus cost = already weighted difference between y & yhat
-      y, yhat = y.reshape(ncond, 16), yhat.reshape(ncond, 16)
-      cost = np.array([y[:, :6] - yhat[:, :6], wtc*y[:, 6:11] - wtc*yhat[:, 6:11], wte*y[:, 11:] - wte*yhat[:, 11:]]).astype(np.float32)
-
-      cost = y - yhat
-
-      return yhat
+      return c_wtd
 
 
-def simulate_full(a, tr, v, ssv, z, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
+def simulate_full(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
       """
 
       Simulates all Conditions, SSD, trials, timepoints simultaneously.
@@ -269,11 +254,18 @@ def simulate_full(a, tr, v, ssv, z, ncond=2, prob=np.array([.1, .3, .5, .7, .9])
 
       dx=np.sqrt(si*dt)
 
+      a, tr, v, ssv, z = p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z']
+
       nssd = len(ssd); nss = int(.5*ntot)
-      if np.ndim(tr)==0: tr=np.array([tr]*ncond)
+
+      if np.ndim(tr)==0:
+            tr=np.array([tr]*ncond)
+      if np.ndim(a)==0:
+            a=np.array([a]*ncond)
+
       Pg = 0.5*(1 + v*dx/si)
       Ps = 0.5*(1 + ssv*dx/si)
-
+      
       Tg = np.ceil((tb-tr)/dt).astype(int)
       Ts = np.ceil((tb-ssd)/dt).astype(int)
 
@@ -282,31 +274,24 @@ def simulate_full(a, tr, v, ssv, z, ncond=2, prob=np.array([.1, .3, .5, .7, .9])
       init_ss = np.array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
       DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
 
-      if return_traces:
-            return [DVg, DVs]
-
-      #ALL CONDITIONS, ALL SSD
-      grt = (tr + (np.where(DVg[:, nss:, :].max(axis=2)>=a, np.argmax(DVg[:, nss:, :]>=a, axis=2)*dt, np.nan).T)).T
-      ert = (tr + (np.where(DVg[:, :nss, :].max(axis=2)>=a, np.argmax(DVg[:, :nss, :]>=a, axis=2)*dt, np.nan).T)).T
+      grt = ( tr + (np.where((DVg[:, nss:, :].max(axis=2).T>a).T, np.argmax((DVg[:, nss:, :].T>=a).T, axis=2)*dt, np.nan).T)).T
+      ert = ( tr + (np.where((DVg[:, :nss, :].max(axis=2).T>a).T, np.argmax((DVg[:, :nss, :].T>=a).T, axis=2)*dt, np.nan).T)).T
       ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt, np.nan)
 
       #collapse across SSD and get average ssrt vector for each condition
-      c_ssrt = ssrt.mean(axis=1)
+      ertx = np.nanmean(ert, axis=0)
+      ssrtx = np.nanmean(np.vstack(ssrt), axis=0)
 
       # compute RT quantiles for correct and error resp.
-
-      # & APPLY GO CORRECT RT QUANTILE WEIGHTS
       gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*10 for i, rtc in enumerate(grt)])
-
-      # & APPLY GO ERR RT QUANTILE WEIGHTS
-      eq = np.array([mq(np.extract(ert[i]<c_ssrt[i], ert[i]), prob=prob)*10 for i in range(ncond)])
+      eq = mq(np.extract(ertx<ssrtx, ertx), prob=prob)*10
+      #eq = np.array([mq(np.extract(ert[i]<c_ssrt[i], ert[i]), prob=prob)*10 for i in range(ncond)])
 
       # Get response and stop accuracy information
       gac = np.mean(np.where(grt<tb, 1, 0), axis=1)
       sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
 
-      return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
-
+      return np.append(np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq]]) for ii in range(ncond)]), eq)
 
 def resim_yhat(theta, return_traces=False, bias=['v'], ntrials=2000, wts=None):
 

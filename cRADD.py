@@ -154,6 +154,12 @@ def analyze_reactive_single(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005,
       gac = np.where(grt<tb,1,0).mean()
       sacc = 1 - np.where(ert<ssrt, 1, 0).mean(axis=1)
 
+      #ALL CONDITIONS, ALL SSD
+      #grt = (tr + (np.where(DVg[:, nss:, :].max(axis=2).T>=a, np.argmax((DVg[:, nss:, :]).T>=a, axis=2)*dt, np.nan).T)).T
+      #ert = (tr + (np.where(DVg[:, :nss, :].max(axis=2)>=a, np.argmax(DVg[:, :nss, :]>=a, axis=2)*dt, np.nan).T)).T
+      #ALL CONDITIONS, ALL SSD
+
+
       return np.hstack([gac, sacc, gq*10, eq*10])
 
 

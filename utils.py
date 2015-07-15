@@ -11,7 +11,6 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """
       takes quantile estimates and fits cumulative density function
