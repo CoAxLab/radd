@@ -56,10 +56,10 @@ def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntri
 
 def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
 
-	gac = data.query('trial_type=="go"').acc.mean()
-	sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
+	gac = data.query('ttype=="go"').acc.mean()
+	sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
 
-	grt = data.query('trial_type=="go" & acc==1').rt.values
+	grt = data.query('ttype=="go" & acc==1').rt.values
 	ert = data.query('response==1 & acc==0').rt.values
 	gq = mq(grt, prob=prob)
 	eq = mq(ert, prob=prob)
@@ -133,9 +133,9 @@ def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
       # Take the shorter of the ert and ssrt list, concatenate with grt
       rt=np.append(np.fmin(ert,ssrt), grt)
 
-      simdf = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'trial_type':ttypes})
-      # calculate accuracy for both trial_types
-      simdf['acc'] = np.where(simdf['trial_type']==simdf['choice'], 1, 0)
+      simdf = pd.DataFrame({'response':response, 'choice':choice, 'rt':rt, 'ssd':ssdlist, 'ttype':ttypes})
+      # calculate accuracy for both ttypes
+      simdf['acc'] = np.where(simdf['ttype']==simdf['choice'], 1, 0)
       simdf.rt.replace(999, np.nan, inplace=True)
       return simdf
 

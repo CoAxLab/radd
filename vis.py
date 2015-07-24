@@ -77,8 +77,7 @@ def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, 
 
 
 
-
-def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, savestr='fit_plot_rtq'):
+def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, savestr='fit_plot_rtq'):
 
       sns.set_context('notebook', font_scale=1.6)
 
@@ -88,7 +87,6 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, savestr='fit_plot_rtq'
       fit_eq = yhat[11:]
 
       if plot_acc:
-
             f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
             savestr = savestr + "_acc"
             gacc = y[0]
@@ -123,6 +121,23 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, savestr='fit_plot_rtq'
       if save:
             plt.savefig(savestr+'.png', format='png', dpi=300)
 
+def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
+
+      if ax is None:
+            f, ax = plt.subplots(1, figsize=(5,5))
+      if color is None:
+            color='k'
+      kdefits = utils.kde_fit_quantiles(quant, bw=bw)
+      sns.kdeplot(kdefits, cumulative=True,  color=color, ax=ax, linewidth=2.5)
+
+      ax.set_xlim(kdefits.min()*.94, kdefits.max()*1.05)
+      ax.set_ylabel('P(RT<t)')
+      ax.set_xlabel('RT (s)')
+      ax.set_ylim(-.05, 1.05)
+      ax.set_xticklabels(ax.get_xticks()*.1)
+
+      plt.tight_layout()
+      sns.despine()
 
 def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, return_exec_ss=False, pgo=np.arange(0, 1.2, .2)):
 

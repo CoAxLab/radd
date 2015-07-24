@@ -11,12 +11,12 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 
 
-def rangl_data(data, cutoff=.650, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
+def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
 
       if kind == 'reactive':
-            gac = data.query('trial_type=="go"').acc.mean()
-            sacc = data.query('trial_type=="stop"').groupby('ssd').mean()['acc'].values
-            grt = data.query('trial_type=="go" & acc==1').rt.values
+            gac = data.query('ttype=="go"').acc.mean()
+            sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
+            grt = data.query('ttype=="go" & acc==1').rt.values
             ert = data.query('response==1 & acc==0').rt.values
             gq = mq(grt, prob=prob)
             eq = mq(ert, prob=prob)
@@ -24,14 +24,29 @@ def rangl_data(data, cutoff=.650, kind='reactive', prob=np.array([.1, .3, .5, .7
             return np.hstack([gac, sacc, gq*10, eq*10]).astype(np.float32)
 
       elif kind=='proactive':
-            godf = data.query('response==1')
-            gotrials=godf[godf.rt<=rt_cutoff]
-            pgo = data.response.mean()
-            gp = pgo*prob
-            gq = mq(gotrials.rt, prob=gp)
-            gmu = gotrials.rt.mean()
-            return np.hstack([gq*10, gp, gmu, pgo])
+            #godf = data.query('response==1')
+            #gotrials=godf[godf.rt<=pro_cut]
+            #gq = mq(gotrials.rt, prob=prob)
+            return data.response.mean().astype(np.float32)
 
+def rt_quantiles(data, cutoff=.54502, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
+      rtq = []
+      godf = data[data.response==1]
+
+      if split=='HiLo' and 'HiLo' not in godf.columns:
+            godf['HiLo']=['x']
+            godf[godf['pGo']<=.5, 'HiLo'] = 'Lo'
+            godf[godf['pGo']>.5, 'HiLo'] = 'Hi'
+      if split != None:
+            splitdf = godf.groupby(split)
+      else:
+            splitdf = godf.copy()
+
+      for c, df in splitdf:
+            rts = df[df.rt<=cutoff].rt.values
+            rtq.append(mq(rts, prob=prob)*10)
+
+      return np.hstack(rtq)
 
 def append_eq(yy):
 
@@ -54,12 +69,12 @@ def resample_data(data, n=120, kind='reactive'):
                   return rangl_re(pd.concat(bootlist))
 
       else:
-                  boots = df.reset_index(drop=True)
-                  orig_ix = np.asarray(boots.index[:])
-                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
-                  bootdf = df.irow(resampled_ix)
-                  bootdf_list.append(bootdf)
-                  return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
+            boots = df.reset_index(drop=True)
+            orig_ix = np.asarray(boots.index[:])
+            resampled_ix = rwr(orig_ix, get_index=True, n=n)
+            bootdf = df.irow(resampled_ix)
+            bootdf_list.append(bootdf)
+            return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 
 class Model(object):
@@ -72,40 +87,43 @@ class Model(object):
             self.kind = kind
             self.data = data
             self.niter = niter
+            if 'trial_type' in self.data.columns:
+                  self.data.rename(columns={'trial_type':'ttype'}, inplace=True)
 
             if depends_on is None:
                   self.is_flat=True
+                  self.cond='flat'
+                  self.labels=[self.cond]
                   self.ncond=1
-                  grouped=self.data.groupby('idx')
-                  self.datdf = grouped.apply(rangl_data, kind=self.kind)
             else:
-                  self.is_flat=False
-                  self.depends_on = depends_on
-                  self.depends = depends_on.keys()
-                  self.cond = depends_on.values()[0]
-                  self.labels = list(data[self.cond].unique())
+                  self.is_flat = False
+                  self.depends_on=depends_on
+                  self.cond=depends_on.values()[0]
+                  self.labels=data[self.cond].unique()
                   self.ncond=len(self.labels)
-                  grouped = data.groupby(['idx', self.cond])
-                  self.datdf = grouped.apply(rangl_data, kind=self.kind)
+
 
             self.i = 0
             self.fit_on = fit_on
             self.isprepared=False
 
-            self.delays = sorted(data.query('trial_type=="stop"').ssd.unique().astype(np.int))
+            if self.kind=='reactive':
+                  self.delays = sorted(data.query('ttype=="stop"').ssd.unique().astype(np.int))
+
+            elif self.kind=='proactive':
+                  self.pGo = np.arange(0, 1.2, .2)
 
             if self.fit_on=='bootstrap':
-                  self.indx=range(niter)
+                  self.indx = range(niter)
                   self.ifx = resample_data
-            elif self.fit_on=='subjects' or self.fit_on=='average':
-                  self.indx=list(self.data.idx.unique())
+            else:
+                  self.indx = list(self.data.idx.unique())
                   self.ifx = rangl_data
             if prepare:
                   self.prepare_fit()
 
 
       def prepared_message(self):
-
 
             if self.is_flat:
                   strings = (self.fit_on, self.kind)
@@ -149,17 +167,21 @@ class Model(object):
                   self.__prepare_indx_model__()
 
 
-
       def __prepare_flat_model__(self):
 
-            data=self.data.copy(); delays = self.delays;
-            self.dat = self.datdf.copy()
+            if self.inits is None:
+                  self.load_default_inits()
 
-            qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
-            ixdf = pd.DataFrame({'idx': data.idx.unique(), 'flat': 'flat'}, columns=['idx', 'flat'])
-            self.observed = pd.concat([ixdf, pd.DataFrame(data=np.vstack(datdf.values), columns=qp_cols)], axis=1)
+            indx = self.indx
+            params = sorted(inits.keys())
+            datdf = self.grouped.apply(rangl_data, kind=self.kind)
 
+            self.dat = datdf.copy()
+            self.ncond=1; self.labels=['flat']
+
+            self.__make_dataframes__(datdf, indx, params)
             self.get_wts()
+
             self.prepared_message()
 
 
@@ -168,125 +190,173 @@ class Model(object):
             if self.inits is None:
                   self.load_default_inits()
 
-            inits=self.inits; data=self.data; ncond=self.ncond; kind=self.kind
-            delays=self.delays; depends_on=self.depends_on; datdf=self.datdf
-            cond=self.cond; labels=self.labels; indx=self.indx;
+            data=self.data; indx=self.indx;
+            lbls = self.labels
 
-            if self.fit_on=='bootstrap':
-                  if hasattr(self, 'cond'):
-                        boots = data.groupby([cond])
-                  else:
-                        boots = data
-                  #CREATE ITERABLE CONTAINING NITER of RESAMPLED DATA FOR FITTING
-                  dat = np.vstack([boots.apply(self.ifx, kind=kind).values for i in indx])
+            # if numeric, sort first then convert to string
+            if not isinstance(lbls[0], str):
+                  self.labels = [str(intl) for intl in sorted([int(l*100) for l in lbls])]
             else:
-                  #CREATE ITERABLE CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
-                  dat = np.array([np.vstack(cset) for cset in datdf.unstack().values])
+                  self.labels = sorted(lbls)
 
-            # separate [go acc, sc, cor quantiles] | error quantiles
-            # and average error quantile est. across conditions
-            self.error_quantiles = np.vstack(dat[:,:,-5:]).mean(axis=0)
-            self.dat = dat[:,:,:-5]
-
-            indx_vals = np.sort(np.hstack(indx*ncond))
-            cond_vals = np.array(labels*len(indx))
-
-            params = sorted(inits.keys())
+            params = sorted(self.inits.keys())
             self.pc_map = {}
-            for d in depends_on.keys():
+            for d in self.depends_on.keys():
                   params.remove(d)
-                  params_dep = ['_'.join([d, l]) for l in labels]
+                  params_dep = ['_'.join([d, l]) for l in self.labels]
                   self.pc_map[d] = params_dep
                   params.extend(params_dep)
 
-            self.infolabels = np.hstack([params,'nfev','chi','rchi','AIC','BIC','CNVRG'])
-            qp_cols = ['Go'] + delays +['c5','c25','c50','c75','c95'] + ['e5','e25','e50','e75','e95']
-            ixdf = pd.DataFrame({'idx': indx_vals, cond: cond_vals}, columns=['idx', cond])
-
-            self.observed = pd.concat([ixdf, pd.DataFrame(data=np.vstack(datdf.values), columns=qp_cols)], axis=1)
-            self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros_like(np.vstack(datdf.values)), columns=qp_cols)], axis=1)
-            self.popt = pd.DataFrame(columns=self.infolabels, index=indx)
-
+            self.set_fitparams()
+            self.__make_dataframes__(data, indx, params, self.labels, self.ncond)
             self.get_wts()
+
             self.prepared_message()
 
 
-      def optimize(self, save=False, savepth='./', live_update=True, log_fits=True, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500):
+      def __make_dataframes__(self, data, indx, params, labels, ncond):
 
-            ntrials, ftol, xtol, maxfev, niter = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, get_params=True)
+            prob = self.fitparams['prob']
+            cond = self.cond;
+            qp_cols = self.get_header(params, prob);
 
+            ic_grp = data.groupby(['idx', cond])
+            c_grp = data.groupby([cond])
+            i_grp = data.groupby(['idx'])
+
+            if self.fit_on=='bootstrap':
+                  self.dat = np.vstack([i_grp.apply(self.ifx, kind=self.kind).values for i in indx]).unstack()
+            else:
+                  datdf = ic_grp.apply(rangl_data, kind=self.kind).unstack()
+
+            if self.kind=='proactive':
+                  rtq =  i_grp.apply(rt_quantiles)
+                  rtdat = pd.DataFrame(np.vstack(rtq.values), columns=qp_cols[-10:], index=indx)
+                  rtdat[rtdat<1] = np.nan
+
+                  self.observed = pd.concat([datdf, rtdat], axis=1)
+                  self.observed.columns = qp_cols
+                  self.fits = pd.DataFrame(np.zeros_like(self.observed), columns=qp_cols, index=indx)
+                  self.dat = self.observed.values.reshape((len(self.indx), 16))
+
+            elif self.kind=='reactive':
+                  # separate [go acc, sc, cor quantiles] | error quantiles
+                  # and average error quantile est. across conditions
+                  dat = np.array([np.vstack(x) for x in datdf.values])
+                  self.error_quantiles = np.vstack(dat[:,:,-5:]).mean(axis=0)
+                  self.dat = dat[:,:,:-5]
+
+                  idx = np.sort(np.hstack(indx*ncond)); c = np.array(labels*len(indx))
+                  ixdf =pd.DataFrame({'idx':idx, cond:c}, columns=['idx', cond])
+                  self.observed = pd.concat([ixdf, pd.DataFrame(np.vstack(datdf.unstack().values), columns=qp_cols)], axis=1)
+                  self.fits = pd.concat([ixdf, pd.DataFrame(np.zeros((len(idx),16)), columns=qp_cols)], axis=1)
+
+            self.popt = pd.DataFrame(columns=self.infolabels, index=indx)
+
+
+
+      def optimize(self, save=True, savepth='./', live_update=True, log_fits=True, disp=True, xtol=1.e-3, ftol=1.e-3, maxfev=500, ntrials=2000, niter=500, prob=np.array([.1, .3, .5, .7, .9])):
+
+            ntrials, ftol, xtol, maxfev, niter, prob = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, prob=prob, get_params=True)
             if not self.isprepared:
                   self.prepare_fit()
 
             if self.is_flat:
-                  self.__flat_optimize__(log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
-
+                  self.__flat_optimize__(log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp, prob=prob)
                   return self.fitp, self.yhat
 
-
             elif self.fit_on=='average':
-                  self.__avg_optimize__(log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
-
+                  self.__avg_optimize__(log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp, prob=prob)
                   return self.fitp, np.append(self.yhat[:-5].reshape(self.ncond, 11), self.yhat[-5:])
-
 
             elif self.fit_on in ['subjects', 'bootstrap']:
-                  self.__indx_optimize__(log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp, save=save, savepth=savepth, live_update=live_update, niter=niter)
+                  self.__indx_optimize__(log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp, save=save, savepth=savepth, live_update=live_update, niter=niter, prob=prob)
 
-                  return self.fitp, np.append(self.yhat[:-5].reshape(self.ncond, 11), self.yhat[-5:])
-
-
-      def __flat_optimize__(self, log_fits, ntrials, maxfev, ftol, xtol, disp):
-
-            self.y = self.dat.mean(axis=0)
-
-            self.finfo, self.fitp , self.yhat = fit_flat.optimize_theta_flat(self.y, inits=self.inits, wts=self.wts, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+                  if self.kind=='reactive':
+                        yhat = np.append(self.yhat[:-5].reshape(self.ncond, 11), self.yhat[-5:])
+                  elif self.kind=='proactive':
+                        yhat = self.yhat.reshape(self.ncond, 6)
+                  return self.fitp, yhat
 
 
 
-      def __avg_optimize__(self, log_fits, ntrials, maxfev, ftol, xtol, disp):
+      def __flat_optimize__(self, log_fits, ntrials, maxfev, ftol, xtol, disp, prob):
 
-            y = np.append(self.dat.mean(axis=0), self.error_quantiles)
+            if self.kind=='reactive':
+                  self.y = self.dat.mean(axis=0)
+            elif self.kind=='proactive':
+                  y = y.flatten()
 
-            self.finfo, self.fitp , self.yhat = fit.optimize_theta(y, inits=self.inits, wts=self.wts, ncond=self.ncond, pc_map=self.pc_map, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+            self.finfo, self.fitp , self.yhat = fit_flat.optimize_theta_flat(self.y, inits=self.inits, wts=self.wts, prob=prob, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
 
 
-      def __indx_optimize__(self, log_fits, ntrials, maxfev, ftol, xtol, disp, save, savepth, live_update, niter):
+
+      def __avg_optimize__(self, log_fits, ntrials, maxfev, ftol, xtol, disp, prob):
+
+            if self.kind=='reactive':
+                  self.y = np.append(self.dat.mean(axis=0), self.error_quantiles)
+            elif self.kind=='proactive':
+                  y = y.flatten()
+
+            self.finfo, self.fitp , self.yhat = fit.optimize_theta(self.y, inits=self.inits, wts=self.wts, ncond=self.ncond, pc_map=self.pc_map, kind=self.kind, prob=prob, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+
+
+
+      def __indx_optimize__(self, log_fits, ntrials, maxfev, ftol, xtol, disp, save, savepth, live_update, niter, prob):
+
+            self.y = np.append(self.dat.mean(axis=0), self.error_quantiles)
 
             for i, y in enumerate(self.dat):
 
                   # rejoin grouped y vector, with mean eq
                   # this flattens the full vector, gets
                   # reshaped before weights are applied
-                  y = np.append(y, self.error_quantiles)
+                  if self.kind=='reactive':
+                        y = np.append(y, self.error_quantiles)
+                  elif self.kind=='proactive':
+                        y = y.flatten()
 
-                  self.finfo, self.fitp , self.yhat = fit.optimize_theta(y, inits=self.inits, wts=self.wts, ncond=self.ncond, pc_map=self.pc_map, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
+                  self.finfo, self.fitp , self.yhat = fit.optimize_theta(y, inits=self.inits, wts=self.wts, ncond=self.ncond, pc_map=self.pc_map, kind=self.kind, prob=prob, log_fits=log_fits, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, disp=disp)
 
-                  self.popt.iloc[:, 2:]=pd.Series({info: self.finfo[info] for info in self.infolabels})
-                  self.fits.iloc[self.i: self.i+self.ncond, self.ncond:] = self.yhat
+                  self.popt.iloc[i]=pd.Series({info: self.finfo[info] for info in self.infolabels})
+                  self.fits.iloc[self.i: self.i+ self.ncond, self.ncond:] = np.vstack(append_eq(self.yhat))
                   self.i+=self.ncond
 
                   if save and live_update:
-                        self.fits.to_csv(savepth+model+"_fits.csv", index=False)
-                        self.popt.to_csv(savepth+model+"_popt.csv", index=False)
-
-      def append_eq(yy):
-
-            return np.hstack([np.append(yi, yy[-5:]) for yi in yy[:-5].reshape(2, 11)]).reshape(2,16)
+                        self.fits.to_csv(savepth+"fits.csv")
+                        self.popt.to_csv(savepth+"popt.csv")
 
 
-      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfev=500, niter=500, get_params=False):
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter}
+      def set_fitparams(self, ntrials=2000, ftol=1.e-3, xtol=1.e-3, maxfev=500, niter=500, prob=np.array([.1, .3, .5, .7, .9]), get_params=False):
+
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob}
 
             if self.fit_on=='bootstrap':
                   self.indx=range(self.fitparams['niter'])
 
             fitp = self.fitparams
-
             if get_params:
-                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfev'], fitp['niter']
+                  return fitp['ntrials'], fitp['ftol'], fitp['xtol'], fitp['maxfev'], fitp['niter'], fitp['prob']
 
+
+      def get_header(self, params=None, prob=np.array([.1, .3, .5, .7, .9])):
+
+            info = ['nfev','chi','rchi','AIC','BIC','CNVRG']
+            cq = ['c'+str(int(n*100)) for n in prob]
+
+            if self.kind == 'reactive':
+                  cq = ['c'+str(int(n*100)) for n in prob]
+                  eq = ['e'+str(int(n*100)) for n in prob]
+                  qp_cols = ['Go'] + self.delays + cq + eq
+            else:
+                  hi = ['hi'+str(int(n*100)) for n in prob]
+                  lo = ['lo'+str(int(n*100)) for n in prob]
+                  qp_cols = self.labels + hi + lo
+            if params is not None:
+                  self.infolabels = params + info
+
+            return qp_cols
 
 
       def load_default_inits(self):
@@ -295,46 +365,39 @@ class Model(object):
 
 
       def get_wts(self):
-
             """
             wtc: weights applied to correct rt quantiles in cost f(x)
-
                   * P(R | No SSD)j * sdj(.5Qj, ... .95Qj)
-
             wte: weight applied to error rt quantiles in cost f(x)
-
-                  * P(R | SSD) * sd(.5eQ, ... .95eQ)
-
-            wts are calculated as a function of the observed variablitity in RT
-            quantiles across subjects
-
-            the variability of these statistics did not change significantly across
-            conditions, thus the weights are caclulated collapsing across across
-            all conditions
-
                   * P(R | SSD) * sd(.5eQ, ... .95eQ)
             """
 
-            #if self.is_flat:
-            sd = self.observed.std()
-            pc = self.data.query('trial_type=="go"').response.mean()
-            sdc = sd.loc['c5':'c95'].values
-            wtc = (pc*(sdc.min(axis=0)/sdc.T)).T
+            if self.kind == 'reactive':
 
-            pe = self.data.query('trial_type=="stop"').response.mean()
-            sde = sd.loc['e5':'e95'].values
-            wte = (pe*(sde.min(axis=0)/sde.T)).T
-            self.wts = np.append(wtc, wte)
-            #else:
-            #sd = self.observed.groupby(self.cond).std()
-            #pc = self.data.query('trial_type=="go"').groupby(self.cond).response.mean().values
-            #sdc = sd.loc[:,'c5':'c95'].values
-            #wtc = (pc*(sdc.min(axis=1)/sdc.T)).T
-            #sde = sd.loc[:,'e5':'e95'].values
-            #wte = (pe*(sde.min(axis=1)/sde.T)).T
-            #self.wts = np.append(self.wts, wte).reshape(10,ncond).T
+                  sd = self.observed.std()
+                  pc = self.data.query('ttype=="go"').response.mean()
+                  sdc = sd.loc['c10':'c90'].values
+                  wtc = (pc*(sdc.min(axis=0)/sdc.T)).T
 
-      #def lets_see(self, y, yhat, plot_acc=True, )
+                  pe = self.data.query('ttype=="stop"').response.mean()
+                  sde = sd.loc['e10':'e90'].values
+                  wte = (pe*(sde.min(axis=0)/sde.T)).T
+                  self.wts = np.append(wtc, wte)
+
+            elif self.kind == 'proactive':
+
+                  sd = self.observed.std()
+                  sdp = sd.loc['0':'100'].values
+                  sdhi = sd.loc['hi10':'hi90'].values
+                  sdlo = sd.loc['lo10':'lo90'].values
+
+                  pGo = np.sort(self.data[self.cond].unique())
+                  presp = self.data.groupby(self.cond).response.mean().values
+                  pc = 1-abs(presp - pGo)
+
+                  wtc = (pc*(sdp.min(axis=0)/sdp.T)).T
+                  self.wts = np.hstack([np.ones(len(self.labels)), pc[:3].mean()*(sdhi.min()/sdhi), pc[3:].mean()*(sdlo.min()/sdlo)])
+
 
       def set_rt_cutoff(self, rt_cutoff=None):
 

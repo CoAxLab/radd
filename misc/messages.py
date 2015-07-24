@@ -3,10 +3,9 @@ from numpy.random import randint
 
 def get_one():
 
-      msgs=["Optimize On, Wayne",
+      msgs = ["Optimize On, Wayne",
       "Optimize On, Garth",
-      "May the Nelder be with you",
-      "I wish you a slippery gradient, and a happy Nature paper",
+      "I wish you a steep gradient, and a happy Nature paper",
       "See it's not that Simplex, wait that's an oxymoron!",
       "Go to bed",
       "It'll probably work this time",

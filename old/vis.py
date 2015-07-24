@@ -609,8 +609,8 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         axes = np.array(axes).flatten()
 
 
-        emp_cor = redf.query('trial_type=="go" & choice=="go"').rt.values
-        sim_cor = simdf.query('trial_type=="go" & choice==1').GoRT.values
+        emp_cor = redf.query('ttype=="go" & choice=="go"').rt.values
+        sim_cor = simdf.query('ttype=="go" & choice==1').GoRT.values
         #emp_all = redf.query('choice=="go"').rt.values
         #sim_all = simdf.query('choice==1').GoRT.values
         for i, (ssd, df) in enumerate(redf.groupby('ssd')):
@@ -622,8 +622,8 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
                         yl = axes[i].get_ylim();
                 else:
                         labels=[None]*4
-                sgo = df.query('trial_type=="stop" & choice=="go"').rt.values-ssd*.001
-                sim_errs = simdf[simdf['SSD'].isin([ssd])].query('trial_type=="stop" & choice==1').GoRT.values-(ssd*.001)
+                sgo = df.query('ttype=="stop" & choice=="go"').rt.values-ssd*.001
+                sim_errs = simdf[simdf['SSD'].isin([ssd])].query('ttype=="stop" & choice==1').GoRT.values-(ssd*.001)
 
                 #plot Correct Go
                 sns.distplot(emp_cor, bins=bins, hist=emp_hist, kde=emp_kde, norm_hist=norm_hist, label=labels[0], ax=axes[i], color=greens[3], kde_kws={'shade':True})
@@ -651,12 +651,12 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         qg = mq(emp_cor, prob = prob)
         qsim_g = mq(sim_cor, prob = prob)
 
-        all_sgo = redf.query('trial_type=="stop" & choice=="go"').rt
+        all_sgo = redf.query('ttype=="stop" & choice=="go"').rt
         qsg = mq(all_sgo, prob = prob)
-        all_sim_errs = simdf.query('trial_type=="stop" & choice==1').GoRT
+        all_sim_errs = simdf.query('ttype=="stop" & choice==1').GoRT
         qsim_sg = mq(all_sim_errs, prob = prob)
 
-        pdefect = redf.query('trial_type=="go"').mean()['acc']
+        pdefect = redf.query('ttype=="go"').mean()['acc']
         axes[-1].plot(qg, prob*pdefect, marker='o', color=greens[3], label='Emp Correct')
         axes[-1].plot(qsim_g, prob*pdefect, marker='o', linestyle='--', color=greens[2], label='Sim Correct')
 
@@ -684,7 +684,7 @@ def ssgo_go_rts(data):
         for i, (ssd, df) in enumerate(data.groupby('ssd')):
 
                 allgo = data.query('choice=="go"')
-                sgo = df.query('trial_type=="stop" & choice=="go"')
+                sgo = df.query('ttype=="stop" & choice=="go"')
 
                 if len(sgo)<1:
                         continue
@@ -695,10 +695,10 @@ def ssgo_go_rts(data):
                 ax=axes[i], color=greens[3])
                 sns.despine()
 
-        all_sgo = redf.query('trial_type=="stop" & choice=="go"')
+        all_sgo = redf.query('ttype=="stop" & choice=="go"')
         qg = mq(allgo.rt, prob = prob)
         qsg = mq(all_sgo.rt, prob = prob)
-        defect_scalar = redf.query('trial_type=="go"').mean()['acc']
+        defect_scalar = redf.query('ttype=="go"').mean()['acc']
         axes[-1].plot(prob, qg, marker='o', color=greens[3])
         axes[-1].plot(prob, qsg, marker='o', color=reds[5])
         plt.tight_layout()

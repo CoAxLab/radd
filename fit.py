@@ -92,7 +92,7 @@ def set_bounds(a=(.001, 5.000), tr=(.001, .650), v=(.0001, 10.0000), z=(.001, .9
       return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
 
 
-def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, method='nelder'):
+def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='reactive', prob=np.array([.1, .3, .5, .7, .9]), ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, method='nelder'):
 
       """
       The main function for optimizing parameters of reactive stop signal model.
@@ -151,9 +151,10 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, ntrials=5000, maxf
 
       p0 = [popt.add(k, value=v, vary=False, min=lim[k][0], max=lim[k][1]) for k, v in ip.items()]
 
-      fcn_kws={'y': y, 'pc_map': pc_map, 'wts': wts, 'ntrials': ntrials, 'ncond': ncond}
+      fcn_kws={'y': y, 'pc_map': pc_map, 'wts': wts, 'ntrials': ntrials, 'ncond': ncond, 'kind':kind, 'prob':prob}
       opt_kws = {'disp':disp, 'xtol':xtol, 'ftol':ftol, 'maxfev': maxfev}
-      optmod = minimize(recost, popt, method=method, kws=fcn_kws, options=opt_kws)
+
+      optmod = minimize(cost_fx, popt, method=method, kws=fcn_kws, options=opt_kws)
 
       optp = optmod.params
       finfo = {k:optp[k].value for k in optp.keys()}
@@ -184,7 +185,7 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, ntrials=5000, maxf
       return finfo, fitp, yhat
 
 
-def recost(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
+def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='reactive', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
 
       """
       simulate data via <simulate_full> and return weighted
@@ -212,20 +213,22 @@ def recost(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, ssd=np.arange(.2
             p = {k:popt[k] for k in popt.keys()}
       else:
             p = popt.valuesdict()
-
       for pkey, pkc in pc_map.items():
             p[pkey] = np.array([p[pc] for pc in pkc])
 
       ncond = len(pkc)
-      yhat = simulate_full(p, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
+      yhat = RADD(p, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
 
       c = y - yhat
-      c_wtd = np.hstack([np.hstack(c[:-5].reshape(2,11)[:, :6]), np.hstack(wts[:5]*c[:-5].reshape(2,11)[:,6:11]), wts[-5:]*c[-5:]])
-
+      if kind=='reactive':
+            #c_wtd = np.hstack([np.hstack(c[:-5].reshape(ncond,11)[:, :6]), np.hstack(wts[:5]*c[:-5].reshape(ncond,11)[:,6:11]), wts[-5:]*c[-5:]])
+      elif kind=='proactive':
+            #c_wtd = np.hstack([c.reshape(ncond, 6)[:ncond, 1], c.reshape(ncond, 6)[:, 1:]*wts[ncond:]])
+            c_wtd = wts * c
       return c_wtd
 
 
-def simulate_full(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
+def RADD(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False):
       """
 
       Simulates all Conditions, SSD, trials, timepoints simultaneously.
@@ -256,16 +259,17 @@ def simulate_full(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange
 
       a, tr, v, ssv, z = p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z']
 
-      nssd = len(ssd); nss = int(.5*ntot)
-
       if np.ndim(tr)==0:
-            tr=np.array([tr]*ncond)
+            tr=np.ones(ncond)*tr
       if np.ndim(a)==0:
-            a=np.array([a]*ncond)
+            a=np.ones(ncond)*a
+      if np.ndim(ssd)==0:
+            ssd = np.ones(ncond)*ssd
+      nssd = len(ssd); nss = int(.5*ntot)
 
       Pg = 0.5*(1 + v*dx/si)
       Ps = 0.5*(1 + ssv*dx/si)
-      
+
       Tg = np.ceil((tb-tr)/dt).astype(int)
       Ts = np.ceil((tb-ssd)/dt).astype(int)
 
@@ -285,47 +289,55 @@ def simulate_full(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange
       # compute RT quantiles for correct and error resp.
       gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*10 for i, rtc in enumerate(grt)])
       eq = mq(np.extract(ertx<ssrtx, ertx), prob=prob)*10
-      #eq = np.array([mq(np.extract(ert[i]<c_ssrt[i], ert[i]), prob=prob)*10 for i in range(ncond)])
-
       # Get response and stop accuracy information
-      gac = np.mean(np.where(grt<tb, 1, 0), axis=1)
+      gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
       sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
 
       return np.append(np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq]]) for ii in range(ncond)]), eq)
 
-def resim_yhat(theta, return_traces=False, bias=['v'], ntrials=2000, wts=None):
 
+
+def RADD_NoSS(p, ncond=6, pGo=np.arange(0.0,1.2,.2), prob=np.array([.1, .3, .5, .7, .9]), ssd=.450, ntot=2000, tb=0.550, dt=.0005, si=.01, return_traces=False, ss=False):
       """
-      simulate multiple conditions, ssd (as in recost function)
+
+      Simulates all Conditions, SSD, trials, timepoints simultaneously.
+      Vectorized operations are set up so that any of the parameters can be
+      a single float or a vector of floats (i.e., when simulating/fitting multiple
+      conditions differentiated by the value of one or more model parameters)
 
       args:
-            theta (dict):                 param dict
-            return_traces (bool):         return [DVg, DVs]
+            a, tr, v, z (float/array):     model parameters
+            ntot (int):                         number of total trials
+            tb (float):                         time boundary
+            ncond (int):                        number of conditions to simulate
 
       returns:
-            output:
-                  output is either simulated predictions (i.e. yhat)
-                        or Go and Stop traces in list (i.e. [DVg, DVs])
 
+            DVg (Go Process):             3d array for all conditions, trials, timepoints
+                                          (i.e. DVg = [nCOND [NTrials [NTime]]] )
+                                          All conditions are simulated simultaneously (i.e., BSL & PNL)
       """
 
+      dx=np.sqrt(si*dt)
 
-      p = {k:theta[k] for k in theta.keys()}
-      ssd=np.arange(.2, .45, .05);
-      prob=np.array([.1, .3, .5, .7, .9])
+      a, tr, v, ssv, z = p['a'], p['tr'], p['v'], p['z']
 
-      cond = {pk: p.pop(pk) for pk in p.keys() if pk[-1].isdigit()}
-      ncond = len(cond.keys())
-      for i in range(ncond):
-            p[cond.keys()[i][:-1]] = np.array(cond.values())
+      if np.ndim(tr)==0:
+            tr=np.ones(ncond)*tr
+      if np.ndim(a)==0:
+            a=np.ones(ncond)*a
 
-      if 'tr' not in bias:
-            p['tr'] = np.array([p['tr']]*2)
+      Pg = 0.5*(1 + v*dx/si)
+      Tg = np.ceil((tb-tr)/dt).astype(int)
 
-      output = simulate_full(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials, return_traces=False)
+      # a/tr/v Bias: ALL CONDITIONS, ALL SSD
+      DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+      # compute RT quantiles and accuracy
+      grt = ( tr + (np.where((DVg.max(axis=2).T>a).T, np.argmax((DVg.T>=a).T, axis=2)*dt, np.nan).T)).T
+      gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*10 for i, rtc in enumerate(grt)])
+      gac = np.mean(np.where(grt<tb, 1, 0), axis=1)
 
-      return output
-
+      return np.append(np.hstack([np.hstack([i[ii] for i in [gac, gq]]) for ii in range(ncond)]))
 
 
 def sim_trbias_full(a, tr, v, ssv, z, analyze=True, ncond=1, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):

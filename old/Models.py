@@ -78,7 +78,7 @@ class Model(object):
             labels = data[cond].unique();
 
 
-            delays = sorted(data.query('trial_type=="stop"').ssd.unique().astype(np.int))
+            delays = sorted(data.query('ttype=="stop"').ssd.unique().astype(np.int))
 
             if self.fit=='bootstrap':
                   if self.kind=='reactive':

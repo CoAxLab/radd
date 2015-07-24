@@ -44,10 +44,10 @@ def simulate(theta, ntrials=2000, model='radd', tb=0.560, return_all=False, visu
 
 	if visual:
 		columns=["rt","choice","acc", "response", "go_tsteps", "go_paths", "ss_tsteps",
-			"ss_paths", "len_go_tsteps","len_ss_tsteps","trial_type", 'ssd', "pGo"]
+			"ss_paths", "len_go_tsteps","len_ss_tsteps","ttype", 'ssd', "pGo"]
 		mfx = radd_visfx
 	else:
-		columns = ['rt', 'choice', 'response', 'acc', 'trial_type', 'ssd', 'pGo']
+		columns = ['rt', 'choice', 'response', 'acc', 'ttype', 'ssd', 'pGo']
 		mfx = radd_fitfx
 
 	if simbold:
@@ -179,7 +179,7 @@ def rise(theta, model='radd', tb=.560, ttype='go', tau=.0005, si=.01, task='pro'
 	else:
 		acc=0.00
 
-	return {'rt':rt, 'choice':choice, 'response':response, 'thalamus':thalamus, 'trial_type':ttype,	'acc':acc, 'ssd':ssd, 'pGo':theta['pGo'], 'outcome':outcome}
+	return {'rt':rt, 'choice':choice, 'response':response, 'thalamus':thalamus, 'ttype':ttype,	'acc':acc, 'ssd':ssd, 'pGo':theta['pGo'], 'outcome':outcome}
 
 
 def decay(thalamus, ithalamus, baseline, t, mu, ssv, decay_coeff=-1.6587, si=.01, tau=.0005, task='Pro', bias='v', ssv_decay=False):

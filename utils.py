@@ -11,7 +11,7 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
+def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1): 
       """
       takes quantile estimates and fits cumulative density function
       returns samples to pass to sns.kdeplot()
@@ -256,7 +256,7 @@ def calc_quant_weights(rtvec, quants):
 
 def ssrt_calc(df, avgrt=.3):
 
-      dfstp = df.query('trial_type=="stop"')
+      dfstp = df.query('ttype=="stop"')
       dfgo = df.query('choice=="go"')
 
       pGoErr = np.array([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
