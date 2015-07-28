@@ -40,10 +40,8 @@ class RADDCore(object):
 
             if self.fit_on=='bootstrap':
                   self.indx = range(niter)
-                  self.ifx = resample_data
             else:
                   self.indx = list(self.data.idx.unique())
-                  self.ifx = rangl_data
 
 
       def rangl_data(self, data, re_cut=.650, pro_cut=.54502, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
@@ -137,13 +135,13 @@ class RADDCore(object):
             i_grp = data.groupby(['idx'])
 
             if self.fit_on=='bootstrap':
-                  self.dat = np.vstack([i_grp.apply(self.ifx, kind=self.kind).values for i in indx]).unstack()
+                  self.dat = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in indx]).unstack()
 
             if self.kind=='proactive':
-                  datdf = ic_grp.apply(rangl_data, kind=self.kind).unstack()
-                  rtdat = pd.DataFrame(np.vstack(i_grp.apply(rt_quantiles).values), index=indx)
+                  datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
+                  rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
                   rtdat[rtdat<1] = np.nan
-                  rts_flat = pd.DataFrame(np.vstack(i_grp.apply(rt_quantiles, split=None).values), index=indx)
+                  rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split=None).values), index=indx)
                   self.observed = pd.concat([datdf, rtdat], axis=1)
                   self.observed.columns = qp_cols
                   self.avg_y = self.observed.mean().values
@@ -152,7 +150,7 @@ class RADDCore(object):
                   fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
 
             elif self.kind=='reactive':
-                  datdf = ic_grp.apply(rangl_data, kind=self.kind).unstack().unstack()
+                  datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack().unstack()
                   indxx = pd.Series(indx*ncond, name='idx')
                   obs = pd.DataFrame(np.vstack(datdf.values), columns=qp_cols, index=indxx)
                   obs[cond]=np.sort(labels*len(indx))
@@ -164,7 +162,6 @@ class RADDCore(object):
 
             fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
             self.df_dict = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
-
 
 
       def __get_header__(self, params=None, prob=np.array([.1, .3, .5, .7, .9])):

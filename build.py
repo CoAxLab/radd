@@ -42,19 +42,20 @@ class Model(RADDCore):
 
             try:
                   theta=self.popt
+                  simulator=self.opt.simulator
             except Exception:
                   theta=self.inits
                   self.set_fitparams()
+                  simulator = Simulator(fitparams=self.fitparams, kind=self.kind, style=self.style, inits=theta, pc_map=self.pc_map)
 
-            self.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, style=self.style, inits=self.inits, pc_map=self.pc_map)
-            theta = self.simulator.vectorize_params(theta, sim_info=False, as_dict=True)
+            theta = simulator.vectorize_params(theta, sim_info=False, as_dict=True)
 
             if self.kind=='reactive':
-                  dvg, dvs = self.simulator.core_radd(theta)
-                  yhat = self.simulator.analyze_reactive(dvg, dvs, theta)
+                  dvg, dvs = simulator.core_radd(theta)
+                  yhat = simulator.analyze_reactive(dvg, dvs, theta)
             elif self.kind=='proactive':
-                  dvg = self.simulator.pro_radd(theta)
-                  yhat = self.simulator.analyze_proactive(dvg, theta)
+                  dvg = simulator.pro_radd(theta)
+                  yhat = simulator.analyze_proactive(dvg, theta)
 
             return yhat
 

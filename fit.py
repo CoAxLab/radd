@@ -125,10 +125,8 @@ class Simulator(object):
 
             if self.flat:
                   wts = self.flat_wts
-                  free = True
             else:
                   wts = self.wts
-                  free = False
 
             if inits!=None:
                   ip = deepcopy(inits)
@@ -248,7 +246,7 @@ class Simulator(object):
                   allp.extend(['ssv', 'z'])
                   return {k: p[k][0] if k in self.pvc else p[k] for k in allp}
 
-            out = [p['a'][0], p['tr'][0], p['v'][0], p['ssv'], p['z']]
+            out = [p['a'], p['tr'], p['v'], p['ssv'], p['z']]
 
             if sim_info:
                   Pg = 0.5*(1 + p['v']*self.dx/self.si)
