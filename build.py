@@ -159,7 +159,7 @@ class Optimizer(Base):
             super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, style=style, fit_whole_model=fit_whole_model, niter=niter)
 
 
-      def optimize(self, save=True, savepth='./', log_fits=True, disp=True, xtol=1.e-4, ftol=1.e-4, maxfev=1000, ntrials=10000, niter=500, prob=np.array([.1, .3, .5, .7, .9]), tb=None, ):
+      def optimize(self, save=True, savepth='./', log_fits=True, disp=True, xtol=1.e-4, ftol=1.e-4, maxfev=1000, ntrials=10000, niter=500, prob=np.array([.1, .3, .5, .7, .9]), tb=None):
 
             self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob)
 
@@ -194,6 +194,7 @@ class Optimizer(Base):
                         self.fitinfo.to_csv(savepth+"fitinfo.csv")
 
             self.popt=self.fitinfo.mean()
+
 
       def __opt_routine__(self, y):
 
@@ -240,9 +241,8 @@ class Model(Base):
             self.opt = Optimizer(kind=self.kind, inits=self.inits, style=self.style, depends_on=self.depends_on, fit_on=self.fit_on, dataframes=self.df_dict, wts=self.wts, pc_map=self.pc_map)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize(save=save, savepth=savepth, log_fits=log_fits, disp=disp, xtol=xtol, ftol=ftol, maxfev=maxfev, ntrials=ntrials, niter=niter, prob=prob)
-            self.is_optimized=True
 
-            return self.fits, self.fitinfo, self.popt
+            self.is_optimized=True
 
 
       def simulate(self):
@@ -313,7 +313,7 @@ class Model(Base):
                   self.observed.columns = qp_cols
                   self.avg_y = self.observed.mean().values
                   self.flat_y=np.append(datdf.mean().mean(), rts_flat.mean())
-                  dat = self.observed.values.reshape((len(indx), 16))
+                  dat = self.observed.values.reshape((len(indx), len(qp_cols)))
                   fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
 
             elif self.kind=='reactive':
@@ -325,7 +325,7 @@ class Model(Base):
                   self.avg_y = self.observed.groupby(cond).mean().loc[:,qp_cols[0] : qp_cols[-1]].values
                   self.flat_y = self.observed.loc[:, qp_cols[0] : qp_cols[-1]].mean().values
                   dat = self.observed.loc[:,qp_cols[0]:qp_cols[-1]].values.reshape(len(indx),ncond,16)
-                  fits = pd.DataFrame(np.zeros((len(indxx),16)), columns=qp_cols, index=indxx)
+                  fits = pd.DataFrame(np.zeros((len(indxx),len(qp_cols))), columns=qp_cols, index=indxx)
 
             fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
             self.df_dict = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
@@ -361,7 +361,6 @@ class Model(Base):
             """
 
             if self.kind == 'reactive':
-
                   obs_var = self.observed.groupby(self.cond).sem().loc[:,'Go':]
                   qvar = obs_var.values[:,6:]
                   pvar = obs_var.values[:,:6]
@@ -380,8 +379,8 @@ class Model(Base):
 
                   self.wts = np.hstack([np.append(p, w) for p, w in zip(pwts, qwts)])
 
-            elif self.kind == 'proactive':
 
+            elif self.kind == 'proactive':
                   sd = self.observed.sem()
                   sdhi = sd.loc['hi10':'hi90'].values
                   sdlo = sd.loc['lo10':'lo90'].values
