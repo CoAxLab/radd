@@ -11,7 +11,66 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1): 
+def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
+
+      if kind == 'reactive':
+            gac = data.query('ttype=="go"').acc.mean()
+            sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
+            grt = data.query('ttype=="go" & acc==1').rt.values
+            ert = data.query('response==1 & acc==0').rt.values
+            gq = mq(grt, prob=prob)
+            eq = mq(ert, prob=prob)
+            return np.hstack([gac, sacc, gq*10, eq*10])
+
+      elif kind=='proactive':
+            return 1-data.response.mean()
+
+def rt_quantiles(data, cutoff=.560, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
+
+      rtq = []
+      godf = data[data.response==1]
+
+      if split=='HiLo' and 'HiLo' not in godf.columns:
+            godf['HiLo']=['x']
+            godf[godf['pGo']<=.5, 'HiLo'] = 'Lo'
+            godf[godf['pGo']>.5, 'HiLo'] = 'Hi'
+      if split != None:
+            splitdf = godf.groupby(split)
+      else:
+            rts = godf[godf.rt<=cutoff].rt.values
+            return mq(rts, prob=prob)*10
+
+      for c, df in splitdf:
+            rts = df[df.rt<=cutoff].rt.values
+            rtq.append(mq(rts, prob=prob)*10)
+
+      return np.hstack(rtq)
+
+
+def resample_data(data, n=120, kind='reactive'):
+
+      df=data.copy(); bootlist=list()
+      if n==None: n=len(df)
+
+      if kind=='reactive':
+            for ssd, ssdf in df.groupby('ssd'):
+                  boots = ssdf.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = ssdf.irow(resampled_ix)
+                  bootlist.append(bootdf)
+                  #concatenate and return all resampled conditions
+                  return rangl_re(pd.concat(bootlist))
+      else:
+            boots = df.reset_index(drop=True)
+            orig_ix = np.asarray(boots.index[:])
+            resampled_ix = rwr(orig_ix, get_index=True, n=n)
+            bootdf = df.irow(resampled_ix)
+            bootdf_list.append(bootdf)
+            return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
+
+
+def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """
       takes quantile estimates and fits cumulative density function
       returns samples to pass to sns.kdeplot()

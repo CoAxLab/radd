@@ -19,13 +19,13 @@ gpal = lambda nc: sns.blend_palette(['#65b88f', '#2c724f'], n_colors=nc)
 ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
 
 
-def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, labels=None):
+def scurves(lines=[], kind='reactive', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
 
       if len(lines[0])==6:
                 task='pro'
 
       if ax is None:
-		f, ax = plt.subplots(1, figsize=(6,5))
+            f, ax = plt.subplots(1, figsize=(6,5))
       if colors is None:
             colors=sns.color_palette('husl', n_colors=len(lines))
       if labels is None:
@@ -36,14 +36,14 @@ def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, 
       lines=[np.array(line) if type(line)==list else line for line in lines]
       pse=[];
 
-      if 'Re' in task:
+      if kind=='reactive':
             x=np.array([400, 350, 300, 250, 200], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
             yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
       else:
             x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
-            xtls=x.copy()[::-1]; xsim=np.linspace(-5, 11, 10000)
-            yylabel='P(NoGo)'; scale_factor=100; xxlabel='P(Go)'; scale_factor=10
+            xtls=x.copy()[::-1]; xsim=np.linspace(-5, 11, 10000); xxlim=(-1, 10.5)
+            yylabel='P(NoGo)'; scale_factor=100; xxlabel='P(Go)';
 
       x=utils.res(-x, lower=x[-1]/10, upper=x[0]/10)
       for i, yi in enumerate(lines):
@@ -62,7 +62,11 @@ def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, 
             if yerr!=[]:
                   #ax.errorbar(x, y[i], yerr=yerr[i], color=colors[i], marker='o', elinewidth=2, ecolor='k')
                   ax.errorbar(x, y, yerr=yerr[i], color=colors[i], ecolor=colors[i], capsize=0, lw=0, elinewidth=3)
-            ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
+
+            if markers:
+                  ax.plot(x, y, lw=2.5, marker='o', ms=5, color=colors[i], label=labels[i])
+            else:
+                  ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
             pse.append(xp[idx]/scale_factor)
 
       plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.05, 1.05), yticks=[0, 1])
@@ -77,7 +81,7 @@ def scurves(lines=[], task='ssRe', yerr=[], pstop=.5, ax=None, linestyles=None, 
 
 
 
-def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, savestr='fit_plot_rtq'):
+def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='reactive', savestr='fit_plot_rtq'):
 
       sns.set_context('notebook', font_scale=1.6)
 
@@ -87,24 +91,34 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, savestr='fit_plot_rtq')
       fit_eq = yhat[11:]
 
       if plot_acc:
-            f, (ax1, ax2) = plt.subplots(1,2,figsize=(10,5))
+            f, (ax1, ax2) = plt.subplots(1,2,figsize=(10, 5.5))
             savestr = savestr + "_acc"
-            gacc = y[0]
-            sacc = y[1:6]
-            fit_gacc = yhat[0]
-            fit_sacc = yhat[1:6]
+            if kind=='reactive':
+                  gacc = y[0]
+                  sacc = y[1:6]
+                  fit_gacc = yhat[0]
+                  fit_sacc = yhat[1:6]
+            else:
+                  sacc = y[:6]
+                  fit_sacc = yhat[:6]
+
       else:
-            f, ax1 = plt.subplots(1, figsize=(5,5))
+            f, ax1 = plt.subplots(1, figsize=(5, 5.5))
 
       # Fit RT quantiles to KDE function in radd.utils
       quant_list = [gq, fit_gq, eq, fit_eq]
       kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
 
-      sns.kdeplot(kdefits[0], cumulative=True, label='Data RTc', linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[1], cumulative=True, label='Fit RTc', linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
+      if kind=='reactive':
+            lbs=['Data Cor','Fit Cor','Data Err','Fit Err']
+      else:
+            lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']
 
-      sns.kdeplot(kdefits[2], cumulative=True, label='Data RTe', linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[3], cumulative=True, label='Fit RTe', linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[0], cumulative=True, label=lbs[0], linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[1], cumulative=True, label=lbs[1], linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
+
+      sns.kdeplot(kdefits[2], cumulative=True, label=lbs[2], linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[3], cumulative=True, label=lbs[3], linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
 
       ax1.set_xlim(4.3, 6.5)
       ax1.set_ylabel('P(RT<t)')
@@ -114,7 +128,7 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, savestr='fit_plot_rtq')
 
       if plot_acc:
             # Plot observed and predicted stop curves
-            scurves([sacc, fit_sacc], labels=['Data SC', 'Fit SC'], colors=bpal(2), linestyles=['-','--'], ax=ax2)
+            scurves([sacc, fit_sacc], labels=['Data SC', 'Fit SC'], colors=bpal(2), kind=kind, linestyles=['-','--'], ax=ax2)
 
       plt.tight_layout()
       sns.despine()
@@ -259,19 +273,48 @@ def pro_animate(i, x, protraces, prolines):
       return prolines,
 
 
-def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.5451, cg='Green', cr='Red'):
+def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05)):
+
+      for i, trace in enumerate(DVs[0,:]):
+            theta['ssd'] = ssd[i]
+            plot_traces(DVg[0], trace, theta)
+
+
+def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.650, cg='Green', cr='Red'):
 
       f,ax=plt.subplots(1,figsize=(8,5))
       tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z']; ssd=sim_theta['ssd']
 
       for i, igo in enumerate(DVg):
-            plt.plot(np.arange(tr, tb, tau), igo, color=cg, alpha=.1, linewidth=.5)
+            ind = np.argmax(igo>=a)
+            xx = [np.arange(tr, tr+(len(igo[:ind-1])*tau), tau), np.arange(tr, tb, tau)]
+            x = xx[0 if len(xx[0])<len(xx[1]) else 1]
+            plt.plot(x, igo[:len(x)], color=cg, alpha=.1, linewidth=.5)
             if i<len(DVs):
-                  plt.plot(np.arange(ssd, tb, tau), DVs[i], color=cr, alpha=.1, linewidth=.5)
+                  if np.any(DVs<=0):
+                        ind=np.argmax(DVs[i]<=0)
+                  else:
+                        ind=np.argmax(DVs[i]>=a)
+                  xx = [np.arange(ssd, ssd+(len(DVs[i, :ind-1])*tau), tau), np.arange(ssd, tb, tau)]
+                  x = xx[0 if len(xx[0])<len(xx[1]) else 1]
+                  #x = np.arange(ssd, ssd+(len(DVs[i, :ind-1])*tau), tau)
+                  plt.plot(x, DVs[i, :len(x)], color=cr, alpha=.1, linewidth=.5)
 
-      plt.setp(ax, xlim=(tr, tb), ylim=(0,a))
-      ax.hlines(y=z, xmin=tr, xmax=tb, linewidth=3, linestyle='--', color="#6C7A89")
-      sns.despine(top=False,bottom=False, right=True, left=False)
+      xlow = np.min([tr, ssd])
+      xlim = (xlow*.95, 1.05*tb)
+      if np.any(DVs<=0):
+            ylow=0
+            ylim=(-.03, a*1.03)
+      else:
+            ylow=z
+            ylim=(z-.03, a*1.03)
+
+      plt.setp(ax, xlim=xlim, ylim=ylim)
+      ax.hlines(y=z, xmin=xlow, xmax=tb, linewidth=2, linestyle='--', color="k", alpha=.5)
+      ax.hlines(y=a, xmin=xlow, xmax=tb, linewidth=2, linestyle='-', color="k")
+      ax.hlines(y=ylow, xmin=xlow, xmax=tb, linewidth=2, linestyle='-', color="k")
+      ax.vlines(x=xlow, ymin=ylow*.998, ymax=a*1.002, linewidth=2, linestyle='-', color="k")
+      sns.despine(top=True,bottom=True, right=True, left=True)
       ax.set_xticklabels([])
       ax.set_yticklabels([])
       ax.set_xticks([])

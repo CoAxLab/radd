@@ -148,8 +148,48 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
       return cost
 
 
+      def cost_fx(popt, y, pc_map={}, ncond=1, wts=None, ntrials=2000, kind='reactive', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
 
-def simulate_flat(a, tr, v, ssv, z, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
+            """
+            simulate data via <simulate_full> and return weighted
+            cost between observed (y) and simulated values (yhat).
+
+            returned vector is implicitly used by lmfit minimize
+            routine invoked in <optimize_theta> which then submits the
+            SSE of the already weighted cost to a Nelder-Mead Simplex
+            optimization.
+
+
+            args:
+                  theta (dict):           param dict
+                  y (np.array):           NCond x 16 array of observed
+                                          values entered into cost f(x)
+                  wts (np.array)          weights separately applied to
+                                          correct and error RT quantile
+                                          comparison
+            returns:
+                  cost:                   weighted difference bw
+                                          observed (y) and simulated (yhat)
+            """
+
+            if type(popt)==dict:
+                  p = {k:popt[k] for k in popt.keys()}
+            else:
+                  p = popt.valuesdict()
+
+            yhat = RADD(p, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
+
+            c = y - yhat
+            if kind=='reactive':
+                  c_wtd = np.hstack([np.hstack(c[:-5].reshape(ncond,11)[:, :6]), np.hstack(wts[:5]*c[:-5].reshape(ncond,11)[:,6:11]), wts[-5:]*c[-5:]])
+            elif kind=='proactive':
+                  c_wtd = np.hstack([c.reshape(ncond, 6)[:ncond, 1], c.reshape(ncond, 6)[:, 1:]*wts[ncond:]])
+                  c_wtd = wts * c
+            return c_wtd
+
+
+
+def RADD(a, tr, v, ssv, z, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
 
       """
 
