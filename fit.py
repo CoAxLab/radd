@@ -214,7 +214,7 @@ class Simulator(object):
                   p = theta.valuesdict()
 
             if self.kind=='proactive':
-                  dvg, dvs = self.core_radd(p)
+                  dvg = self.pro_radd(p)
                   yhat = self.analyze_proactive(dvg, p)
 
             elif self.kind=='reactive':
@@ -330,8 +330,8 @@ class Simulator(object):
             dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd; tb=self.tb; prob=self.prob
 
             grt = (tr+(np.where((DVg.max(axis=2).T>=a).T, np.argmax((DVg.T>=a).T,axis=2)*dt,np.nan).T)).T
-            hi = np.nanmean(grt[:ncond/2], axis=0)
-            lo = np.nanmean(grt[ncond/2:], axis=0)
+            hi = np.nanmean(grt[ncond/2:], axis=0)
+            lo = np.nanmean(grt[:ncond/2], axis=0)
             hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
             if self.flat:
                   hilo=[np.hstack(hilo)]
