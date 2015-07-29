@@ -101,6 +101,7 @@ class Simulator(object):
                         out.extend([Ps, Ts])
             return out
 
+
       def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001)):
 
             """
@@ -127,6 +128,21 @@ class Simulator(object):
                   self.costfx = self.pro_costfx
 
 
+      def radd_costfx(self, theta):
+            """
+            Reactive Model (RADD) cost function
+            """
+
+            if type(theta)==dict:
+                  p = {k:theta[k] for k in theta.keys()}
+            else:
+                  p = theta.valuesdict()
+            dvg, dvs = self.simulate_radd(p)
+            yhat = self.analyze_radd(dvg, dvs, p)
+
+            return (self.y - yhat)*self.wts[:len(self.y)]
+
+
       def pro_costfx(self, theta):
             """
             Proactive model cost function
@@ -136,7 +152,6 @@ class Simulator(object):
                   p = {k:theta[k] for k in theta.keys()}
             else:
                   p = theta.valuesdict()
-
             dvg = self.simulate_pro(p)
             yhat = self.analyze_pro(dvg, p)
 
@@ -151,24 +166,8 @@ class Simulator(object):
                   p = {k:theta[k] for k in theta.keys()}
             else:
                   p = theta.valuesdict()
-
             dvg, dvs = self.simulate_irace(p)
-            yhat = self.analyze_reactive(dvg, dvs, p)
-            return (self.y - yhat)*self.wts[:len(self.y)]
-
-
-      def radd_costfx(self, theta):
-            """
-            Reactive Model (RADD) cost function
-            """
-
-            if type(theta)==dict:
-                  p = {k:theta[k] for k in theta.keys()}
-            else:
-                  p = theta.valuesdict()
-
-            dvg, dvs = self.simulate_radd(p)
-            yhat = self.analyze_reactive(dvg, dvs, p)
+            yhat = self.analyze_irace(dvg, dvs, p)
 
             return (self.y - yhat)*self.wts[:len(self.y)]
 
@@ -180,7 +179,6 @@ class Simulator(object):
             DVg = z + np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
             init_ss = np.array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
             DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
-
             return DVg, DVs
 
 
@@ -200,22 +198,17 @@ class Simulator(object):
             DVg = z + np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
             init_ss = np.ones((self.ncond, self.nssd, self.nss))*z
             DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
-
             return DVg, DVs
 
 
-      def analyze_reactive(self, DVg, DVs, p):
+      def analyze_radd(self, DVg, DVs, p):
 
             a, tr, v, ssv, z = self.vectorize_params(p, sim_info=False)
             dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd; tb=self.tb; prob=self.prob
 
             grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
             ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
-
-            if self.kind=='radd':
-                  ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt,np.nan)
-            else:
-                  ssrt = ((np.where((DVs.max(axis=3).T>=a).T,ssd[:, None]+np.argmax((DVs.T>=a).T,axis=3)*dt,np.nan).T)).T
+            ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt,np.nan)
 
             # compute RT quantiles for correct and error resp.
             ert = np.array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
@@ -224,18 +217,17 @@ class Simulator(object):
             # Get response and stop accuracy information
             gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
             sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
-
             return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
-      def analyze_proactive(self, DVg, p):
+      def analyze_pro(self, DVg, p):
 
             a, tr, v, z = self.vectorize_params(p, sim_info=False)
             dt=self.dt; ncond=self.ncond; tb=self.tb; prob=self.prob
 
             rt = (tr+(np.where((DVg.max(axis=2).T>=a).T, np.argmax((DVg.T>=a).T,axis=2)*dt, 999).T)).T
 
-            if self.flat:
+            if len(self.y)<=(len(prob)+1):
                   gq = mq(rt[rt<tb], prob=prob)*10
             else:
                   hi = np.hstack(rt[ncond/2:])#, axis=0)
@@ -246,5 +238,23 @@ class Simulator(object):
 
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
-            #return gq, eq, gac, sacc
             return np.hstack([gac, gq])
+
+
+      def analyze_irace(self, DVg, DVs, p):
+
+            a, tr, v, ssv, z = self.vectorize_params(p, sim_info=False)
+            dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd; tb=self.tb; prob=self.prob
+
+            grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
+            ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
+            ssrt = ((np.where((DVs.max(axis=3).T>=a).T,ssd[:, None]+np.argmax((DVs.T>=a).T,axis=3)*dt,np.nan).T)).T
+
+            # compute RT quantiles for correct and error resp.
+            ert = np.array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
+            gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*10 for rtc in grt])
+            eq = [mq(ert[i][ert[i]<ssrt[i]], prob=prob)*10 for i in range(ncond)]
+            # Get response and stop accuracy information
+            gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
+            sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
+            return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])

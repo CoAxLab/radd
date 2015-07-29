@@ -40,18 +40,19 @@ class Model(RADDCore):
                   fit model holding all fixed except depends_on keys
                   or fit model with all free before fitting depends_on keys
 
+            tb (float):
+                  timeboundary: time alloted in task for making a response
+
       """
 
 
-
-
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, weight_presp=True, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, weight_presp=True, tb=None, *args, **kws):
 
             self.data=data
             self.weight_presp=weight_presp
             self.is_optimized=False
 
-            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind)
+            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb)
 
             self.prepare_fit()
 
@@ -60,12 +61,11 @@ class Model(RADDCore):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
+            fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
+            
+            self.opt = Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=self.inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
 
-            self.opt = Optimizer(dframes=self.dframes, kind=self.kind, inits=self.inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
-
-            self.fits, self.fitinfo, self.popt = self.opt.optimize(save=save, savepth=savepth, log_fits=log_fits, disp=disp, xtol=xtol, ftol=ftol, maxfev=maxfev, ntrials=ntrials, niter=niter, prob=prob)
-
-            self.is_optimized=True
+            self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
 
 
       def simulate(self):
@@ -76,19 +76,19 @@ class Model(RADDCore):
             except Exception:
                   theta=self.inits
                   self.set_fitparams()
-                  simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
+                  simulator=Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
 
             theta = simulator.vectorize_params(theta, sim_info=False, as_dict=True)
 
             if self.kind=='radd':
                   dvg, dvs = simulator.simulate_radd(theta)
-                  yhat = simulator.analyze_reactive(dvg, dvs, theta)
-            if self.kind=='irace':
-                  dvg, dvs = simulator.simulate_irace(theta)
-                  yhat = simulator.analyze_reactive(dvg, dvs, theta)
+                  yhat = simulator.analyze_radd(dvg, dvs, theta)
             elif self.kind=='pro':
                   dvg = simulator.simulate_pro(theta)
-                  yhat = simulator.analyze_proactive(dvg, theta)
+                  yhat = simulator.analyze_pro(dvg, theta)
+            if self.kind=='irace':
+                  dvg, dvs = simulator.simulate_irace(theta)
+                  yhat = simulator.analyze_irace(dvg, dvs, theta)
 
             return yhat
 
@@ -136,14 +136,18 @@ class Optimizer(RADDCore):
       """
 
 
-      def __init__(self, dframes=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, *args, **kws):
+      def __init__(self, dframes=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, fitparams=None, *args, **kws):
 
             self.fits=dframes['fits']
             self.fitinfo=dframes['fitinfo']
-            self.avg_y=dframes['avg_y']
-            self.flat_y=dframes['flat_y']
-            self.dat=dframes['dat']
             self.data=dframes['data']
+            self.fitparams=fitparams
+
+            if fit_on=='average':
+                  self.avg_y=dframes['avg_y']
+                  self.flat_y=dframes['flat_y']
+            elif fit_on in ['subjects', 'bootstrap']:
+                  self.dat=dframes['dat']
 
             self.method=method
             self.wts=wts
@@ -152,18 +156,19 @@ class Optimizer(RADDCore):
             super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
 
 
-      def optimize(self, save=True, savepth='./', log_fits=True, disp=True, xtol=1.e-4, ftol=1.e-4, maxfev=1000, ntrials=10000, niter=500, prob=np.array([.1, .3, .5, .7, .9]), tb=None):
+      def optimize_model(self, save=True, savepth='./'):
 
-            fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
+            if self.fitparams is None:
+                  self.set_fitparams()
 
-            self.simulator = Simulator(fitparams=fp, kind=self.kind, inits=self.inits, method=self.method, pc_map=self.pc_map)
+            self.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, method=self.method, pc_map=self.pc_map)
 
             if self.fit_on=='average':
-                  self.yhat, self.fitinfo, self.popt = self.__opt_routine__(self.avg_y)
-                  return self.yhat, self.fitinfo, self.popt
+                  yhat, fitinfo, popt = self.__opt_routine__(self.avg_y)
+                  return yhat, fitinfo, popt
             else:
-                  self.__indx_optimize__(save=save, savepth=savepth)
-                  return self.fits, self.fitinfo, self.popt
+                  fits, fitinfo, popt = self.__indx_optimize__(save=save, savepth=savepth, fitparams=fp)
+                  return fits, fitinfo, popt
 
 
       def optimize_theta(self, y, inits, flat=False):
@@ -227,6 +232,7 @@ class Optimizer(RADDCore):
             return  yhat, finfo, popt
 
 
+
       def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001)):
 
             """
@@ -243,16 +249,26 @@ class Optimizer(RADDCore):
             return bounds
 
 
+
       def __indx_optimize__(self, save=True, savepth='./'):
 
-            ri=0; radv=self.ncond
+            ri=0; nc=self.ncond
             pcols=self.fitinfo.columns
             for i, y in enumerate(self.dat):
+
+                  if self.kind in ['radd', 'irace']:
+                        self.flat_y = y.mean(axis=0)
+                  elif self.kind=='pro':
+                        nquant = len(self.fitparams['prob'])
+                        flatgo = y[:nc].mean(),
+                        flatq = y[nc:].reshape(2,nquant).mean(axis=0)
+                        self.flat_y = np.hstack([flatgo, flatq])
+
                   yhat, finfo, popt = self.__opt_routine__(y)
                   self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
                   if self.kind in ['radd', 'irace']:
-                        self.fits.iloc[ri:ri+radv, radv:] = yhat
-                        ri+=radv
+                        self.fits.iloc[ri:ri+nc, nc:] = yhat
+                        ri+=nc
                   else:
                         self.fits.iloc[i] = yhat
                   if save:
@@ -262,25 +278,24 @@ class Optimizer(RADDCore):
             self.popt=self.fitinfo.mean()
 
 
+
       def __opt_routine__(self, y):
 
             p = dict(deepcopy(self.inits))
             fp = self.fitparams
-
             if not self.fit_flat:
                   self.simulator.ncond = self.ncond
                   self.simulator.wts = self.wts
                   yhat, finfo, popt = self.optimize_theta(y=y, inits=p, flat=False)
             else:
-
                   to_fit = [self.flat_y, y]
                   wts = [fp['flat_wts'], fp['wts']]
                   flat=[1, 0]
                   ncond=[1, self.ncond]
-                  for i, y in enumerate(to_fit):
+                  for i, yi in enumerate(to_fit):
                         self.simulator.ncond = ncond[i]
                         self.simulator.wts = wts[i]
-                        yhat, finfo, popt = self.optimize_theta(y=y, inits=p, flat=flat[i])
+                        yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, flat=flat[i])
                         p = deepcopy(popt)
 
             return yhat, finfo, popt

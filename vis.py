@@ -19,10 +19,10 @@ gpal = lambda nc: sns.blend_palette(['#65b88f', '#16a085'], n_colors=nc)
 ppal = lambda nc: sns.blend_palette(['#848bb6', '#674172'], n_colors=nc)
 
 
-def scurves(lines=[], kind='react', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
+def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
 
       if len(lines[0])==6:
-                task='proact'
+                kind=='pro'
 
       if ax is None:
             f, ax = plt.subplots(1, figsize=(6,5))
@@ -36,7 +36,7 @@ def scurves(lines=[], kind='react', yerr=[], pstop=.5, ax=None, linestyles=None,
       lines=[np.array(line) if type(line)==list else line for line in lines]
       pse=[];
 
-      if kind=='react':
+      if kind=='radd':
             x=np.array([400, 350, 300, 250, 200], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
             yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
@@ -81,7 +81,7 @@ def scurves(lines=[], kind='react', yerr=[], pstop=.5, ax=None, linestyles=None,
 
 
 
-def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='react', savestr='fit_plot_rtq'):
+def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='radd', savestr='fit_plot'):
 
       sns.set_context('notebook', font_scale=1.6)
 
@@ -92,8 +92,7 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='react', savestr='
 
       if plot_acc:
             f, (ax1, ax2) = plt.subplots(1,2,figsize=(10, 5.5))
-            savestr = savestr + "_acc"
-            if kind=='react':
+            if kind=='radd':
                   gacc = y[0]
                   sacc = y[1:6]
                   fit_gacc = yhat[0]
@@ -109,7 +108,7 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='react', savestr='
       quant_list = [gq, fit_gq, eq, fit_eq]
       kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
 
-      if kind=='react':
+      if kind=='radd':
             lbs=['Data Cor','Fit Cor','Data Err','Fit Err']
       else:
             lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']

@@ -22,39 +22,42 @@ class RADDCore(object):
 
 
 
-      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, *args, **kws):
+      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, tb=None, *args, **kws):
 
             self.data = data
             self.inits = inits
             self.kind = kind
             self.depends_on = depends_on
             self.fit_on = fit_on
+
             if fit_whole_model:
                   self.fit_flat=True
+
             if self.depends_on != None:
                   self.cond=depends_on.values()[0]
                   self.labels=data[self.cond].unique()
                   self.ncond=len(self.labels)
-            else:
-                  self.cond='flat'
-                  self.labels=None
-                  self.ncond=1
 
             if self.kind in ['radd', 'irace']:
-                  ssd = self.data.query('ttype=="stop"').ssd.unique()
+                  ssd = data[data.ttype=="stop"].ssd.unique()
+                  self.pGo = len(data[data.ttype=='go'])/len(data)
                   self.delays = sorted(ssd.astype(np.int))
                   self.ssd = np.array(self.delays)*.001
             elif self.kind=='pro':
                   self.pGo = sorted(self.data.pGo.unique())
                   self.ssd=np.array([.450])
 
+            if tb is None:
+                  self.tb = data[data.response==1].rt.max()
+            else:
+                  self.tb=tb
             if self.fit_on=='bootstrap':
                   self.indx = range(niter)
             else:
-                  self.indx = list(self.data.idx.unique())
+                  self.indx = list(data.idx.unique())
 
 
-      def rangl_data(self, data, re_cut=.650, pro_cut=.54502, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
+      def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
 
             if self.kind in ['radd', 'irace']:
                   gac = data.query('ttype=="go"').acc.mean()
@@ -66,12 +69,19 @@ class RADDCore(object):
                   return np.hstack([gac, sacc, gq*10, eq*10])
 
             elif kind=='pro':
+                  godf = data[data.response==1]
+                  godf['response']=np.where(godf.rt<self.tb, 1, 0)
+                  data = pd.concat([godf, data[data.response==0]])
                   return 1-data.response.mean()
 
 
-      def rt_quantiles(self, data, cutoff=.560, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
+      def rt_quantiles(self, data, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
             rtq = []
-            godf = data[data.response==1]
+
+            godfx = data[data.response==1]
+            godfx['response']=np.where(godfx.rt<self.tb, 1, 0)
+            godf = godfx[godfx.response==1]
+
             if split=='HiLo' and 'HiLo' not in godf.columns:
                   godf['HiLo']=['x']
                   godf[godf['pGo']<=.5, 'HiLo'] = 'Lo'
@@ -79,11 +89,11 @@ class RADDCore(object):
             if split != None:
                   splitdf = godf.groupby(split)
             else:
-                  rts = godf[godf.rt<=cutoff].rt.values
+                  rts = godf[godf.rt<=self.tb].rt.values
                   return mq(rts, prob=prob)*10
 
             for c, df in splitdf:
-                  rts = df[df.rt<=cutoff].rt.values
+                  rts = df[df.rt<=self.tb].rt.values
                   rtq.append(mq(rts, prob=prob)*10)
 
             return np.hstack(rtq)
@@ -112,22 +122,20 @@ class RADDCore(object):
                   return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 
-      def set_fitparams(self, ntrials=10000, ftol=1.e-4, xtol=1.e-4, maxfev=1000, niter=500, log_fits=True, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, tb=None, **kwgs):
+      def set_fitparams(self, ntrials=10000, ftol=1.e-4, xtol=1.e-4, maxfev=1000, niter=500, log_fits=True, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
 
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
             if self.kind in ['radd', 'irace']:
                   fwts = self.wts.reshape(self.ncond, 16).mean(axis=0)
-                  if tb is None: tb = .650
 
             elif self.kind=='pro':
                   nogo = self.wts[:len(self.pGo)].mean()
                   quant = self.wts[len(self.pGo):].reshape(2, len(prob)).mean(axis=0)
                   fwts = np.hstack([nogo, quant])
-                  if tb is None: tb = .560
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'flat_wts':fwts}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':fwts}
 
             if get_params:
                   return self.fitparams
@@ -237,6 +245,7 @@ class RADDCore(object):
                   qwts_lo = presp[:3].mean()*(np.median(sdlo)/sdlo)
 
                   self.wts = np.hstack([pwts, qwts_hi, qwts_lo])
+                  self.wts[self.wts>4]=self.wts[self.wts<=4].max()
 
 
       def load_default_inits(self):
