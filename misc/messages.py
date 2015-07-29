@@ -12,7 +12,7 @@ def get_one():
 
       return msgs[randint(0, len(msgs))]
 
-def saygo(depends_on={}, labels=[], kind='reactive', fit_on='subjects'):
+def saygo(depends_on={}, labels=[], kind='radd', fit_on='subjects'):
 
       pdeps = depends_on.keys()
       deplist = []

@@ -21,7 +21,7 @@ def set_bounds(a=(.001, 5.000), tr=(.001, .650), v=(.0001, 10.0000), z=(.001, .9
       return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
 
 
-def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='reactive', style='DDM', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9]), ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, tb=.650, method='nelder'):
+def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='radd', style='DDM', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9]), ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, tb=.650, method='nelder'):
 
       """
       The main function for optimizing parameters of reactive stop signal model.
@@ -36,7 +36,7 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='reac
 
             Example:
 
-                  model = build.Model(data=pd.DataFrame, inits=param_dict, depends_on={'v': 'Cond'}, kind='reactive', prepare=1)
+                  model = build.Model(data=pd.DataFrame, inits=param_dict, depends_on={'v': 'Cond'}, kind='radd', prepare=1)
                   model.fit_model(*args, **kwargs)
 
       Based on specified parameter dependencies on task conditions (i.e. depends_on={param: cond})
@@ -123,7 +123,7 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='reac
       return finfo, fitp, yhat
 
 
-def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='reactive', tb=0.650, ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9]), style='DDM'):
+def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='radd', tb=0.650, ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9]), style='DDM'):
 
       """
       simulate data via <simulate_full> and return weighted

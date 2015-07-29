@@ -4,7 +4,7 @@ from __future__ import division
 from numpy import cumsum, where, ceil, array, sqrt, nan
 from numpy.random import random_sample as rs
 
-def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='reactive'):
+def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='radd'):
 
 	"""
 	DVg is instantiated for all trials. DVs contains traces for a subset of
@@ -29,7 +29,7 @@ def run(theta, ntrials=2000, tb=0.650, tau=.0005, si=.01, model='radd', kind='re
 	#simulate all go signal paths
 	DVg = z + cumsum(where(trials<Pg, dx, -dx), axis=1)
 
-	if kind=='proactive':
+	if kind=='pro':
 		return DVg, array([999])
 
 	nSS = int(ntrials*(1-theta['pGo']))

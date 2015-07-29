@@ -19,7 +19,7 @@ ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
 
 class Model(object):
 
-      def __init__(self, kind='reactive', model='radd', inits={}, data=pd.DataFrame, depends_on={'xx':'XX'}, fit='bootstrap', niter=50, *args, **kwargs):
+      def __init__(self, kind='radd', model='radd', inits={}, data=pd.DataFrame, depends_on={'xx':'XX'}, fit='bootstrap', niter=50, *args, **kwargs):
 
             self.model = model
             self.inits = inits
@@ -63,9 +63,9 @@ class Model(object):
             inits = self.inits
             y = self.dat.mean(axis=0)
 
-            if self.kind=='reactive':
+            if self.kind=='radd':
                   self.gopt, self.ghat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
-            elif self.kind=='proactive':
+            elif self.kind=='pro':
                   self.gopt, self.ghat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=self.model, depends=['xx'], maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=1)
 
 
@@ -81,18 +81,18 @@ class Model(object):
             delays = sorted(data.query('ttype=="stop"').ssd.unique().astype(np.int))
 
             if self.fit=='bootstrap':
-                  if self.kind=='reactive':
+                  if self.kind=='radd':
                         ifx = utils.resample_reactive
-                  elif self.kind=='proactive':
+                  elif self.kind=='pro':
                         ifx = utils.resample_proactive
 
                   #CREATE ITERABLE OBJECT CONTAINING NITER of RESAMPLED DATA FOR FITTING
                   self.dat = np.vstack([[ifx(cdf) for i in indx] for c, cdf in self.data.groupby(self.cond)])
 
             elif self.fit=='subjects':
-                  if self.kind=='reactive':
+                  if self.kind=='radd':
                         ifx = utils.rangl_re
-                  elif self.kind=='proactive':
+                  elif self.kind=='pro':
                         ifx = utils.rangl_pro
 
                   #CREATE ITERABLE OBJECT CONTAINING ALL INDIVIDUAL IDX DATA FOR FITTING
@@ -133,10 +133,10 @@ class Model(object):
 
             for i, y in enumerate(self.dat):
 
-                  if self.kind=='reactive':
+                  if self.kind=='radd':
                         params, yhat = fitre.fit_reactive_model(y, inits=inits, ntrials=ntrials, wts=wts, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params, disp=disp)
 
-                  elif self.kind=='proactive':
+                  elif self.kind=='pro':
                         inits['pGo']=cdf.pGo.mean()
                         params, yhat = fitpro.fit_proactive_model(y, inits=inits, ntrials=ntrials, model=model, depends=depends, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=0, disp=disp)
                         #self.store_procost(indx[i], label, params, yhat)
@@ -157,9 +157,9 @@ class Model(object):
       def set_rt_cutoff(self, rt_cutoff=None):
 
             if rt_cutoff==None:
-                  if self.kind=='reactive':
+                  if self.kind=='radd':
                         self.rt_cutoff = .650
-                  elif self.kind=='proactive':
+                  elif self.kind=='pro':
                         self.rt_cutoff = .54502
                   else:
                         self.rt_cutoff=self.data.query('response==1').rt.max()

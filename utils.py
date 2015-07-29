@@ -11,9 +11,9 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='reactive', prob=np.array([.1, .3, .5, .7, .9])):
+def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
 
-      if kind == 'reactive':
+      if kind == 'radd':
             gac = data.query('ttype=="go"').acc.mean()
             sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
             grt = data.query('ttype=="go" & acc==1').rt.values
@@ -22,7 +22,7 @@ def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='reactive', prob=np.array
             eq = mq(ert, prob=prob)
             return np.hstack([gac, sacc, gq*10, eq*10])
 
-      elif kind=='proactive':
+      elif kind=='pro':
             return 1-data.response.mean()
 
 def rt_quantiles(data, cutoff=.560, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
@@ -47,12 +47,12 @@ def rt_quantiles(data, cutoff=.560, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
       return np.hstack(rtq)
 
 
-def resample_data(data, n=120, kind='reactive'):
+def resample_data(data, n=120, kind='radd'):
 
       df=data.copy(); bootlist=list()
       if n==None: n=len(df)
 
-      if kind=='reactive':
+      if kind=='radd':
             for ssd, ssdf in df.groupby('ssd'):
                   boots = ssdf.reset_index(drop=True)
                   orig_ix = np.asarray(boots.index[:])
@@ -97,12 +97,12 @@ def bic(model):
       return -2 * logp + k * np.log(n)
 
 
-def resample_data(data, n=120, kind='reactive'):
+def resample_data(data, n=120, kind='radd'):
 
       df=data.copy(); bootlist=list()
       if n==None: n=len(df)
 
-      if kind=='reactive':
+      if kind=='radd':
             for ssd, ssdf in df.groupby('ssd'):
                   boots = ssdf.reset_index(drop=True)
                   orig_ix = np.asarray(boots.index[:])

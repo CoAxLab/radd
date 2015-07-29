@@ -93,7 +93,7 @@ def simple_prosim(theta, bias_vals, bias='v', pgo=np.arange(0, 1.2, .2)):
 		# stop (dvs) process vectors for each trial (n=2000)
 		# NOTE: in the proactive task SSD occurs too late (450ms)
 		# for the stop-process to affect model output
-		dvg = RADD.run(theta, ntrials=ntrials, tb=tb, kind='proactive')
+		dvg = RADD.run(theta, ntrials=ntrials, tb=tb, kind='pro')
 		# extract no-go probability and go RT from
 		nogo, rt = gen_prosim_df(dvg, theta, tb=tb, rt_cutoff=rt_cutoff)
 		nogo_list.append(nogo); rt_list.append(rt)

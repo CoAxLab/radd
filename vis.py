@@ -13,16 +13,16 @@ sns.set(font='Helvetica')
 sns.set(rc={'text.color': '#222222', 'axes.labelcolor': '#222222', 'figure.facecolor': 'white'})
 
 
-rpal = lambda nc: sns.blend_palette(['#e88379', '#9e261b'], n_colors=nc)
-bpal = lambda nc: sns.blend_palette(['#81aedb', '#2a6095'], n_colors=nc)
-gpal = lambda nc: sns.blend_palette(['#65b88f', '#2c724f'], n_colors=nc)
-ppal = lambda nc: sns.blend_palette(['#848bb6', '#4c527f'], n_colors=nc)
+rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
+bpal = lambda nc: sns.blend_palette(['#81aedb', '#4168B7'], n_colors=nc)
+gpal = lambda nc: sns.blend_palette(['#65b88f', '#16a085'], n_colors=nc)
+ppal = lambda nc: sns.blend_palette(['#848bb6', '#674172'], n_colors=nc)
 
 
-def scurves(lines=[], kind='reactive', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
+def scurves(lines=[], kind='react', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
 
       if len(lines[0])==6:
-                task='pro'
+                task='proact'
 
       if ax is None:
             f, ax = plt.subplots(1, figsize=(6,5))
@@ -36,7 +36,7 @@ def scurves(lines=[], kind='reactive', yerr=[], pstop=.5, ax=None, linestyles=No
       lines=[np.array(line) if type(line)==list else line for line in lines]
       pse=[];
 
-      if kind=='reactive':
+      if kind=='react':
             x=np.array([400, 350, 300, 250, 200], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
             yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
@@ -81,7 +81,7 @@ def scurves(lines=[], kind='reactive', yerr=[], pstop=.5, ax=None, linestyles=No
 
 
 
-def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='reactive', savestr='fit_plot_rtq'):
+def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='react', savestr='fit_plot_rtq'):
 
       sns.set_context('notebook', font_scale=1.6)
 
@@ -93,7 +93,7 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='reactive', savest
       if plot_acc:
             f, (ax1, ax2) = plt.subplots(1,2,figsize=(10, 5.5))
             savestr = savestr + "_acc"
-            if kind=='reactive':
+            if kind=='react':
                   gacc = y[0]
                   sacc = y[1:6]
                   fit_gacc = yhat[0]
@@ -109,7 +109,7 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='reactive', savest
       quant_list = [gq, fit_gq, eq, fit_eq]
       kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
 
-      if kind=='reactive':
+      if kind=='react':
             lbs=['Data Cor','Fit Cor','Data Err','Fit Err']
       else:
             lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']
@@ -245,8 +245,8 @@ def build_decision_axis(theta, gotraces):
 
 def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
 
-      clist=['#2ecc71']*len(dvg_traces)
-      clist_ss = sns.light_palette('#e74c3c', n_colors=6)[::-1]
+      clist=['#2c724f']*len(dvg_traces)
+      clist_ss = sns.light_palette('#c0392b', n_colors=6)[::-1]
 
       for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
             if g[i]>=rtheta['a'] or dvs_traces[nline][i]<=0:
@@ -280,7 +280,7 @@ def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05)):
             plot_traces(DVg[0], trace, theta)
 
 
-def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.650, cg='Green', cr='Red'):
+def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.650, cg='#2c724f', cr='#c0392b'):
 
       f,ax=plt.subplots(1,figsize=(8,5))
       tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z']; ssd=sim_theta['ssd']

@@ -34,7 +34,7 @@ def optimize_theta_flat(y, inits={}, wts=None, ntrials=5000, maxfev=5000, ftol=1
 
             Example:
 
-                  model = build.Model(data=pd.DataFrame, inits=param_dict, kind='reactive', prepare=1)
+                  model = build.Model(data=pd.DataFrame, inits=param_dict, kind='radd', prepare=1)
                   model.fit_model(*args, **kwargs)
 
       args:
@@ -148,7 +148,7 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
       return cost
 
 
-      def cost_fx(popt, y, pc_map={}, ncond=1, wts=None, ntrials=2000, kind='reactive', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
+      def cost_fx(popt, y, pc_map={}, ncond=1, wts=None, ntrials=2000, kind='radd', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
 
             """
             simulate data via <simulate_full> and return weighted
@@ -180,9 +180,9 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
             yhat = RADD(p, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials)
 
             c = y - yhat
-            if kind=='reactive':
+            if kind=='radd':
                   c_wtd = np.hstack([np.hstack(c[:-5].reshape(ncond,11)[:, :6]), np.hstack(wts[:5]*c[:-5].reshape(ncond,11)[:,6:11]), wts[-5:]*c[-5:]])
-            elif kind=='proactive':
+            elif kind=='pro':
                   c_wtd = np.hstack([c.reshape(ncond, 6)[:ncond, 1], c.reshape(ncond, 6)[:, 1:]*wts[ncond:]])
                   c_wtd = wts * c
             return c_wtd
