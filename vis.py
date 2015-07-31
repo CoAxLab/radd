@@ -10,7 +10,7 @@ from radd import utils
 from scipy.stats.mstats import mquantiles as mq
 
 sns.set(font='Helvetica')
-sns.set(rc={'text.color': '#222222', 'axes.labelcolor': '#222222', 'figure.facecolor': 'white'})
+sns.set(style='ticks', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
 
 
 rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
@@ -81,7 +81,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
 
 
-def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='radd', savestr='fit_plot'):
+def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, kind='radd', savestr='fit_plot'):
 
       sns.set_context('notebook', font_scale=1.6)
 
@@ -92,15 +92,18 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=True, kind='radd', savestr='f
 
       if plot_acc:
             f, (ax1, ax2) = plt.subplots(1,2,figsize=(10, 5.5))
-            if kind=='radd':
+            if kind in ['radd', 'irace']:
                   gacc = y[0]
                   sacc = y[1:6]
                   fit_gacc = yhat[0]
                   fit_sacc = yhat[1:6]
+                  c1=gpal(2)
+                  c2=rpal(2)
             else:
                   sacc = y[:6]
                   fit_sacc = yhat[:6]
-
+                  c1=bpal(2)
+                  c2=ppal(2)
       else:
             f, ax1 = plt.subplots(1, figsize=(5, 5.5))
 
@@ -279,17 +282,16 @@ def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05)):
             plot_traces(DVg[0], trace, theta)
 
 
-def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.650, cg='#2c724f', cr='#c0392b'):
-
-      f,ax=plt.subplots(1,figsize=(8,5))
-      tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z']; ssd=sim_theta['ssd']
-
+def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='radd', ssd=.450, ax=None, tau=.0005, tb=.650, cg='#2c724f', cr='#c0392b'):
+      if ax is None:
+            f,ax=plt.subplots(1,figsize=(8,5))
+      tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z'];
       for i, igo in enumerate(DVg):
             ind = np.argmax(igo>=a)
             xx = [np.arange(tr, tr+(len(igo[:ind-1])*tau), tau), np.arange(tr, tb, tau)]
             x = xx[0 if len(xx[0])<len(xx[1]) else 1]
             plt.plot(x, igo[:len(x)], color=cg, alpha=.1, linewidth=.5)
-            if i<len(DVs):
+            if kind in ['irace', 'radd'] and i<len(DVs):
                   if np.any(DVs<=0):
                         ind=np.argmax(DVs[i]<=0)
                   else:
@@ -301,7 +303,7 @@ def plot_traces(DVg, DVs, sim_theta, tau=.0005, tb=.650, cg='#2c724f', cr='#c039
 
       xlow = np.min([tr, ssd])
       xlim = (xlow*.95, 1.05*tb)
-      if np.any(DVs<=0):
+      if kind=='pro' or np.any(DVs<=0):
             ylow=0
             ylim=(-.03, a*1.03)
       else:

@@ -46,11 +46,10 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, weight_presp=True, tb=None, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, tb=None, weighted=True, *args, **kws):
 
             self.data=data
-            self.weight_presp=weight_presp
-            self.is_optimized=False
+            self.weighted=weighted
 
             super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb)
 
@@ -62,10 +61,11 @@ class Model(RADDCore):
             see Optimizer method optimize()
             """
             fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
-            
-            self.opt = Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=self.inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
+            inits = dict(deepcopy(self.inits))
+            self.opt = Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
+            self.residual = self.opt.residual
 
 
       def simulate(self):
@@ -86,7 +86,10 @@ class Model(RADDCore):
             elif self.kind=='pro':
                   dvg = simulator.simulate_pro(theta)
                   yhat = simulator.analyze_pro(dvg, theta)
-            if self.kind=='irace':
+            elif self.kind=='xpro':
+                  dvg = simulator.simulate_xpro(theta)
+                  yhat = simulator.analyze_pro(dvg, theta)
+            elif self.kind=='irace':
                   dvg, dvs = simulator.simulate_irace(theta)
                   yhat = simulator.analyze_irace(dvg, dvs, theta)
 
@@ -105,6 +108,15 @@ class Model(RADDCore):
             else:
                   self.labels = sorted(self.labels)
 
+            if 'pro' in self.kind:
+                  if 'z' in self.inits.keys():
+                        z=self.inits.pop('z')
+                        self.inits['a']=self.inits['a']-z
+                  if 'ssv' in self.inits.keys():
+                        ssv=self.inits.pop('ssv')
+            if 'x' in self.kind and 'xb' not in self.inits.keys():
+                  self.inits['xb'] = 1
+
             params = sorted(self.inits.keys())
             self.pc_map = {}
             for d in self.depends_on.keys():
@@ -114,7 +126,12 @@ class Model(RADDCore):
                   params.extend(params_dep)
             qp_cols = self.__get_header__(params)
             self.__make_dataframes__(qp_cols)
-            self.get_wts()
+            if self.weighted:
+                  self.get_wts()
+            else:
+                  self.fwts=np.ones_like(self.flat_y.flatten())
+                  self.wts=np.ones_like(self.avg_y.flatten())
+
             self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on)
 
 
@@ -134,7 +151,6 @@ class Optimizer(RADDCore):
 
       Handles fitting routines for models of average, individual subject, and bootstrapped data
       """
-
 
       def __init__(self, dframes=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, fitparams=None, *args, **kws):
 
@@ -215,10 +231,11 @@ class Optimizer(RADDCore):
             finfo['AIC']=optmod.aic
             finfo['BIC']=optmod.bic
 
-            yhat = (y.flatten() + optmod.residual)#*wts[:len(self.y)]
-
+            yhat = y.flatten() + optmod.residual
+            self.residual=optmod.residual
+            ndep = len(self.depends_on.keys())
+            fitid=self.kind + " (" + "%s, "*ndep % tuple(self.depends_on.keys())+")"
             if fp['log_fits']:
-                  fitid = time.strftime('%H:%M:%S')
                   with open('fit_report.txt', 'a') as f:
                         f.write(str(fitid)+'\n')
                         f.write(fit_report(optmod, show_correl=False)+'\n')
@@ -233,7 +250,7 @@ class Optimizer(RADDCore):
 
 
 
-      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001)):
+      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.5,10)):
 
             """
             set and return boundaries to limit search space
@@ -242,10 +259,7 @@ class Optimizer(RADDCore):
             if self.kind=='irace':
                   ssv=(abs(ssv[1]), abs(ssv[0]))
 
-            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
-            if self.kind=='pro':
-                  ssv = bounds.pop('ssv')
-
+            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb}
             return bounds
 
 
@@ -258,7 +272,7 @@ class Optimizer(RADDCore):
 
                   if self.kind in ['radd', 'irace']:
                         self.flat_y = y.mean(axis=0)
-                  elif self.kind=='pro':
+                  elif self.kind in ['pro', 'xpro']:
                         nquant = len(self.fitparams['prob'])
                         flatgo = y[:nc].mean(),
                         flatq = y[nc:].reshape(2,nquant).mean(axis=0)
@@ -269,7 +283,7 @@ class Optimizer(RADDCore):
                   if self.kind in ['radd', 'irace']:
                         self.fits.iloc[ri:ri+nc, nc:] = yhat
                         ri+=nc
-                  else:
+                  elif self.kind in ['pro', 'xpro']:
                         self.fits.iloc[i] = yhat
                   if save:
                         self.fits.to_csv(savepth+"fits.csv")

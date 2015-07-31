@@ -69,6 +69,15 @@ def resample_data(data, n=120, kind='radd'):
             bootdf_list.append(bootdf)
             return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
+def safe_keeping():
+
+      from scipy.stats.distributions import norm
+      q=m.avg_y[6:11]
+      nsamples = int(Tg.max()/(len(q)))
+      kq = np.sort(utils.kde_fit_quantiles(q, bw=.1, nsamples=nsamples))
+      kq=kq[kq<=5.6]
+      cp = norm.cdf(kq, loc=kq.mean(), scale=np.std(kq))
+      bias =a[0]*(np.log(.8/(1-.8))/np.log(cp/(1-cp)))
 
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """

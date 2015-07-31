@@ -40,11 +40,12 @@ class Simulator(object):
             self.inits=inits
             self.kind=kind
             self.pc_map=pc_map
-
             self.pnames=['a', 'tr', 'v', 'ssv', 'z']
-            if self.kind=='pro':
-                  ssv_val = self.pnames.remove('ssv')
             self.pvectors=['a', 'tr', 'v']
+            if 'pro' in self.kind:
+                  null = [self.pnames.remove(i) for i in ['ssv', 'z']]
+            if 'x' in self.kind:
+                  self.pnames.append('xb')
             self.pvc=deepcopy(self.pvectors)
             self.y=None
 
@@ -102,7 +103,7 @@ class Simulator(object):
             return out
 
 
-      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001)):
+      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xx=(5,15)):
 
             """
             set and return boundaries to limit search space
@@ -111,7 +112,10 @@ class Simulator(object):
             if kind=='irace':
                   ssv=(abs(ssv[1]), abs(ssv[0]))
 
-            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
+            bounds = {'a':a,'tr':tr,'v':v,'ssv':ssv,'z':z,'xn':xx,'xd':xx}
+            if 'x' not in self.kind:
+                  x = bounds.pop('xn')
+                  x = bounds.pop('xd')
             if self.kind=='pro':
                   ssv = bounds.pop('ssv')
 
@@ -122,11 +126,14 @@ class Simulator(object):
 
             if self.kind=='radd':
                   self.costfx = self.radd_costfx
-            elif self.kind=='irace':
-                  self.costfx = self.irace_costfx
             elif self.kind=='pro':
                   self.costfx = self.pro_costfx
-
+                  self.ntot = int(self.ntot/self.ncond)
+            elif self.kind=='xpro':
+                  self.costfx = self.xpro_costfx
+                  self.ntot = int(self.ntot/self.ncond)
+            elif self.kind=='irace':
+                  self.costfx = self.irace_costfx
 
       def radd_costfx(self, theta):
             """
@@ -140,7 +147,7 @@ class Simulator(object):
             dvg, dvs = self.simulate_radd(p)
             yhat = self.analyze_radd(dvg, dvs, p)
 
-            return (self.y - yhat)*self.wts[:len(self.y)]
+            return (yhat - self.y)*self.wts[:len(self.y)]
 
 
       def pro_costfx(self, theta):
@@ -155,7 +162,22 @@ class Simulator(object):
             dvg = self.simulate_pro(p)
             yhat = self.analyze_pro(dvg, p)
 
-            return (self.y - yhat)*self.wts[:len(self.y)]
+            return (yhat - self.y)*self.wts[:len(self.y)]
+
+
+      def xpro_costfx(self, theta):
+            """
+            ExProactive model cost function
+            """
+
+            if type(theta)==dict:
+                  p = {k: theta[k] for k in theta.keys()}
+            else:
+                  p = theta.valuesdict()
+            dvg = self.simulate_xpro(p)
+            yhat = self.analyze_pro(dvg, p)
+
+            return (yhat - self.y)*self.wts[:len(self.y)]
 
 
       def irace_costfx(self, theta):
@@ -169,7 +191,7 @@ class Simulator(object):
             dvg, dvs = self.simulate_irace(p)
             yhat = self.analyze_irace(dvg, dvs, p)
 
-            return (self.y - yhat)*self.wts[:len(self.y)]
+            return (yhat - self.y)*self.wts[:len(self.y)]
 
 
       def simulate_radd(self, p):
@@ -184,10 +206,17 @@ class Simulator(object):
 
       def simulate_pro(self, p):
 
-            a, tr, v, z, Pg, Tg = self.vectorize_params(p)
-            ntrials = int(self.ntot/self.ncond)
+            a, tr, v, Pg, Tg = self.vectorize_params(p)
             # a/tr/v Bias: ALL CONDITIONS
-            DVg = z + np.cumsum(np.where((rs((self.ncond, ntrials, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
+            DVg = np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
+            return DVg
+
+
+      def simulate_xpro(self, p):
+            a, tr, v, xb, Pg, Tg = self.vectorize_params(p)
+            xtbias = np.exp(xb * np.cumsum([self.dt]*Tg.max()))
+            # a/tr/v Bias: ALL CONDITIONS
+            DVg = xtbias * np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
             return DVg
 
 

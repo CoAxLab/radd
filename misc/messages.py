@@ -5,8 +5,8 @@ def get_one():
 
       msgs = ["Optimize On, Wayne",
       "Optimize On, Garth",
+      "See, it's not that simplex...",
       "I wish you a steep gradient, and a happy Nature paper",
-      "See it's not that Simplex, hey that's an oxymoron...",
       "It'll probably work this time",
       "'They dont think it be like it is, but it do' -Oscar Gamble"]
 
