@@ -21,6 +21,8 @@ ppal = lambda nc: sns.blend_palette(['#848bb6', '#674172'], n_colors=nc)
 
 def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
 
+      sns.set_context('notebook', font_scale=1.6)
+
       if len(lines[0])==6:
                 kind=='pro'
 
@@ -70,9 +72,9 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
             pse.append(xp[idx]/scale_factor)
 
       plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.05, 1.05), yticks=[0, 1])
-      ax.set_xticklabels([int(xt) for xt in xtls], fontsize=18); ax.set_yticklabels([0.0, 1.0], fontsize=18)
-      ax.set_xlabel(xxlabel, fontsize=18); ax.set_ylabel(yylabel, fontsize=18)
-      ax.legend(loc=0, fontsize=16)
+      ax.set_xticklabels([int(xt) for xt in xtls]); ax.set_yticklabels([0.0, 1.0])
+      ax.set_xlabel(xxlabel); ax.set_ylabel(yylabel)
+      ax.legend(loc=0)
 
       plt.tight_layout()
       sns.despine()
@@ -81,7 +83,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
 
 
-def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, kind='radd', savestr='fit_plot'):
+def plot_fits(y, yhat, bw=.01, plot_acc=False, save=False, kind='radd', savestr='fit_plot'):
 
       sns.set_context('notebook', font_scale=1.6)
 
@@ -99,11 +101,13 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, kind='radd', savestr='
                   fit_sacc = yhat[1:6]
                   c1=gpal(2)
                   c2=rpal(2)
+                  xlim = [.43, .65]
             else:
                   sacc = y[:6]
                   fit_sacc = yhat[:6]
                   c1=bpal(2)
                   c2=ppal(2)
+                  xlim = [.45, .6]
       else:
             f, ax1 = plt.subplots(1, figsize=(5, 5.5))
 
@@ -111,7 +115,7 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, kind='radd', savestr='
       quant_list = [gq, fit_gq, eq, fit_eq]
       kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
 
-      if kind=='radd':
+      if 'radd' in kind:
             lbs=['Data Cor','Fit Cor','Data Err','Fit Err']
       else:
             lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']
@@ -122,11 +126,11 @@ def plot_fits(y, yhat, bw=.1, plot_acc=False, save=False, kind='radd', savestr='
       sns.kdeplot(kdefits[2], cumulative=True, label=lbs[2], linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
       sns.kdeplot(kdefits[3], cumulative=True, label=lbs[3], linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
 
-      ax1.set_xlim(4.3, 6.5)
+      ax1.set_xlim(xlim[0], xlim[1])
       ax1.set_ylabel('P(RT<t)')
       ax1.set_xlabel('RT (s)')
       ax1.set_ylim(-.05, 1.05)
-      ax1.set_xticklabels(ax1.get_xticks()*.1)
+      ax1.set_xticklabels(ax1.get_xticks())
 
       if plot_acc:
             # Plot observed and predicted stop curves

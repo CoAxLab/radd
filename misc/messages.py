@@ -22,6 +22,8 @@ def saygo(depends_on={}, labels=[], kind='radd', fit_on='subjects'):
             deplist.append('Onset Time')
       if 'v' in pdeps:
             deplist.append('Drift-Rate')
+      if 'xb' in pdeps:
+            deplist.append('Dynamic Drift')
 
       if len(pdeps)>1:
             pdep = ' and '.join(deplist)

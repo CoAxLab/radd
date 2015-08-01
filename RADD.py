@@ -22,13 +22,29 @@ class RADDCore(object):
 
 
 
-      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, tb=None, *args, **kws):
+      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, tb=None, scale_rts=False, *args, **kws):
 
             self.data = data
             self.inits = inits
             self.kind = kind
             self.depends_on = depends_on
             self.fit_on = fit_on
+
+            if scale_rts:
+                  self.scale = 10.
+            else:
+                  self.scale = 1.
+
+            if 'ssd' in inits.keys():
+                  del self.inits['ssd']
+            if 'pGo' in inits.keys():
+                  del self.inits['pGo']
+
+            if self.kind in ['radd', 'irace', 'xradd', 'xirace']:
+                  self.data_style='re'
+
+            elif self.kind in ['pro', 'xpro']:
+                  self.data_style='pro'
 
             if fit_whole_model:
                   self.fit_flat=True
@@ -38,12 +54,13 @@ class RADDCore(object):
                   self.labels=data[self.cond].unique()
                   self.ncond=len(self.labels)
 
-            if self.kind in ['radd', 'irace']:
+            if self.data_style=='re':
                   ssd = data[data.ttype=="stop"].ssd.unique()
                   self.pGo = len(data[data.ttype=='go'])/len(data)
                   self.delays = sorted(ssd.astype(np.int))
                   self.ssd = np.array(self.delays)*.001
-            elif self.kind in ['pro', 'xpro']:
+
+            elif self.data_style=='pro':
                   self.pGo = sorted(self.data.pGo.unique())
                   self.ssd=np.array([.450])
 
@@ -59,42 +76,42 @@ class RADDCore(object):
 
       def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
 
-            if self.kind in ['radd', 'irace']:
+            if self.data_style=='re':
                   gac = data.query('ttype=="go"').acc.mean()
                   sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
                   grt = data.query('ttype=="go" & acc==1').rt.values
                   ert = data.query('response==1 & acc==0').rt.values
                   gq = mq(grt, prob=prob)
                   eq = mq(ert, prob=prob)
-                  return np.hstack([gac, sacc, gq*10, eq*10])
+                  return np.hstack([gac, sacc, gq*self.scale, eq*self.scale])
 
-            elif self.kind in ['pro', 'xpro']:
+            elif self.data_style=='pro':
                   godf = data[data.response==1]
                   godf['response']=np.where(godf.rt<self.tb, 1, 0)
                   data = pd.concat([godf, data[data.response==0]])
                   return 1-data.response.mean()
 
 
+
       def rt_quantiles(self, data, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
             rtq = []
-
             godfx = data[data.response==1]
             godfx['response']=np.where(godfx.rt<self.tb, 1, 0)
             godf = godfx[godfx.response==1]
 
             if split=='HiLo' and 'HiLo' not in godf.columns:
                   godf['HiLo']=['x']
-                  godf[godf['pGo']<=.5, 'HiLo'] = 'Lo'
+                  godf[godf['pGo'].isin([.2,.4]), 'HiLo'] = 'Lo'
                   godf[godf['pGo']>.5, 'HiLo'] = 'Hi'
             if split != None:
                   splitdf = godf.groupby(split)
             else:
                   rts = godf[godf.rt<=self.tb].rt.values
-                  return mq(rts, prob=prob)*10
+                  return mq(rts, prob=prob)*self.scale
 
             for c, df in splitdf:
                   rts = df[df.rt<=self.tb].rt.values
-                  rtq.append(mq(rts, prob=prob)*10)
+                  rtq.append(mq(rts, prob=prob)*self.scale)
 
             return np.hstack(rtq)
 
@@ -104,7 +121,7 @@ class RADDCore(object):
             df=data.copy(); bootlist=list()
             if n==None: n=len(df)
 
-            if self.kind in ['radd', 'irace']:
+            if self.data_style=='re':
                   for ssd, ssdf in df.groupby('ssd'):
                         boots = ssdf.reset_index(drop=True)
                         orig_ix = np.asarray(boots.index[:])
@@ -113,7 +130,7 @@ class RADDCore(object):
                         bootlist.append(bootdf)
                         #concatenate and return all resampled conditions
                         return rangl_re(pd.concat(bootlist))
-            elif self.kind in ['pro', 'xpro']:
+            elif self.data_style=='pro':
                   boots = df.reset_index(drop=True)
                   orig_ix = np.asarray(boots.index[:])
                   resampled_ix = rwr(orig_ix, get_index=True, n=n)
@@ -127,7 +144,7 @@ class RADDCore(object):
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'scale':self.scale, 'depends_on': self.depends_on}
 
             if get_params:
                   return self.fitparams
@@ -146,19 +163,7 @@ class RADDCore(object):
             if self.fit_on=='bootstrap':
                   self.dat = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in indx]).unstack()
 
-            if self.kind in ['pro', 'xpro']:
-                  datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
-                  rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
-                  rtdat[rtdat<1] = np.nan
-                  rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split=None).values), index=indx)
-                  self.observed = pd.concat([datdf, rtdat], axis=1)
-                  self.observed.columns = qp_cols
-                  self.avg_y = self.observed.mean().values
-                  self.flat_y=np.append(datdf.mean().mean(), rts_flat.mean())
-                  dat = self.observed.values.reshape((len(indx), len(qp_cols)))
-                  fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
-
-            elif self.kind in ['radd', 'irace']:
+            if self.data_style=='re':
                   datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack().unstack()
                   indxx = pd.Series(indx*ncond, name='idx')
                   obs = pd.DataFrame(np.vstack(datdf.values), columns=qp_cols, index=indxx)
@@ -168,6 +173,18 @@ class RADDCore(object):
                   self.flat_y = self.observed.loc[:, qp_cols[0] : qp_cols[-1]].mean().values
                   dat = self.observed.loc[:,qp_cols[0]:qp_cols[-1]].values.reshape(len(indx),ncond,16)
                   fits = pd.DataFrame(np.zeros((len(indxx),len(qp_cols))), columns=qp_cols, index=indxx)
+
+            elif self.data_style=='pro':
+                  datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
+                  rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
+                  rtdat[rtdat<.1] = np.nan
+                  rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split=None).values), index=indx)
+                  self.observed = pd.concat([datdf, rtdat], axis=1)
+                  self.observed.columns = qp_cols
+                  self.avg_y = self.observed.mean().values
+                  self.flat_y=np.append(datdf.mean().mean(), rts_flat.mean())
+                  dat = self.observed.values.reshape((len(indx), len(qp_cols)))
+                  fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
 
             fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
             self.dframes = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
@@ -202,7 +219,7 @@ class RADDCore(object):
             """
 
 
-            if self.kind in ['radd', 'irace']:
+            if self.data_style=='re':
                   obs_var = self.observed.groupby(self.cond).sem().loc[:,'Go':]
                   qvar = obs_var.values[:,6:]
                   pvar = obs_var.values[:,:6]
@@ -218,41 +235,40 @@ class RADDCore(object):
                   # calculate flat weights (collapsing across conditions)
                   self.fwts = self.wts.reshape(self.ncond, 16).mean(axis=0)
 
-            elif self.kind in ['pro', 'xpro']:
-                  #sd = self.observed.sem()
-                  #sdhi = sd.loc['hi10':'hi90'].values
-                  #sdlo = sd.loc['lo10':'lo90'].values
-                  #presp = 1-self.observed.mean().loc['0':'100'].values
+            elif self.data_style=='pro':
 
-                  #sdp = sd.loc['0':'100'].values
-                  #pwts = np.min(sdp)/sdp
+                  upper = self.data[self.data.pGo>.5].response.mean()
+                  lower = self.data[self.data.pGo.isin([.2,.4])].response.mean()
 
-                  #qwts_hi = presp[3:].mean()*(np.min(sdhi)/sdhi)
-                  #qwts_lo = presp[:3].mean()*(np.min(sdlo)/sdlo)
+                  #qvar = self.observed.std().iloc[6:].values
+                  #hi = qvar[:5]; lo = qvar[5:]
+                  #qwts = np.hstack([upper*(hi[2]/hi), lower*(lo[2]/lo)])
 
-                  #self.wts = np.hstack([pwts, qwts_hi, qwts_lo])
-                  #self.wts[self.wts>4]=self.wts[self.wts<=4].max()
+                  pvar = self.data.groupby('pGo').std().response.values
+                  psub1 = np.median(pvar[:-1])/pvar[:-1]
+                  pwts = np.append(psub1, psub1.max())
+                  #pwts = np.array([1.5,1,1,1,1,1.5])
+                  #self.wts = np.hstack([pwts, qwts])
+                  qvar = self.observed.std().iloc[6:].values.reshape(2,5)
+                  #qr = np.median(qvar)/qvar
+                  #qwts = np.append(upper*qr[:5], lower*qr[5:])
 
-                  upper = self.data[self.data.pGo>=.5].response.mean()
-                  lower = self.data[self.data.pGo<.5].response.mean()
+                  sq_ratio = (np.median(qvar, axis=1)/qvar.T).T
+                  wt_hi = upper*sq_ratio[0, :]
+                  wt_lo = lower*sq_ratio[1, :]
+                  self.wts = np.hstack([pwts, wt_hi, wt_lo])
 
-                  qvar = self.observed.std().iloc[6:].values
-                  hi = qvar[:5]; lo = qvar[5:]
-                  qwts = np.hstack([upper*hi[2]/hi, lower*lo[2]/lo])
-
-                  #pvar = self.data.groupby('pGo').std().response.values
-                  #psub1 = np.median(pvar[:-1])/pvar[:-1]
-                  #pwts = np.append(psub1, psub1.max())
-                  pwts = np.array([1.5,1,1,1,2,2])
-                  self.wts = np.hstack([pwts, qwts])
+                  #qwts = np.hstack([upper*(hi[2]/hi), lower*(lo[2]/lo)])
+                  #pwts = np.array([1.5,  1,  1,  1,  2, 2])
+                  #self.wts = np.hstack([pwts, qwts])
                   # calculate flat weights (collapsing across conditions)
                   nogo = self.wts[:len(self.pGo)].mean()
-                  quant = self.wts[len(self.pGo):].reshape(2, len(lo)).mean(axis=0)
+                  quant = self.wts[len(self.pGo):].reshape(2, 5).mean(axis=0)
                   self.fwts = np.hstack([nogo, quant])
-                  #m.wts = np.array([ 2, 1., 1., 1., 1., 2., 0.27620733, 0.52553224, 0.91749432, 2.14544939,        1.40991778, 0.04186772, 0.15626717, 0.27937158, 0.35727406, 0.1821659 ])
+
       def load_default_inits(self):
 
-            if self.kind=='radd':
+            if self.data_style=='re':
                   self.inits = {'a': 0.44, 'ssv': 0.947, 'tr': 0.3049, 'v': 1.1224, 'z': 0.15}
             elif self.kind in ['pro', 'xpro']:
                   self.inits = {}
