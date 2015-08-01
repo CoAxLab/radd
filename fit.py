@@ -93,7 +93,7 @@ class Optimizer(RADDCore):
             opt_kws = {'disp':fp['disp'], 'xtol':fp['xtol'], 'ftol':['ftol'], 'maxfev':fp['maxfev']}
 
             # OPTIMIZE THETA
-            optmod = minimize(self.simulator.cost_fx, theta, method=self.method, options=opt_kws)
+            optmod = minimize(self.simulator.__cost_fx__, theta, method=self.method, options=opt_kws)
 
             optp = optmod.params
             finfo = {k:optp[k].value for k in optp.keys()}

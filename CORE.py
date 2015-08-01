@@ -5,7 +5,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
-from radd.misc.messages import saygo
+from radd.toolbox.messages import saygo
 
 
 class RADDCore(object):

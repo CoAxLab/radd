@@ -44,7 +44,7 @@ class Simulator(object):
       def prepare_simulator(self):
 
             pdepends = self.fitparams['depends_on'].keys()
-            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb','si']
+            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
             self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
 
             fp=dict(deepcopy(self.fitparams))
@@ -73,8 +73,7 @@ class Simulator(object):
 
       def vectorize_params(self, p, as_dict=False):
 
-            """
-            ensures that all parameters are either converted to arrays
+            """ ensures that all parameters are either converted to arrays
             of length ncond.
 
             * can also be accessed directly, outside of optimization routine,
@@ -95,7 +94,6 @@ class Simulator(object):
             as_dict (bool):         return vect. param dictionaries for simulating
 
             sim_info (bool):        return drift coeff, ntimepoints
-
             """
 
             if 'si' in p.keys():
@@ -133,6 +131,7 @@ class Simulator(object):
 
             return Pg, Tg
 
+
       def __update_stop_process__(self, p):
 
             Ps = 0.5*(1 + p['ssv']*self.dx/self.si)
@@ -140,9 +139,11 @@ class Simulator(object):
             return Ps, Ts
 
 
-      def cost_fx(self, theta):
-            """
-            Reactive Model (RADD) cost function
+      def __cost_fx__(self, theta):
+
+            """ Main cost function used for fitting all models self.sim_fx
+            determines which model is simulated (determined when Simulator
+            is initiated)
             """
 
             if type(theta)==dict:
@@ -154,7 +155,6 @@ class Simulator(object):
             yhat = self.sim_fx(p, analyze=True)
 
             return (yhat - self.y)*self.wts[:len(self.y)]
-
 
 
       def simulate_radd(self, p, analyze=True):
@@ -196,7 +196,7 @@ class Simulator(object):
             init_ss = self.lowerb*np.ones((self.ncond, self.nssd, self.nss))
             DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
             if analyze:
-                  return self.analyze_radd(DVg, DVs p)
+                  return self.analyze_radd(DVg, DVs, p)
             else:
                   return DVg, DVs
 
@@ -240,7 +240,6 @@ class Simulator(object):
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
             return np.hstack([gac, qrt])
-
 
 
       def analyze_irace(self, DVg, DVs, p):

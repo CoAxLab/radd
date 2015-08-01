@@ -1,6 +1,5 @@
 #!/usr/local/bin/env python
 from __future__ import division
-
 from radd import fitre, utils, cRADD, build
 from scipy.stats.mstats import mquantiles as mq
 from lmfit import report_fit, fit_report

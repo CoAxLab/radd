@@ -6,7 +6,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
-from radd.misc.messages import saygo
+from radd.toolbox.messages import saygo
 from radd.models import Simulator
 from radd import fit
 from radd.CORE import RADDCore
@@ -68,7 +68,7 @@ class Model(RADDCore):
             self.simulator = self.opt.simulator
 
 
-      def simulate(self):
+      def simulate(self, analyze=True):
 
             if not hasattr(self, 'simulator'):
                   theta=self.inits
@@ -78,16 +78,7 @@ class Model(RADDCore):
                   theta=self.popt
 
             theta = self.simulator.vectorize_params(theta, as_dict=True)
-
-            if 'radd' in self.kind:
-                  dvg, dvs = self.simulator.simulate_radd(theta)
-                  yhat = self.simulator.analyze_radd(dvg, dvs, theta)
-            if 'pro' in self.kind:
-                  dvg = self.simulator.simulate_pro(theta)
-                  yhat = self.simulator.analyze_pro(dvg, theta)
-            if 'irace' in self.kind:
-                  dvg, dvs = self.simulator.simulate_irace(theta)
-                  yhat = self.simulator.analyze_irace(dvg, dvs, theta)
+            yhat = self.simulator.sim_fx(theta, analyze=True)
 
             return yhat
 
