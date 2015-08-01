@@ -9,7 +9,7 @@ from scipy.stats.mstats import mquantiles as mq
 from radd.misc.messages import saygo
 from radd.models import Simulator
 from radd import fit
-from radd.RADD import RADDCore
+from radd.CORE import RADDCore
 
 class Model(RADDCore):
 

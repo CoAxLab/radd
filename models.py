@@ -37,15 +37,15 @@ class Simulator(object):
                   self.kind=kind
                   self.pc_map=pc_map
 
-            pdepends = self.fitparams['depends_on'].keys()
-            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb','si']
-            self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
-
             if prepare:
                   self.prepare_simulator()
 
 
       def prepare_simulator(self):
+
+            pdepends = self.fitparams['depends_on'].keys()
+            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb','si']
+            self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
 
             fp=dict(deepcopy(self.fitparams))
             self.tb=fp['tb']
@@ -60,8 +60,15 @@ class Simulator(object):
             self.lowerb=0
             self.y=None
 
-            if 'pro' in self.kind:
+            if 'radd' in self.kind:
+                  self.sim_fx = self.simulate_radd
+
+            elif 'pro' in self.kind:
+                  self.sim_fx = self.simulate_pro
                   self.ntot = int(self.ntot/self.ncond)
+
+            elif 'irace' in self.kind:
+                  self.sim_fx = self.simulate_irace
 
 
       def vectorize_params(self, p, as_dict=False):
@@ -133,17 +140,7 @@ class Simulator(object):
             return Ps, Ts
 
 
-      def set_costfx(self):
-
-            if 'radd' in self.kind:
-                  self.costfx = self.radd_costfx
-            elif 'pro' in self.kind:
-                  self.costfx = self.pro_costfx
-            elif 'irace' in self.kind:
-                  self.costfx = self.irace_costfx
-
-
-      def radd_costfx(self, theta):
+      def cost_fx(self, theta):
             """
             Reactive Model (RADD) cost function
             """
@@ -154,46 +151,13 @@ class Simulator(object):
                   p = theta.valuesdict()
 
             p = self.vectorize_params(p)
-            dvg, dvs = self.simulate_radd(p)
-            yhat = self.analyze_radd(dvg, dvs, p)
+            yhat = self.sim_fx(p, analyze=True)
 
             return (yhat - self.y)*self.wts[:len(self.y)]
 
 
-      def pro_costfx(self, theta):
-            """
-            Proactive model cost function
-            """
 
-            if type(theta)==dict:
-                  p = dict(deepcopy(theta))
-            else:
-                  p = theta.valuesdict()
-
-            p = self.vectorize_params(p)
-            dvg = self.simulate_pro(p)
-            yhat = self.analyze_pro(dvg, p)
-
-            return (yhat - self.y)*self.wts[:len(self.y)]
-
-
-      def irace_costfx(self, theta):
-            """
-            Independent Race Model cost function
-            """
-            if type(theta)==dict:
-                  p = dict(deepcopy(theta))
-            else:
-                  p = theta.valuesdict()
-
-            p = self.vectorize_params(p)
-            dvg, dvs = self.simulate_irace(p)
-            yhat = self.analyze_irace(dvg, dvs, p)
-
-            return (yhat - self.y)*self.wts[:len(self.y)]
-
-
-      def simulate_radd(self, p):
+      def simulate_radd(self, p, analyze=True):
 
             Pg, Tg = self.__update_go_process__(p)
             Ps, Ts = self.__update_stop_process__(p)
@@ -202,19 +166,27 @@ class Simulator(object):
             DVg = self.lowerb+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
             init_ss = np.array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
             DVs = init_ss[:, :, :, None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
-            return DVg, DVs
+
+            if analyze:
+                  return self.analyze_radd(DVg, DVs, p)
+            else:
+                  return DVg, DVs
 
 
-      def simulate_pro(self, p):
+      def simulate_pro(self, p, analyze=True):
 
             Pg, Tg = self.__update_go_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS
             DVg = self.lowerb+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
-            return DVg
+
+            if analyze:
+                  return self.analyze_pro(DVg, p)
+            else:
+                  return DVg
 
 
-      def simulate_irace(self, p):
+      def simulate_irace(self, p, analyze=True):
 
             Pg, Tg = self.__update_go_process__(p)
             Ps, Ts = self.__update_stop_process__(p)
@@ -223,8 +195,10 @@ class Simulator(object):
             DVg = self.lowerb + (self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
             init_ss = self.lowerb*np.ones((self.ncond, self.nssd, self.nss))
             DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
-
-            return DVg, DVs
+            if analyze:
+                  return self.analyze_radd(DVg, DVs p)
+            else:
+                  return DVg, DVs
 
 
       def analyze_radd(self, DVg, DVs, p):

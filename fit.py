@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from radd.models import Simulator
 from lmfit import Parameters, minimize, fit_report, Minimizer
-from radd.RADD import RADDCore
+from radd.CORE import RADDCore
 
 class Optimizer(RADDCore):
 
@@ -62,13 +62,11 @@ class Optimizer(RADDCore):
 
       def optimize_theta(self, y, inits, flat=False):
 
-            """
-            Optimizes parameters following specified parameter
+            """ Optimizes parameters following specified parameter
             dependencies on task conditions (i.e. depends_on={param: cond})
             """
 
             self.simulator.y = y.flatten()
-            self.simulator.set_costfx()
             self.simulator.is_flat = flat
 
             pnames = deepcopy(self.simulator.pnames)
@@ -95,7 +93,7 @@ class Optimizer(RADDCore):
             opt_kws = {'disp':fp['disp'], 'xtol':fp['xtol'], 'ftol':['ftol'], 'maxfev':fp['maxfev']}
 
             # OPTIMIZE THETA
-            optmod = minimize(self.simulator.costfx, theta, method=self.method, options=opt_kws)
+            optmod = minimize(self.simulator.cost_fx, theta, method=self.method, options=opt_kws)
 
             optp = optmod.params
             finfo = {k:optp[k].value for k in optp.keys()}
@@ -130,10 +128,10 @@ class Optimizer(RADDCore):
 
       def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
 
-            """
-            set and return boundaries to limit search space
+            """ set and return boundaries to limit search space
             of parameter optimization in <optimize_theta>
             """
+
             if 'irace' in self.kind:
                   ssv=(abs(ssv[1]), abs(ssv[0]))
 
