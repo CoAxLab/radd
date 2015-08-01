@@ -95,14 +95,14 @@ class RADDCore(object):
 
       def rt_quantiles(self, data, split='HiLo', prob=np.arange(0.1,1.0,0.2)):
             rtq = []
-            godfx = data[data.response==1]
-            godfx['response']=np.where(godfx.rt<self.tb, 1, 0)
-            godf = godfx[godfx.response==1]
+            godfx = data[(data.response==1) & (data.pGo>0.)]
+            godfx.loc[:, 'response'] = np.where(godfx.rt<self.tb, 1, 0)
+            godf = godfx.query('response==1')
 
-            if split=='HiLo' and 'HiLo' not in godf.columns:
-                  godf['HiLo']=['x']
-                  godf[godf['pGo'].isin([.2,.4]), 'HiLo'] = 'Lo'
-                  godf[godf['pGo']>.5, 'HiLo'] = 'Hi'
+            if split=='HiLo':
+                  godf['HiLo']='x'
+                  godf.ix[godf['pGo'].isin([.2,.4, .6]), 'HiLo'] = 'Lo'
+                  godf.ix[godf['pGo'].isin([.6, .8, 1.0]), 'HiLo'] = 'Hi'
             if split != None:
                   splitdf = godf.groupby(split)
             else:
@@ -195,11 +195,11 @@ class RADDCore(object):
             info = ['nfev','chi','rchi','AIC','BIC','CNVRG']
             cq = ['c'+str(int(n*100)) for n in prob]
 
-            if self.kind in ['radd', 'irace']:
+            if self.data_style=='re':
                   cq = ['c'+str(int(n*100)) for n in prob]
                   eq = ['e'+str(int(n*100)) for n in prob]
                   qp_cols = ['Go'] + self.delays + cq + eq
-            elif self.kind in ['pro', 'xpro']:
+            elif self.data_style=='pro':
                   hi = ['hi'+str(int(n*100)) for n in prob]
                   lo = ['lo'+str(int(n*100)) for n in prob]
                   qp_cols = self.labels + hi + lo
@@ -237,8 +237,8 @@ class RADDCore(object):
 
             elif self.data_style=='pro':
 
-                  upper = self.data[self.data.pGo>.5].response.mean()
-                  lower = self.data[self.data.pGo.isin([.2,.4])].response.mean()
+                  upper = self.data[self.data.isin([.6,.8,1.0])].response.mean()
+                  lower = self.data[self.data.pGo.isin([.2,.4,.6])].response.mean()
 
                   #qvar = self.observed.std().iloc[6:].values
                   #hi = qvar[:5]; lo = qvar[5:]

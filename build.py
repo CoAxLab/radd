@@ -8,7 +8,7 @@ import pandas as pd
 from scipy.stats.mstats import mquantiles as mq
 from radd.misc.messages import saygo
 from radd.models import Simulator
-from radd.fit import Optimizer
+from radd import fit
 from radd.RADD import RADDCore
 
 class Model(RADDCore):
@@ -61,7 +61,7 @@ class Model(RADDCore):
             """
             fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
             inits = dict(deepcopy(self.inits))
-            self.opt = Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
+            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
             self.residual = self.opt.residual
@@ -96,7 +96,7 @@ class Model(RADDCore):
 
             if 'trial_type' in self.data.columns:
                   self.data.rename(columns={'trial_type':'ttype'}, inplace=True)
-
+            single_bound_models = ['xirace', 'irace', 'xpro', 'pro']
             # if numeric, sort first then convert to string
             if not isinstance(self.labels[0], str):
                   ints = sorted([int(l*100) for l in self.labels])
@@ -104,10 +104,10 @@ class Model(RADDCore):
             else:
                   self.labels = sorted(self.labels)
 
+            if self.kind in single_bound_models and 'z' in self.inits.keys():
+                  z=self.inits.pop('z')
+                  self.inits['a']=self.inits['a']-z
             if 'pro' in self.kind:
-                  if 'z' in self.inits.keys():
-                        z=self.inits.pop('z')
-                        self.inits['a']=self.inits['a']-z
                   if 'ssv' in self.inits.keys():
                         ssv=self.inits.pop('ssv')
             if 'x' in self.kind and 'xb' not in self.inits.keys():

@@ -6,9 +6,8 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from radd.models import Simulator
-from radd.RADD import RADDCore
 from lmfit import Parameters, minimize, fit_report, Minimizer
-
+from radd.RADD import RADDCore
 
 class Optimizer(RADDCore):
 
@@ -79,9 +78,9 @@ class Optimizer(RADDCore):
             fp = self.fitparams
 
             ip = deepcopy(inits)
-            if self.kind=='irace':
+            if 'race' in self.kind:
                   ip['ssv']=abs(ip['ssv'])
-            elif self.kind=='radd':
+            elif 'radd' in self.kind:
                   ip['ssv']=-abs(ip['ssv'])
 
             theta=Parameters()
@@ -129,16 +128,16 @@ class Optimizer(RADDCore):
 
 
 
-      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10)):
+      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
 
             """
             set and return boundaries to limit search space
             of parameter optimization in <optimize_theta>
             """
-            if self.kind=='irace':
+            if 'irace' in self.kind:
                   ssv=(abs(ssv[1]), abs(ssv[0]))
 
-            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb}
+            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
             return bounds
 
 
@@ -149,11 +148,11 @@ class Optimizer(RADDCore):
             pcols=self.fitinfo.columns
             for i, y in enumerate(self.dat):
 
-                  if self.kind in ['radd', 'irace']:
+                  if self.data_style=='re':
                         self.flat_y = y.mean(axis=0)
-                  elif self.kind in ['pro', 'xpro']:
+                  elif self.data_style=='pro':
                         nquant = len(self.fitparams['prob'])
-                        flatgo = y[:nc].mean(),
+                        flatgo = y[:nc].mean()
                         flatq = y[nc:].reshape(2,nquant).mean(axis=0)
                         self.flat_y = np.hstack([flatgo, flatq])
 
@@ -161,10 +160,10 @@ class Optimizer(RADDCore):
                   yhat, finfo, popt = self.__opt_routine__(y)
 
                   self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
-                  if self.kind in ['radd', 'irace']:
+                  if self.data_style=='re':
                         self.fits.iloc[ri:ri+nc, nc:] = yhat
                         ri+=nc
-                  elif 'pro' in self.kind:
+                  elif self.data_style=='pro':
                         self.fits.iloc[i] = yhat
                   if save:
                         self.fits.to_csv(savepth+"fits.csv")
@@ -188,6 +187,7 @@ class Optimizer(RADDCore):
                   wts = [fp['flat_wts'], fp['wts']]
                   flat=[1, 0]
                   ncond=[1, self.ncond]
+
                   for i, yi in enumerate(to_fit):
                         self.simulator.ncond = ncond[i]
                         self.simulator.wts = wts[i]

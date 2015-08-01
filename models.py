@@ -38,11 +38,8 @@ class Simulator(object):
                   self.pc_map=pc_map
 
             pdepends = self.fitparams['depends_on'].keys()
-            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb']
+            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb','si']
             self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
-            #for pdep in pdepends:
-            #      self.pvc.remove(pdep)
-
 
             if prepare:
                   self.prepare_simulator()
@@ -63,7 +60,6 @@ class Simulator(object):
             self.lowerb=0
             self.y=None
 
-            #self.pfit = list(set(self.inits.keys()).intersection(self.pnames))
             if 'pro' in self.kind:
                   self.ntot = int(self.ntot/self.ncond)
 
@@ -95,8 +91,9 @@ class Simulator(object):
 
             """
 
-            #if self.is_flat:
-            #      return p
+            if 'si' in p.keys():
+                  self.dx=np.sqrt(p['si']*self.dt)
+
             if 'xb' not in p.keys():
                   p['xb']=1.0
 
@@ -202,9 +199,9 @@ class Simulator(object):
             Ps, Ts = self.__update_stop_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
-            DVg = self.lowerb + (self.xtb[:,None] * np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, - self.dx).T, axis=2))
+            DVg = self.lowerb+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
             init_ss = np.array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
-            DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
+            DVs = init_ss[:, :, :, None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
             return DVg, DVs
 
 
@@ -213,7 +210,7 @@ class Simulator(object):
             Pg, Tg = self.__update_go_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS
-            DVg = self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
+            DVg = self.lowerb+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
             return DVg
 
 
@@ -223,9 +220,9 @@ class Simulator(object):
             Ps, Ts = self.__update_stop_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
-            DVg = self.lowerb + (self.xtb[:,None] * np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
+            DVg = self.lowerb + (self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
             init_ss = self.lowerb*np.ones((self.ncond, self.nssd, self.nss))
-            DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max())) < Ps, self.dx, -self.dx), axis=1)
+            DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
 
             return DVg, DVs
 
@@ -261,7 +258,7 @@ class Simulator(object):
                   qrt = mq(rt[rt<tb], prob=prob)*scale
             else:
                   hi = np.hstack(rt[3:])
-                  lo = np.hstack(rt[1:3])
+                  lo = np.hstack(rt[:3])
                   hilo = [hi[hi<tb], lo[lo<tb]]
                   # compute RT quantiles for correct and error resp.
                   qrt = np.hstack([mq(rti[rti<tb], prob=prob)*scale for rti in hilo])

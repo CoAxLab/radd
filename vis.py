@@ -9,15 +9,16 @@ import seaborn as sns
 from radd import utils
 from scipy.stats.mstats import mquantiles as mq
 
+rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
+bpal = lambda nc: sns.blend_palette(['#81aedb', '#3A539B'], n_colors=nc)
+gpal = lambda nc: sns.blend_palette(['#65b88f', '#27ae60'], n_colors=nc)
+ppal = lambda nc: sns.blend_palette(['#848bb6', '#663399'], n_colors=nc)
+heat = lambda nc: sns.blend_palette(['#f39c12', '#c0392b'], n_colors=nc)
+cool = lambda nc: sns.blend_palette(["#4168B7", "#27ae60"], n_colors=nc)
+slate = lambda nc: sns.blend_palette(['#95A5A6', "#6C7A89"], n_colors=nc)
+
 sns.set(font='Helvetica')
 sns.set(style='ticks', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
-
-
-rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
-bpal = lambda nc: sns.blend_palette(['#81aedb', '#4168B7'], n_colors=nc)
-gpal = lambda nc: sns.blend_palette(['#65b88f', '#16a085'], n_colors=nc)
-ppal = lambda nc: sns.blend_palette(['#848bb6', '#674172'], n_colors=nc)
-
 
 def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
 
@@ -29,7 +30,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
       if ax is None:
             f, ax = plt.subplots(1, figsize=(6,5))
       if colors is None:
-            colors=sns.color_palette('husl', n_colors=len(lines))
+            colors = bpal(len(lines))
       if labels is None:
             labels=['']*len(lines)
       if linestyles is None:
@@ -37,15 +38,17 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
       lines=[np.array(line) if type(line)==list else line for line in lines]
       pse=[];
-
       if kind=='radd':
             x=np.array([400, 350, 300, 250, 200], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
             yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
+            markers=False
       else:
             x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(-5, 11, 10000); xxlim=(-1, 10.5)
             yylabel='P(NoGo)'; scale_factor=100; xxlabel='P(Go)';
+            mc = cool(len(x)); mclinealpha=[.6, .8]*len(lines)
+            markers=True
 
       x=utils.res(-x, lower=x[-1]/10, upper=x[0]/10)
       for i, yi in enumerate(lines):
@@ -66,7 +69,13 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
                   ax.errorbar(x, y, yerr=yerr[i], color=colors[i], ecolor=colors[i], capsize=0, lw=0, elinewidth=3)
 
             if markers:
-                  ax.plot(x, y, lw=2.5, marker='o', ms=5, color=colors[i], label=labels[i])
+                  a = mclinealpha[i]
+                  ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i], alpha=a)
+                  for ii in range(len(y)):
+                        if i%2==0:
+                              ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color=mc[ii], alpha=.5)
+                        else:
+                              ax.plot(x[ii], y[ii], lw=0, marker='x', ms=9, color=mc[ii], mew=3, alpha=1)
             else:
                   ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
             pse.append(xp[idx]/scale_factor)
@@ -105,9 +114,9 @@ def plot_fits(y, yhat, bw=.01, plot_acc=False, save=False, kind='radd', savestr=
             else:
                   sacc = y[:6]
                   fit_sacc = yhat[:6]
-                  c1=bpal(2)
-                  c2=ppal(2)
-                  xlim = [.45, .6]
+                  c1=gpal(2)
+                  c2=bpal(2)
+                  xlim = [.42, .64]
       else:
             f, ax1 = plt.subplots(1, figsize=(5, 5.5))
 
@@ -120,11 +129,11 @@ def plot_fits(y, yhat, bw=.01, plot_acc=False, save=False, kind='radd', savestr=
       else:
             lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']
 
-      sns.kdeplot(kdefits[0], cumulative=True, label=lbs[0], linestyle='-', color=gpal(2)[0], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[1], cumulative=True, label=lbs[1], linestyle='--', color=gpal(2)[1], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[0], cumulative=True, label=lbs[0], linestyle='-', color=c1[0], ax=ax1, linewidth=3.5, alpha=.8)
+      sns.kdeplot(kdefits[1], cumulative=True, label=lbs[1], linestyle='--', color=c1[1], ax=ax1, linewidth=3.5, alpha=1)
 
-      sns.kdeplot(kdefits[2], cumulative=True, label=lbs[2], linestyle='-', color=rpal(2)[0], ax=ax1, linewidth=3.5)
-      sns.kdeplot(kdefits[3], cumulative=True, label=lbs[3], linestyle='--', color=rpal(2)[1], ax=ax1, linewidth=3.5)
+      sns.kdeplot(kdefits[2], cumulative=True, label=lbs[2], linestyle='-', color=c2[0], ax=ax1, linewidth=3.5, alpha=.8)
+      sns.kdeplot(kdefits[3], cumulative=True, label=lbs[3], linestyle='--', color=c2[1], ax=ax1, linewidth=3.5, alpha=1)
 
       ax1.set_xlim(xlim[0], xlim[1])
       ax1.set_ylabel('P(RT<t)')
@@ -134,7 +143,7 @@ def plot_fits(y, yhat, bw=.01, plot_acc=False, save=False, kind='radd', savestr=
 
       if plot_acc:
             # Plot observed and predicted stop curves
-            scurves([sacc, fit_sacc], labels=['Data SC', 'Fit SC'], colors=bpal(2), kind=kind, linestyles=['-','--'], ax=ax2)
+            scurves([sacc, fit_sacc], labels=['Data SC', 'Fit SC'], kind=kind, linestyles=['-','--'], ax=ax2, markers=True)
 
       plt.tight_layout()
       sns.despine()

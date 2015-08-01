@@ -11,6 +11,7 @@ from scipy.stats.mstats import mquantiles as mq
 
 sns.set(font="Helvetica")
 
+
 def style_params(context='notebook'):
       colors = ["#1abc9c","#16a085","#2ecc71","#27ae60",
       "#3498db", "#2980b9", "#4168B7", "#3A539B",
