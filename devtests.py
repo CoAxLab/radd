@@ -1,6 +1,6 @@
 #!/usr/local/bin/env python
 from __future__ import division
-from radd import fitre, utils, cRADD, build
+from radd import utils, build
 from scipy.stats.mstats import mquantiles as mq
 from lmfit import report_fit, fit_report
 import numpy as np
@@ -55,7 +55,7 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
       ax.plot(wres, label='wls', color='#1270b9', alpha=1, linestyle='-', marker='o', ms=3, lw=2)
       ax.plot(ores, label='ols', color='#c0392b', alpha=1, linestyle='-', marker='o', ms=3, lw=2)
 
-      ht = np.array([np.min(htmin), np.max(htmax)])
+      ht = ([np.min(htmin), np.max(htmax)])
       ax.fill_betweenx(ht, x1=0, x2=5, color='#2c3e50', alpha=.1)
       ax.fill_betweenx(ht, x1=5, x2=10, color='#48647c', alpha=.1)
       ax.fill_betweenx(ht, x1=10, x2=15, color='#2c3e50', alpha=.1)
@@ -159,3 +159,22 @@ def recost_scipy(x0, y=None, wts=None, ntrials=2000, pGo=.5, ssd=np.arange(.2, .
             cost = np.hstack([wta*(y[:6]-yhat[:6]), wtc*y[0]*(y[6:11]-yhat[6:11]), wte*y(y[11:]-yhat[11:])]).astype(np.float32)
 
       return cost
+
+def get_default_inits(kind='radd', fit_noise=False):
+
+      if 'radd' in kind:
+            inits = {'a': 0.4441, 'ssv': -0.9473,  'tr': 0.3049, 'v': 1.0919}
+
+      elif 'pro' in kind:
+            inits = {'a':0.4748, 'tr':0.2725, 'v':1.6961}
+
+      elif 'race' in kind:
+            inits = {'a': 0.3926740, 'ssv': 1.1244, 'tr': 0.33502, 'v':1.0379,  'z': 0.1501}
+
+      if 'x' in kind:
+            inits['xb'] = 2
+
+      if fit_noise:
+            inits['si']=.01
+
+      return inits

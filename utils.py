@@ -11,7 +11,7 @@ import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
 
 
-def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
+def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='radd', prob=([.1, .3, .5, .7, .9])):
 
       if kind == 'radd':
             gac = data.query('ttype=="go"').acc.mean()
@@ -68,16 +68,6 @@ def resample_data(data, n=120, kind='radd'):
             bootdf = df.irow(resampled_ix)
             bootdf_list.append(bootdf)
             return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
-
-def safe_keeping():
-
-      from scipy.stats.distributions import norm
-      q=m.avg_y[6:11]
-      nsamples = int(Tg.max()/(len(q)))
-      kq = np.sort(utils.kde_fit_quantiles(q, bw=.1, nsamples=nsamples))
-      kq=kq[kq<=5.6]
-      cp = norm.cdf(kq, loc=kq.mean(), scale=np.std(kq))
-      bias =a[0]*(np.log(.8/(1-.8))/np.log(cp/(1-cp)))
 
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """
@@ -142,7 +132,7 @@ def rwr(X, get_index=False, n=None):
             n = len(X)
 
       resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
-      X_resample = np.array(X[resample_i])
+      X_resample = (X[resample_i])
 
       if get_index:
             return resample_i
@@ -250,17 +240,17 @@ def get_intersection(iter1, iter2):
 
       intersect_set = set(iter1).intersection(set(iter2))
 
-      return np.array([i for i in intersect_set])
+      return ([i for i in intersect_set])
 
 
 
-def get_observed(df, prob=np.array([10, 30, 50, 70, 90])):
+def get_observed(df, prob=([10, 30, 50, 70, 90])):
 
       rt = df.rt
 
       inter_prob = [prob[0]-0] + [prob[i] - prob[i-1] for i in range(1,len(prob))] + [100 - prob[-1]]
       rtquant = mq(rt, prob=prob*.01)
-      observed = np.ceil(np.array(inter_prob)*.01*len(rt)).astype(int)
+      observed = np.ceil((inter_prob)*.01*len(rt)).astype(int)
       n_obs = np.sum(observed)
 
       return [observed, rtquant, n_obs]
@@ -271,15 +261,15 @@ def get_expected(simdf, obs_quant, n_obs):
       simrt = simdf.rt
       q = obs_quant
 
-      first = np.array([len(simrt[simrt.between(simrt.min(), q[0])])/len(simrt)])*n_obs
-      middle = np.array([len(simrt[simrt.between(q[i-1], q[i])])/len(simrt) for i in range(1,len(q))])*n_obs
-      last = np.array([len(simrt[simrt.between(q[-1], simrt.max())])/len(simrt)])*n_obs
+      first = ([len(simrt[simrt.between(simrt.min(), q[0])])/len(simrt)])*n_obs
+      middle = ([len(simrt[simrt.between(q[i-1], q[i])])/len(simrt) for i in range(1,len(q))])*n_obs
+      last = ([len(simrt[simrt.between(q[-1], simrt.max())])/len(simrt)])*n_obs
 
       expected = np.ceil(np.hstack([first, middle, last]))
       return expected
 
 
-def get_obs_quant_counts(df, prob=np.array([.10, .30, .50, .70, .90])):
+def get_obs_quant_counts(df, prob=([.10, .30, .50, .70, .90])):
 
       if type(df) == pd.Series:
             rt=df.copy()
@@ -288,12 +278,12 @@ def get_obs_quant_counts(df, prob=np.array([.10, .30, .50, .70, .90])):
 
       inter_prob = [prob[0]-0] + [prob[i] - prob[i-1] for i in range(1,len(prob))] + [1.00 - prob[-1]]
       obs_quant = mq(rt, prob=prob)
-      observed = np.ceil(np.array(inter_prob)*len(rt)*.94).astype(int)
+      observed = np.ceil((inter_prob)*len(rt)*.94).astype(int)
 
       return observed, obs_quant
 
 
-def get_exp_counts(simdf, obs_quant, n_obs, prob=np.array([.10, .30, .50, .70, .90])):
+def get_exp_counts(simdf, obs_quant, n_obs, prob=([.10, .30, .50, .70, .90])):
 
       if type(simdf) == pd.Series:
             simrt=simdf.copy()
@@ -327,10 +317,10 @@ def ssrt_calc(df, avgrt=.3):
       dfstp = df.query('ttype=="stop"')
       dfgo = df.query('choice=="go"')
 
-      pGoErr = np.array([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
+      pGoErr = ([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
       nlist = [int(pGoErr[i]*len(idf)) for i, (ix, idf) in enumerate(df.groupby('idx'))]
 
-      GoRTs = np.array([idf.rt.sort(inplace=False).values for ix, idf in dfgo.groupby('idx')])
-      ssrt_list = np.array([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
+      GoRTs = ([idf.rt.sort(inplace=False).values for ix, idf in dfgo.groupby('idx')])
+      ssrt_list = ([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
 
       return ssrt_list

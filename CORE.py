@@ -4,6 +4,7 @@ import os
 from copy import deepcopy
 import numpy as np
 import pandas as pd
+from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from radd.toolbox.messages import saygo
 
@@ -22,44 +23,35 @@ class RADDCore(object):
 
 
 
-      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, tb=None, scale_rts=False, *args, **kws):
+      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, scale=1., fit_whole_model=True, tb=None, scale_rts=False, fit_noise=False, pro_ss=False, *args, **kws):
 
             self.data = data
-            self.inits = inits
             self.kind = kind
             self.depends_on = depends_on
             self.fit_on = fit_on
+            self.scale = scale
+            self.fit_flat = fit_whole_model
+            self.cond = depends_on.values()[0]
+            self.labels = data[self.cond].unique()
+            self.ncond = len(self.labels)
 
-            if scale_rts:
-                  self.scale = 10.
+            if 'pro' in self.kind:
+                  self.data_style='pro'
             else:
-                  self.scale = 1.
-
-            if 'ssd' in inits.keys():
-                  del self.inits['ssd']
-            if 'pGo' in inits.keys():
-                  del self.inits['pGo']
-
-            if self.kind in ['radd', 'irace', 'xradd', 'xirace']:
                   self.data_style='re'
 
-            elif self.kind in ['pro', 'xpro']:
-                  self.data_style='pro'
+            if inits is None:
+                  self.inits = self.get_default_inits()
+            else:
+                  self.inits = inits
 
-            if fit_whole_model:
-                  self.fit_flat=True
-
-            if self.depends_on != None:
-                  self.cond=depends_on.values()[0]
-                  self.labels=data[self.cond].unique()
-                  self.ncond=len(self.labels)
+            self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
 
             if self.data_style=='re':
                   ssd = data[data.ttype=="stop"].ssd.unique()
                   self.pGo = len(data[data.ttype=='go'])/len(data)
                   self.delays = sorted(ssd.astype(np.int))
                   self.ssd = np.array(self.delays)*.001
-
             elif self.data_style=='pro':
                   self.pGo = sorted(self.data.pGo.unique())
                   self.ssd=np.array([.450])
@@ -68,10 +60,12 @@ class RADDCore(object):
                   self.tb = data[data.response==1].rt.max()
             else:
                   self.tb=tb
+
             if self.fit_on=='bootstrap':
                   self.indx = range(niter)
             else:
                   self.indx = list(data.idx.unique())
+
 
 
       def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
@@ -130,6 +124,7 @@ class RADDCore(object):
                         bootlist.append(bootdf)
                         #concatenate and return all resampled conditions
                         return rangl_re(pd.concat(bootlist))
+
             elif self.data_style=='pro':
                   boots = df.reset_index(drop=True)
                   orig_ix = np.asarray(boots.index[:])
@@ -261,14 +256,66 @@ class RADDCore(object):
                   #qwts = np.hstack([upper*(hi[2]/hi), lower*(lo[2]/lo)])
                   #pwts = np.array([1.5,  1,  1,  1,  2, 2])
                   #self.wts = np.hstack([pwts, qwts])
-                  # calculate flat weights (collapsing across conditions)
+                  #calculate flat weights (collapsing across conditions)
                   nogo = self.wts[:len(self.pGo)].mean()
                   quant = self.wts[len(self.pGo):].reshape(2, 5).mean(axis=0)
                   self.fwts = np.hstack([nogo, quant])
 
-      def load_default_inits(self):
 
-            if self.data_style=='re':
-                  self.inits = {'a': 0.44, 'ssv': 0.947, 'tr': 0.3049, 'v': 1.1224, 'z': 0.15}
-            elif self.kind in ['pro', 'xpro']:
-                  self.inits = {}
+      def get_default_inits(self, include_ss=False, fit_noise=False):
+
+            if 'radd' in self.kind:
+                  inits = {'a':0.4441, 'ssv':-0.9473, 'tr':0.3049, 'v':1.0919, 'z':0.1542}
+
+            elif 'pro' in self.kind:
+                  if len(self.depends_on.keys())>1:
+                        inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
+                  elif 'tr' in self.depends_on.keys():
+                        inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
+                  elif 'v' in self.depends_on.keys():
+                        inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
+
+            elif 'race' in self.kind:
+                  inits = {'a':0.3926740, 'ssv':1.1244, 'tr':0.33502, 'v':1.0379,  'z':0.1501}
+
+            return inits
+
+
+
+      def __check_inits__(self, pro_ss=False, fit_noise=False):
+
+            single_bound_models = ['xirace', 'irace', 'xpro', 'pro']
+            x = array([1.39320, 1.52083, 1.65874, 1.75701, 1.89732, 1.94935])
+            if 'ssd' in self.inits.keys():
+                  del self.inits['ssd']
+            if 'pGo' in self.inits.keys():
+                  del self.inits['pGo']
+
+            if pro_ss and 'ssv' not in self.inits.keys():
+                  self.inits['ssv'] = -0.9976
+
+            if self.kind in single_bound_models and 'z' in self.inits.keys():
+                  z=self.inits.pop('z')
+                  self.inits['a']=self.inits['a']-z
+
+            if 'race' in self.kind:
+                  self.inits['ssv']=abs(self.inits['ssv'])
+            elif 'radd' in self.kind:
+                  self.inits['ssv']=-abs(self.inits['ssv'])
+
+            if 'pro' in self.kind:
+                  if pro_ss and 'ssv' not in self.inits.keys():
+                        self.inits['ssv'] = -0.9976
+                  elif not pro_ss and 'ssv' in self.inits.keys():
+                        ssv=self.inits.pop('ssv')
+
+            if 'x' in self.kind and 'xb' not in self.inits.keys():
+                  self.inits['xb'] = 2
+            if fit_noise and 'si' not in self.inits.keys():
+                  self.inits['si'] = .01
+
+
+      def rename_bad_cols(self):
+
+            if 'trial_type' in self.data.columns:
+                  self.data.rename(columns={'trial_type':'ttype'}, inplace=True)

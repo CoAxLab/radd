@@ -47,7 +47,7 @@ def scurves(lines=[], task='ssRe', linestyles=[], pstop=.5, sxdata=None, pse_onl
 	sns.set_context(rc=style_params['context'])
 	sns.set_context(rc={'lines.markeredgewidth': 0.1})
 
-        lines=[np.array(line) if type(line)==list else line for line in lines]
+        lines=[(line) if type(line)==list else line for line in lines]
 
 	if colors==[]:
 		colors=sns.color_palette(sns.color_palette(),len(lines))
@@ -58,7 +58,7 @@ def scurves(lines=[], task='ssRe', linestyles=[], pstop=.5, sxdata=None, pse_onl
 	pse=[]; xsim=np.linspace(-5, 110, 10000)
 
 	if 'Re' in task:
-		x=np.array([400, 350, 300, 250, 200], dtype='float')
+		x=([400, 350, 300, 250, 200], dtype='float')
 		xsim=np.linspace(15, 50, 10000)
 		scale_factor=100
 		xxlim=(17, 42)
@@ -68,7 +68,7 @@ def scurves(lines=[], task='ssRe', linestyles=[], pstop=.5, sxdata=None, pse_onl
 		yylabel="P(Stop)"
 		c=colors; ms=4.5
 	else:
-		x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
+		x=([100, 80, 60, 40, 20, 0], dtype='float')
 		xxticks=np.arange(0, 12, 2)#x/scale_factor
 		xxticklabels=np.arange(0.0, 1.2, .20)
 		xxlim=(-1, 11)
@@ -143,7 +143,7 @@ def prort(bars, lines=[], berr=[], labels=['Data', 'Drift', 'Onset'], colors=['#
         if lines!=[]:
 
                 for i, line in enumerate(lines):
-                        ax.plot(x, np.array(line), color=colors[i+1], lw=4, label=labels[i+1])
+                        ax.plot(x, (line), color=colors[i+1], lw=4, label=labels[i+1])
 
         ax.legend(loc=0, fontsize=17)
         yylim=[490, 560]
@@ -169,11 +169,11 @@ def plot_bar_lines(bars, lines, berr, lerr, labels=['Data', 'Drift', 'Onset'], c
         if berr==[]:
                 berr=np.zeros_like(bars)
         if np.any(bars<1):
-                bars=np.array(bars)*1000
-                berr=np.array(berr)*1000
+                bars=(bars)*1000
+                berr=(berr)*1000
         elif np.any(bars<10):
-                bars=np.array(bars)*100
-                berr=np.array(berr)*100
+                bars=(bars)*100
+                berr=(berr)*100
 
 
         ax.bar(x, bars, yerr=berr, width=10, align='center', color=colors[0], error_kw=dict(elinewidth=2, capsize=0, ecolor='k'), label=labels[0], alpha=1)
@@ -181,13 +181,13 @@ def plot_bar_lines(bars, lines, berr, lerr, labels=['Data', 'Drift', 'Onset'], c
         if lerr==[]:
                 lerr=np.zeros_like(lines)
         if np.any(lines[0]<1):
-                lines=[np.array(l)*1000 for l in lines]
-                lerr=[np.array(l)*1000 for l in lerr]
-                dist_list=[[np.array(l)*1000 for l in d] for d in dist_list]
+                lines=[(l)*1000 for l in lines]
+                lerr=[(l)*1000 for l in lerr]
+                dist_list=[[(l)*1000 for l in d] for d in dist_list]
         elif np.any(lines[0])<10:
-                lines=[np.array(l)*100 for l in lines]
-                lerr=[np.array(l)*100 for l in lerr]
-                dist_list=[[np.array(l)*100 for l in d] for d in dist_list]
+                lines=[(l)*100 for l in lines]
+                lerr=[(l)*100 for l in lerr]
+                dist_list=[[(l)*100 for l in d] for d in dist_list]
 
         if plot_lines:
                 ax.errorbar(x, lines[0], yerr=lerr, color=colors[1], lw=2, label=labels[1])
@@ -207,7 +207,7 @@ def plot_bar_lines(bars, lines, berr, lerr, labels=['Data', 'Drift', 'Onset'], c
 
         ax.legend(loc=0, fontsize=20)
 
-        yylim=np.array([490, 560])
+        yylim=([490, 560])
         plt.setp(ax, ylim=(yylim[0],yylim[1]), yticks=yylim, xticks=x)
         ax.set_yticklabels((yylim[0],yylim[1]), fontsize=22)
         ax.set_xticklabels([str(int(xt)) for xt in x], fontsize=22)
@@ -225,8 +225,8 @@ def bar_line_evs(means=None, err=None, sxdata=None, colors=['#4E4E8B', '#AD3333'
 	f = plt.figure(figsize=(5.5, 6.5))
 	ax = f.add_subplot(111)
 	sns.despine()
-	x=np.array([1.1,1.9])
-	xsim=np.array([1.2, 1.8])
+	x=([1.1,1.9])
+	xsim=([1.2, 1.8])
 
 	ax.bar(x, means[:2], yerr=err[:2], color=colors[0], align='center',
 		error_kw=dict(elinewidth=2, ecolor='black'))
@@ -262,7 +262,7 @@ def bar_line_evs(means=None, err=None, sxdata=None, colors=['#4E4E8B', '#AD3333'
 def plot_re_bar(y, ysim=[], yerr=[], ysimerr=[], sxdata=None, colors=[], ylabel='RT (ms)', yylim=[550,580], save=False, savepath="./"):
 
 	f, ax = plt.subplots(1, figsize=(5.5, 6.5))
-	x=np.array([1,2]); xsim=np.array([1.1, 1.9]);
+	x=([1,2]); xsim=([1.1, 1.9]);
 
 	if colors==[]:
 		colors=['#4E4E8B', '#AD3333', "#074feb", "#f81447"]
@@ -297,7 +297,7 @@ def plot_re_bar(y, ysim=[], yerr=[], ysimerr=[], sxdata=None, colors=[], ylabel=
 def re_rt_viofits(y, ysim, colors=[], labels=[], save=False, savepath="./", bw='scott'):
 
 	f, ax = plt.subplots(1, figsize=(5.5, 6.5))
-	x=np.array([.8, 2.2]); xsim=np.array([1.2, 2.4])
+	x=([.8, 2.2]); xsim=([1.2, 2.4])
 	xxlim=(x[0]-.8, x[-1]+.8); yylim=[490, 630]
 	xxticklabels=['Easy', 'Difficult']
 
@@ -513,7 +513,7 @@ def plot_thalamus_bold_mean_traces(df=pd.DataFrame, outpath="./", pgo=np.arange(
         #yshort = ng_thal_list[0]
         #ng=ax2.fill_between(xx, ng_thal_list[1], ng_thal_list[1]-(ng_thal_list[1]-ng_thal_list[0]), facecolor='RoyalBlue', alpha=0.2)
 
-        xxticks=np.array([tlist[-1], tlist[-1]+np.max(duration)])
+        xxticks=([tlist[-1], tlist[-1]+np.max(duration)])
         xxticklabels=[str(xx*.001) for xx in xxticks]
 
 	for ax in [ax1, ax2]:
@@ -598,7 +598,7 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         redf = pd.read_csv("/Users/kyle/Dropbox/CoAx/SS/Reactive/Re_Data.csv")
         popt = pd.read_csv("/Users/kyle/Dropbox/CoAx/SS/Reactive/BSL/Boot/RADD/rwr_rebsl_popt_radd.csv", index_col=0)
         popt = popt.mean().to_dict()
-        popt['pGo']=.5; prob = np.array([.025, .25, .5, .75, .975])
+        popt['pGo']=.5; prob = ([.025, .25, .5, .75, .975])
         simdf = fitre.simple_resim(popt, return_all=True, ntrials=ntrials)
 
         if sim_hist==True:
@@ -606,7 +606,7 @@ def plot_allrt_quants(ntrials=2000, bins=20, sim_hist=False, sim_kde=True, emp_h
         else:
                 norm_hist=True
         f, axes = plt.subplots(2, 3, figsize=(14, 8))
-        axes = np.array(axes).flatten()
+        axes = (axes).flatten()
 
 
         emp_cor = redf.query('ttype=="go" & choice=="go"').rt.values
@@ -678,7 +678,7 @@ def ssgo_go_rts(data):
         """
 
         f, axes = plt.subplots(2, 3, figsize=(15, 7))
-        axes = np.array(axes).flatten()
+        axes = (axes).flatten()
         prob = np.arange(.025, .975, .25)
 
         for i, (ssd, df) in enumerate(data.groupby('ssd')):
@@ -826,7 +826,7 @@ def style_params(style='ticks', context='paper'):
 		'text.color': '.15','xtick.color': '.15','xtick.direction': 'out','xtick.major.size': 6,'xtick.minor.size': 3,'ytick.color': '.15',
 		'ytick.direction': 'out','ytick.major.size': 6,'ytick.minor.size': 3}
 	if context=='paper':
-		cdict={'axes.labelsize': 16,'axes.titlesize': 17.28,'figure.figsize': np.array([ 5,  5]), 'grid.linewidth': 0.8,
+		cdict={'axes.labelsize': 16,'axes.titlesize': 17.28,'figure.figsize': ([ 5,  5]), 'grid.linewidth': 0.8,
 		'legend.fontsize': 14.,'lines.linewidth': 3.0,'lines.markeredgewidth': 0.0, 'lines.markersize': 6.,'patch.linewidth': 0.24,
 		'xtick.labelsize': 14.,'xtick.major.pad': 5.6, 'xtick.major.width': 0.8,'xtick.minor.width': 0.4,'ytick.labelsize': 14.,
 		'ytick.major.pad': 5.6,'ytick.major.width': 0.8,'ytick.minor.width': 0.4}

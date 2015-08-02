@@ -5,10 +5,10 @@ import time
 from copy import deepcopy
 import numpy as np
 import pandas as pd
-from scipy.stats.mstats import mquantiles as mq
+from numpy import array
 from radd.toolbox.messages import saygo
-from radd.models import Simulator
 from radd import fit
+from radd.models import Simulator
 from radd.CORE import RADDCore
 
 class Model(RADDCore):
@@ -45,64 +45,82 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, tb=None, weighted=True, scale_rts=False, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, rtscale=1., niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, *args, **kws):
 
             self.data=data
             self.weighted=weighted
 
-            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, scale_rts=scale_rts)
+            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, scale=rtscale, fit_noise=fit_noise, pro_ss=pro_ss)
 
             self.prepare_fit()
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, ftol=1.e-4, xtol=1.e-4, maxfev=1000, niter=500, log_fits=True, disp=True, prob=np.array([.1, .3, .5, .7, .9])):
+      def optimize(self, save=True, savepth='./', ntrials=10000, ftol=1.e-4, xtol=1.e-4, maxfev=1000, niter=500, log_fits=True, disp=True, prob=array([.1, .3, .5, .7, .9])):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
+
             fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
+            self.__check_inits__()
+
             inits = dict(deepcopy(self.inits))
+
             self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
+            # get residuals
             self.residual = self.opt.residual
-            self.simulator = self.opt.simulator
 
+            # get Simulator object used by
+            # Optimizer to fit the model
+            self.sim = self.opt.simulator
 
-      def simulate(self, analyze=True):
+      def make_simulator(self):
+            """ initializes Simulator object as Model attr
+            using popt or inits if model is not optimized
+            """
 
-            if not hasattr(self, 'simulator'):
+            if not hasattr(self, 'popt'):
                   theta=self.inits
-                  self.set_fitparams()
-                  self.simulator=Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
             else:
                   theta=self.popt
 
-            theta = self.simulator.vectorize_params(theta, as_dict=True)
-            yhat = self.simulator.sim_fx(theta, analyze=True)
+            self.sim=Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
 
-            return yhat
+      def simulate(self, analyze=True):
+            """ simulate yhat vector using popt or inits
+            if model is not optimized
 
+            :: Arguments ::
+                  analyze (bool):
+                        if True (default) returns yhat vector
+                        if False, returns decision traces
+            :: Returns ::
+                  out (array):
+                        1d array if analyze is True
+                        ndarray of decision traces if False
+            """
+
+            if not hasattr(self, 'sim'):
+                  self.make_simulator()
+
+            theta = self.sim.vectorize_params(theta, as_dict=True)
+            out = self.sim.sim_fx(theta, analyze=analyze)
+
+            return out
 
       def prepare_fit(self):
 
-            if 'trial_type' in self.data.columns:
-                  self.data.rename(columns={'trial_type':'ttype'}, inplace=True)
-            single_bound_models = ['xirace', 'irace', 'xpro', 'pro']
-            # if numeric, sort first then convert to string
+            """ performs model setup and initiates dataframes.
+            Automatically run when Model object is initialized
+            """
+
+
             if not isinstance(self.labels[0], str):
                   ints = sorted([int(l*100) for l in self.labels])
                   self.labels = [str(intl) for intl in ints]
             else:
                   self.labels = sorted(self.labels)
-
-            if self.kind in single_bound_models and 'z' in self.inits.keys():
-                  z=self.inits.pop('z')
-                  self.inits['a']=self.inits['a']-z
-            if 'pro' in self.kind:
-                  if 'ssv' in self.inits.keys():
-                        ssv=self.inits.pop('ssv')
-            if 'x' in self.kind and 'xb' not in self.inits.keys():
-                  self.inits['xb'] = 1
 
             params = sorted(self.inits.keys())
             self.pc_map = {}
@@ -111,12 +129,18 @@ class Model(RADDCore):
                   params_dep = ['_'.join([d, l]) for l in self.labels]
                   self.pc_map[d] = params_dep
                   params.extend(params_dep)
+
             qp_cols = self.__get_header__(params)
+            # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
             self.__make_dataframes__(qp_cols)
+            # CALCULATE WEIGHTS FOR COST FX
             if self.weighted:
                   self.get_wts()
             else:
+                  # MAKE PSEUDO WEIGHTS
                   self.fwts=np.ones_like(self.flat_y.flatten())
                   self.wts=np.ones_like(self.avg_y.flatten())
 
             self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on)
+
+            self.set_fitparams()

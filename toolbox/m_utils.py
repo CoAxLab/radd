@@ -80,4 +80,4 @@ def get_intersection(iter1, iter2):
 
       intersect_set = set(iter1).intersection(set(iter2))
 
-      return np.array([i for i in intersect_set])
+      return ([i for i in intersect_set])

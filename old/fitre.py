@@ -54,7 +54,7 @@ def fit_reactive_model(y, inits={}, depends=['xx'], wts=None, model='radd', ntri
       return params, yhat
 
 
-def rangl_re(data, cutoff=.650, prob=np.array([.1, .3, .5, .7, .9])):
+def rangl_re(data, cutoff=.650, prob=([.1, .3, .5, .7, .9])):
 
 	gac = data.query('ttype=="go"').acc.mean()
 	sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
@@ -99,8 +99,8 @@ def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
       ngo=len(DVg) - nss
       tr=theta['tr']; a=theta['a']; ssd=theta['ssd']
       #define RT functions for upper and lower bound processes
-      upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
-      lower_rt = lambda DV: np.array([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
+      upper_rt = lambda x, DV: ([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
+      lower_rt = lambda DV: ([ssd + np.argmax(DVi<=0)*dt if np.any(DVi<=0) else 999 for DVi in DV])
       #check for and record go trial RTs
       grt = upper_rt(a, DVg[nss:, :])
       if model=='abias':
@@ -123,7 +123,7 @@ def gen_resim_df(DVg, DVs, theta, model='radd', tb=.650, dt=.0005):
 
       # Prepare and return simulations df
       # Compare trialwise SS-Respond RT and SSRT to determine outcome (i.e. race winner)
-      stop = np.array([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
+      stop = ([1 if ert[i]>si else 0 for i, si in enumerate(ssrt)])
       response = np.append(np.abs(1-stop), np.where(grt<tb, 1, 0))
       # Add "choice" column to pad for error in later stages
       choice=np.where(response==1, 'go', 'stop')
@@ -150,7 +150,7 @@ def simple_resim(theta, ssdlist=range(200, 450, 50), ntrials=2000):
       (#TODO : see docs) for further analysis
       """
 
-      ssdlist = np.array(ssdlist)*.001
+      ssdlist = (ssdlist)*.001
       dflist = []
       theta['pGo']=.5
       for ssd in ssdlist:

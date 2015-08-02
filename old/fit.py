@@ -21,7 +21,7 @@ def set_bounds(a=(.001, 5.000), tr=(.001, .650), v=(.0001, 10.0000), z=(.001, .9
       return {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z}
 
 
-def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='radd', style='DDM', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9]), ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, tb=.650, method='nelder'):
+def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='radd', style='DDM', ssd=np.arange(.2, .45, .05), prob=([.1, .3, .5, .7, .9]), ntrials=5000, maxfev=5000, ftol=1.e-3, xtol=1.e-3, disp=True, log_fits=True, tb=.650, method='nelder'):
 
       """
       The main function for optimizing parameters of reactive stop signal model.
@@ -46,7 +46,7 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='radd
 
       args:
 
-            y (np.array [nCondx16):             observed values entered into cost fx
+            y ( [nCondx16):             observed values entered into cost fx
                                                 see build.Model for format info
 
             inits (dict):                       parameter dictionary including
@@ -60,7 +60,7 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='radd
                                                 instances of parameter id in bias list
                                                 are included in lmfit Parameters() object
 
-            wts (np.array [2x10])               weights to be applied (separately) to
+            wts ( [2x10])               weights to be applied (separately) to
                                                 correct and error RT quantiles. Can be estimated
                                                 using get_wts() method of build.Model object
 
@@ -123,7 +123,7 @@ def optimize_theta(y, inits={}, pc_map={}, wts=None, ncond=2, pGo=.5, kind='radd
       return finfo, fitp, yhat
 
 
-def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='radd', tb=0.650, ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9]), style='DDM'):
+def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='radd', tb=0.650, ssd=np.arange(.2, .45, .05), prob=([.1, .3, .5, .7, .9]), style='DDM'):
 
       """
       simulate data via <simulate_full> and return weighted
@@ -137,9 +137,9 @@ def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='radd', tb
 
       args:
             theta (dict):           param dict
-            y (np.array):           NCond x 16 array of observed
+            y ():           NCond x 16 array of observed
                                     values entered into cost f(x)
-            wts (np.array)          weights separately applied to
+            wts ()          weights separately applied to
                                     correct and error RT quantile
                                     comparison
       returns:
@@ -154,7 +154,7 @@ def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='radd', tb
 
       if ncond>1:
             for pkey, pkc in pc_map.items():
-                  p[pkey] = np.array([p[pc] for pc in pkc])
+                  p[pkey] = ([p[pc] for pc in pkc])
 
       yhat = RADD(p, prob=prob, ncond=ncond, ssd=ssd, ntot=ntrials, tb=tb)
 
@@ -163,7 +163,7 @@ def cost_fx(popt, y, pc_map={}, ncond=2, wts=None, ntrials=2000, kind='radd', tb
       return c
 
 
-def RADD(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False, style='DDM'):
+def RADD(p, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False, style='DDM'):
       """
 
       Main code for simulating Reactive RADD model
@@ -215,13 +215,13 @@ def RADD(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45,
 
       # a/tr/v Bias: ALL CONDITIONS, ALL SSD
       DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
-      init_ss = np.array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
+      init_ss = ([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
       DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
 
       grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
       ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
       ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt,np.nan)
-      ert = np.array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
+      ert = ([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
 
       #collapse across SSD and get average ssrt vector for each condition
       # compute RT quantiles for correct and error resp.
@@ -236,7 +236,7 @@ def RADD(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45,
       return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
-def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=np.array([.1, .3, .5, .7, .9]), ssd=.45, ntot=2000, tb=0.545, dt=.0005, si=.01, return_traces=False, style='DDM'):
+def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=([.1, .3, .5, .7, .9]), ssd=.45, ntot=2000, tb=0.545, dt=.0005, si=.01, return_traces=False, style='DDM'):
       """
 
       main code for simulating Proactive RADD model
@@ -300,7 +300,7 @@ def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=np.array([.1, .3, .5, .7,
 
 
 
-def ipRADD(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False, style='DDM'):
+def ipRADD(p, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01, return_traces=False, style='DDM'):
       """
 
       Main code for simulating Independent Race
@@ -353,7 +353,7 @@ def ipRADD(p, ncond=2, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .4
       grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
       ert = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
       ssrt = ((np.where((DVs.max(axis=3).T>=a).T,ssd[:, None]+np.argmax((DVs.T>=a).T,axis=3)*dt,np.nan).T)).T
-      ert = np.array([ert[i] * np.ones_like(ssrt[i]) for i in range(len(ert))])
+      ert = ([ert[i] * np.ones_like(ssrt[i]) for i in range(len(ert))])
 
       #collapse across SSD and get average ssrt vector for each condition
       # compute RT quantiles for correct and error resp.

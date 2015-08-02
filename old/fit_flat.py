@@ -39,13 +39,13 @@ def optimize_theta_flat(y, inits={}, wts=None, ntrials=5000, maxfev=5000, ftol=1
 
       args:
 
-            y (np.array [nCondx16):             observed values entered into cost fx
+            y ( [nCondx16):             observed values entered into cost fx
                                                 see build.Model for format info
 
             inits (dict):                       parameter dictionary including
                                                 keys: a, tr, v, ssv, z
 
-            wts (np.array [2x5]):               weights to be applied (separately) to
+            wts ( [2x5]):               weights to be applied (separately) to
                                                 correct and error RT quantiles. Can be estimated
                                                 using get_wts() method of build.Model object
 
@@ -121,9 +121,9 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
 
       args:
             theta (dict):           param dict
-            y (np.array):           1 x 16 array of observed
+            y ():           1 x 16 array of observed
                                     values entered into cost f(x)
-            wts (np.array)          weights separately applied to
+            wts ()          weights separately applied to
                                     correct and error RT quantile
                                     comparison
       returns:
@@ -134,7 +134,7 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
       p = {k:theta[k] for k in theta.keys()}
 
       ssd=np.arange(.2, .45, .05);
-      prob=np.array([.1, .3, .5, .7, .9])
+      prob=([.1, .3, .5, .7, .9])
 
       yhat = simulate_flat(p['a'], p['tr'], p['v'], -abs(p['ssv']),  p['z'], prob=prob, ssd=ssd, ntot=ntrials)
 
@@ -148,7 +148,7 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
       return cost
 
 
-      def cost_fx(popt, y, pc_map={}, ncond=1, wts=None, ntrials=2000, kind='radd', ssd=np.arange(.2, .45, .05), prob=np.array([.1, .3, .5, .7, .9])):
+      def cost_fx(popt, y, pc_map={}, ncond=1, wts=None, ntrials=2000, kind='radd', ssd=np.arange(.2, .45, .05), prob=([.1, .3, .5, .7, .9])):
 
             """
             simulate data via <simulate_full> and return weighted
@@ -162,9 +162,9 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
 
             args:
                   theta (dict):           param dict
-                  y (np.array):           NCond x 16 array of observed
+                  y ():           NCond x 16 array of observed
                                           values entered into cost f(x)
-                  wts (np.array)          weights separately applied to
+                  wts ()          weights separately applied to
                                           correct and error RT quantile
                                           comparison
             returns:
@@ -189,7 +189,7 @@ def recost_flat(theta, y=None, ntrials=2000, wts=None):
 
 
 
-def RADD(a, tr, v, ssv, z, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
+def RADD(a, tr, v, ssv, z, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=2000, tb=0.650, dt=.0005, si=.01):
 
       """
 
@@ -225,7 +225,7 @@ def RADD(a, tr, v, ssv, z, prob=np.array([.1, .3, .5, .7, .9]), ssd=np.arange(.2
 
       # Flat Model (Ncond == 1), ALL SSD
       DVg = z + np.cumsum(np.where(rs((ntot, Tg)) < Pg, dx, -dx), axis=1)
-      init_ss = np.array([DVg[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
+      init_ss = ([DVg[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
       DVs = init_ss[:, :, None] + np.cumsum(np.where(rs((nssd, nss, Ts.max()))<Ps, dx, -dx), axis=2)
 
       grt = np.where(DVg[nss:, :].max(axis=1)>=a, tr + np.argmax(DVg[nss:, :]>=a, axis=1)*dt, np.nan)

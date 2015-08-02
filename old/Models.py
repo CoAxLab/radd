@@ -31,7 +31,7 @@ class Model(object):
             self.cond = self.depends_on.values()[0]
             self.fitparams = None
             self.live_update = True
-            self.prob=np.array([.1, .3, .5, .7, .9])
+            self.prob=([.1, .3, .5, .7, .9])
             self.i = 0
             self.fit = fit
             if self.fit=='bootstrap':

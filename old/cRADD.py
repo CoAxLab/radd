@@ -79,7 +79,7 @@ def run_single(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=200
 
       # SINGLE CONDITION, ALL SSD
       DVg = z + np.cumsum(np.where(rs((ntot, Tg)) < Pg, dx, -dx), axis=1)
-      init_ss = np.array([DVg[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
+      init_ss = ([DVg[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)])
       DVs = init_ss[:, :, None] + np.cumsum(np.where(rs((nssd, nss, Ts.max()))<Ps, dx, -dx), axis=2)
 
       return DVg, DVs
@@ -125,14 +125,14 @@ def run_full(a, tr, v, ssv, z, ssd=np.arange(.2, .45, .05), nss=1000, ntot=2000,
 
       # ALL CONDITIONS, ALL SSD
       DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg)).T < Pg), dx, -dx).T, axis=2)
-      init_ss = np.array([np.array([DVc[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)]) for DVc in DVg])
+      init_ss = ([([DVc[:nss, ix] for ix in np.where(Ts<Tg, Tg-Ts, 0)]) for DVc in DVg])
       DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((ncond, nssd, nss, Ts.max()))<Ps, dx, -dx), axis=3)
 
       return DVg, DVs
 
 
 
-def analyze_reactive_single(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=np.array([.1, .3, .5, .7, .9])):
+def analyze_reactive_single(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005, p=([.1, .3, .5, .7, .9])):
 
       """
       Takes Go and Stop process vectors from run() output and
@@ -164,7 +164,7 @@ def analyze_reactive_single(DVg, DVs, a,  tr, ssd, nss=1000, tb=.650, tau=.0005,
 
 
 
-def analyze_reactive_full(DVg, DVs, a,  tr, ssd, ncond=2, nss=1000, tb=.650, tau=.0005, p=np.array([.1, .3, .5, .7, .9])):
+def analyze_reactive_full(DVg, DVs, a,  tr, ssd, ncond=2, nss=1000, tb=.650, tau=.0005, p=([.1, .3, .5, .7, .9])):
 
       """
       Takes Go and Stop process vectors from run_full() output and
@@ -187,7 +187,7 @@ def analyze_reactive_full(DVg, DVs, a,  tr, ssd, ncond=2, nss=1000, tb=.650, tau
 
       # Get response and stop accuracy information
       gac = np.where(grt<tb, 1, 0).mean(axis=1)
-      sacc = np.array([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
+      sacc = ([1 - np.where(ert[i]<ssrt[i], 1, 0).mean(axis=1) for i in range(ncond)])
 
 
 

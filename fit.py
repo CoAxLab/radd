@@ -5,6 +5,7 @@ import time
 from copy import deepcopy
 import numpy as np
 import pandas as pd
+from numpy import array
 from radd.models import Simulator
 from lmfit import Parameters, minimize, fit_report, Minimizer
 from radd.CORE import RADDCore
@@ -76,11 +77,6 @@ class Optimizer(RADDCore):
             fp = self.fitparams
 
             ip = deepcopy(inits)
-            if 'race' in self.kind:
-                  ip['ssv']=abs(ip['ssv'])
-            elif 'radd' in self.kind:
-                  ip['ssv']=-abs(ip['ssv'])
-
             theta=Parameters()
             for pkey, pc_list in self.pc_map.items():
                   if flat: break

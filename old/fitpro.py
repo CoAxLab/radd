@@ -37,7 +37,7 @@ def fit_proactive_model(y, inits={}, depends=['xx'], model='radd', SSD=.450, tb=
 
 
 
-def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=np.array([1, 3, 5, 7, 9])):
+def rangl_pro(data, tb=.560, rt_cutoff=.54502, prob=([1, 3, 5, 7, 9])):
 
 	godf = data.query('response==1')
 	gotrials=godf[godf.rt<=rt_cutoff]
@@ -68,7 +68,7 @@ def gen_prosim_df(DVg, theta, tb=.560, dt=.0005):
 
 	tr=theta['tr']; a=theta['a']; ssd=.450
 
-	upper_rt = lambda x, DV: np.array([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
+	upper_rt = lambda x, DV: ([tr + np.argmax(DVi>=x)*dt if np.any(DVi>=x) else 999 for DVi in DV])
 
 	#get vector of response times
 	rt = upper_rt(a, DVg)
@@ -98,4 +98,4 @@ def simple_prosim(theta, bias_vals, bias='v', pgo=np.arange(0, 1.2, .2)):
 		nogo, rt = gen_prosim_df(dvg, theta, tb=tb, rt_cutoff=rt_cutoff)
 		nogo_list.append(nogo); rt_list.append(rt)
 
-	return np.array(nogo_list), np.array(rt_list[1:])*1000
+	return (nogo_list), (rt_list[1:])*1000

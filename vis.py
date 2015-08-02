@@ -3,6 +3,7 @@ from __future__ import division
 import os
 import pandas as pd
 import numpy as np
+from numpy import array
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -36,15 +37,15 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
       if linestyles is None:
             linestyles = ['-']*len(lines)
 
-      lines=[np.array(line) if type(line)==list else line for line in lines]
+      lines=[(line) if type(line)==list else line for line in lines]
       pse=[];
       if kind=='radd':
-            x=np.array([400, 350, 300, 250, 200], dtype='float')
+            x=array([400, 350, 300, 250, 200], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
             yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
             markers=False
       else:
-            x=np.array([100, 80, 60, 40, 20, 0], dtype='float')
+            x=array([100, 80, 60, 40, 20, 0], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(-5, 11, 10000); xxlim=(-1, 10.5)
             yylabel='P(NoGo)'; scale_factor=100; xxlabel='P(Go)';
             mc = cool(len(x)); mclinealpha=[.6, .8]*len(lines)
@@ -88,7 +89,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
       plt.tight_layout()
       sns.despine()
 
-      return np.array(pse)
+      return (pse)
 
 
 
@@ -226,7 +227,7 @@ def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .0
             xinit_ss.append(leng - lens)
             ssi.append(strace[0])
             dvslist[i] = np.append(gtrace[:leng-lens], strace)
-            dvslist[i] = np.append(dvslist[i], np.array([0]))
+            dvslist[i] = np.append(dvslist[i], ([0]))
 
       return [dvglist, dvslist, xinit_ss, ssi]
 

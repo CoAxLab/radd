@@ -31,8 +31,8 @@ def Proboot(data, inits, niter=150, depends_on={'v':'Cond'}, save_path="./", ntr
 
 		fits_i, rts_i, ps_i = fitpro.run_proactive_model(pstop, rt, inits, filt_rts=filt_rts,					ntrials=ntrials, depends_on=depends_on, nx=i, simfx=simfx, tb=tb,maxfev=maxfev, ftol=ftol, xtol=xtol, pgolist=pgolist, disp=disp)
 
-		ps_pred.loc[i,:]=np.array(ps_i)
-		rt_pred.loc[i,:]=np.array(rts_i)
+		ps_pred.loc[i,:]=(ps_i)
+		rt_pred.loc[i,:]=(rts_i)
 		fit_results.append(fits_i)
 
 

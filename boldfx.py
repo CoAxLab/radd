@@ -27,7 +27,7 @@ def trialwise_integrated_BOLD(df=pd.DataFrame, outcomes=['s','g','ng']):
       dfdict={out: thal[thal['outcome']==out].copy() for out in outcomes}
 
       for dfi in dfdict.values():
-            dfi['mag']=[np.cumsum(np.array(i))[-1] for i in dfi.thalamus.values]
+            dfi['mag']=[np.cumsum((i))[-1] for i in dfi.thalamus.values]
 
       return dfdict
 

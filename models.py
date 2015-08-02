@@ -3,14 +3,14 @@ from __future__ import division
 import time
 from copy import deepcopy
 import numpy as np
+from numpy import array
 from numpy.random import random_sample as rs
 from scipy.stats.mstats import mquantiles as mq
+from scipy.stats.distributions import norm
 
 
 class Simulator(object):
-
-      """
-      Core code for simulating RADD models
+      """ Core code for simulating RADD models
 
             * All cond, SSD, & timepoints are simulated simultaneously
 
@@ -40,11 +40,10 @@ class Simulator(object):
             if prepare:
                   self.prepare_simulator()
 
-
       def prepare_simulator(self):
 
             pdepends = self.fitparams['depends_on'].keys()
-            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
+            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'toff']
             self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
 
             fp=dict(deepcopy(self.fitparams))
@@ -57,6 +56,7 @@ class Simulator(object):
             self.scale=fp['scale']
             self.nssd=len(self.ssd)
             self.nss=int(.5*self.ntot)
+
             self.lowerb=0
             self.y=None
 
@@ -69,6 +69,16 @@ class Simulator(object):
 
             elif 'irace' in self.kind:
                   self.sim_fx = self.simulate_irace
+
+            prob = fp['prob']
+            nss = int(.5*self.ntot)
+            ssd = fp['ssd']
+            tb = fp['tb']
+
+            self.resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.0005
+            self.resp_lo = lambda trace: np.argmax((trace.T<=0).T, axis=3)*.0005
+            self.RT = lambda ontime, rbool: ontime[:, None]+(rbool*np.where(rbool==0, np.nan, 1))
+            self.fRTQ = lambda zpd: map((lambda x:mq(x[0][x[0]<x[1]], prob)), zpd)
 
 
       def vectorize_params(self, p, as_dict=False):
@@ -111,12 +121,18 @@ class Simulator(object):
                   elif pkc[0] not in p.keys():
                         p[pkey] = p[pkey]*np.ones(len(pkc))
                   else:
-                        p[pkey] = np.array([p[pc] for pc in pkc])
+                        p[pkey] = array([p[pc] for pc in pkc])
 
             if 'z' in p.keys():
                   self.lowerb = p['z']
 
             return p
+
+
+      def __sample_interactive_ssrt__(loc, sigma):
+            nrvs = self.nss*self.ncond
+            rvs_shape = (self.nssd, nrvs/self.nssd)
+            return (self.ssd + norm.rvs(loc, sigma, nrvs).reshape(rvs_shape).T).T
 
 
       def __update_go_process__(self, p):
@@ -125,9 +141,9 @@ class Simulator(object):
             Tg = np.ceil((self.tb-p['tr'])/self.dt).astype(int)
             t = np.cumsum([self.dt]*Tg.max())
             if 'x' in self.kind:
-                  self.xtb = np.array([np.exp(xtb*t) for xtb in p['xb']])
+                  self.xtb = array([np.exp(xtb*t) for xtb in p['xb']])
             else:
-                  self.xtb = np.array([np.ones(len(t)) for i in range(self.ncond)])
+                  self.xtb = array([np.ones(len(t)) for i in range(self.ncond)])
 
             return Pg, Tg
 
@@ -135,7 +151,10 @@ class Simulator(object):
       def __update_stop_process__(self, p):
 
             Ps = 0.5*(1 + p['ssv']*self.dx/self.si)
-            Ts = np.ceil((self.tb-self.ssd)/self.dt).astype(int)
+            if self.kind=='interactive':
+                  Ts = np.ceil((self.tb-(self.ssd + p['toff']))/self.dt).astype(int)
+            else:
+                  Ts = np.ceil((self.tb-self.ssd)/self.dt).astype(int)
             return Ps, Ts
 
 
@@ -151,7 +170,6 @@ class Simulator(object):
             else:
                   p = theta.valuesdict()
 
-            p = self.vectorize_params(p)
             yhat = self.sim_fx(p, analyze=True)
 
             return (yhat - self.y)*self.wts[:len(self.y)]
@@ -159,22 +177,24 @@ class Simulator(object):
 
       def simulate_radd(self, p, analyze=True):
 
+            p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
             Ps, Ts = self.__update_stop_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
             DVg = self.lowerb+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
-            init_ss = np.array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
+            init_ss = array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
             DVs = init_ss[:, :, :, None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
 
             if analyze:
                   return self.analyze_radd(DVg, DVs, p)
             else:
-                  return DVg, DVs
+                  return [DVg, DVs]
 
 
       def simulate_pro(self, p, analyze=True):
 
+            p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS
@@ -186,8 +206,34 @@ class Simulator(object):
                   return DVg
 
 
+      def simulate_interactive(self, p, analyze=True):
+
+            p = self.vectorize_params(p)
+            Pg, Tg = self.__update_go_process__(p)
+            Ps, Ts = self.__update_stop_process__(p)
+
+            # a/tr/v Bias: ALL CONDITIONS, ALL SSD
+            DVg = self.lowerb+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
+
+            allcond_interacted = []
+            for i, DVc in enumerate(DVg):
+                  interacted = []
+                  for toff in Ts:
+                        DVc[:self.nss, toff:] = DVc[:self.nss, toff:] + np.cumsum(np.where((rs(self.ncond, self.ntot, Tg.max()-toff)).T<Ps), self.dx, -self.dx)
+                        interacted.append(DVc)
+                  allcond_interacted.append(interacted)
+
+            DVg_interacted = np.append(allcond_interacted)
+
+            if analyze:
+                  return self.analyze_interactive(DVg_interacted, p)
+            else:
+                  return DVg_interacted
+
+
       def simulate_irace(self, p, analyze=True):
 
+            p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
             Ps, Ts = self.__update_stop_process__(p)
 
@@ -196,47 +242,46 @@ class Simulator(object):
             init_ss = self.lowerb*np.ones((self.ncond, self.nssd, self.nss))
             DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
             if analyze:
-                  return self.analyze_radd(DVg, DVs, p)
+                  return self.analyze_irace(DVg, DVs, p)
             else:
-                  return DVg, DVs
+                  return [DVg, DVs]
 
 
       def analyze_radd(self, DVg, DVs, p):
 
-            dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd;
-            tb=self.tb; prob=self.prob; scale=self.scale; a=p['a']; tr=p['tr']
+            nss = self.nss; prob = self.prob
+            ssd = self.ssd; tb = self.tb
+            ncond = self.ncond
 
-            grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
-            ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
-            ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:, None]+np.argmax(DVs<=0, axis=3)*dt,np.nan)
+            gdec = self.resp_up(DVg, p['a'])
+            sdec = self.resp_lo(DVs)
+            gort = self.RT(p['tr'], gdec)
+            ssrt = self.RT(ssd, sdec)
 
-            # compute RT quantiles for correct and error resp.
-            ert = np.array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
-            gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*scale for rtc in grt])
-            eq = [mq(ert[i][ert[i]<ssrt[i]], prob=prob)*scale for i in range(ncond)]
-            # Get response and stop accuracy information
-            gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
+            ert = gort[:, :nss][:, None] * np.ones_like(ssrt)
+            eq = self.fRTQ(zip(ert, ssrt))
+            gq = self.fRTQ(zip(gort,[tb]*ncond))
+            gac = np.nanmean(np.where(gort<tb, 1, 0), axis=1)
             sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
 
-            return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
+            return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(self.ncond)])
 
 
       def analyze_pro(self, DVg, p):
 
-            dt=self.dt; ncond=self.ncond; tb=self.tb; prob=self.prob;
-            scale=self.scale; a=p['a']; tr=p['tr']
+            nss = self.nss; prob = self.prob
+            ssd = self.ssd; tb = self.tb
+            ncond = self.ncond
 
-            rt = (tr+(np.where((DVg.max(axis=2).T>=a).T, np.argmax((DVg.T>=a).T,axis=2)*dt, 999).T)).T
+            gdec = self.resp_up(DVg, p['a'])
+            rt = self.RT(p['tr'], gdec)
 
             if self.is_flat:
-                  qrt = mq(rt[rt<tb], prob=prob)*scale
+                  qrt = mq(rt[rt<tb], prob=prob)
             else:
                   hi = np.hstack(rt[3:])
                   lo = np.hstack(rt[:3])
-                  hilo = [hi[hi<tb], lo[lo<tb]]
-                  # compute RT quantiles for correct and error resp.
-                  qrt = np.hstack([mq(rti[rti<tb], prob=prob)*scale for rti in hilo])
-
+                  qrt = np.hstack(self.fRTQ(zip([hi, lo],[tb]*2)))
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
             return np.hstack([gac, qrt])
@@ -252,7 +297,7 @@ class Simulator(object):
             ssrt = ((np.where((DVs.max(axis=3).T>=a).T,ssd[:, None]+np.argmax((DVs.T>=a).T,axis=3)*dt,np.nan).T)).T
 
             # compute RT quantiles for correct and error resp.
-            ert = np.array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
+            ert = array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
             gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*scale for rtc in grt])
             eq = [mq(ert[i][ert[i]<ssrt[i]], prob=prob)*scale for i in range(ncond)]
             # Get response and stop accuracy information
