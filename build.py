@@ -87,6 +87,7 @@ class Model(RADDCore):
 
             self.sim=Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
 
+
       def simulate(self, analyze=True):
             """ simulate yhat vector using popt or inits
             if model is not optimized
@@ -108,6 +109,7 @@ class Model(RADDCore):
             out = self.sim.sim_fx(theta, analyze=analyze)
 
             return out
+
 
       def prepare_fit(self):
 
