@@ -239,7 +239,6 @@ def res(arr,lower=0.0,upper=1.0):
 def get_intersection(iter1, iter2):
 
       intersect_set = set(iter1).intersection(set(iter2))
-
       return ([i for i in intersect_set])
 
 

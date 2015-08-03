@@ -6,7 +6,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.models import Simulator
+from radd import models
 from lmfit import Parameters, minimize, fit_report, Minimizer
 from radd.CORE import RADDCore
 
@@ -30,6 +30,7 @@ class Optimizer(RADDCore):
 
             self.fits=dframes['fits']
             self.fitinfo=dframes['fitinfo']
+
             self.data=dframes['data']
             self.dynamic=dynamic
             self.fitparams=fitparams
@@ -38,11 +39,15 @@ class Optimizer(RADDCore):
                   self.avg_y=dframes['avg_y']
                   self.flat_y=dframes['flat_y']
             elif fit_on in ['subjects', 'bootstrap']:
+                  self.indx_list = dframes['observed'].index
                   self.dat=dframes['dat']
 
             self.method=method
             self.wts=wts
             self.pc_map=pc_map
+
+            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
+            self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
 
             super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
 
@@ -52,14 +57,74 @@ class Optimizer(RADDCore):
             if self.fitparams is None:
                   self.set_fitparams()
 
-            self.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
+            self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
             if self.fit_on=='average':
-                  yhat, fitinfo, popt = self.__opt_routine__(self.avg_y)
+                  yhat, fitinfo, popt = self.__opt_routine__(self.avg_y, fit_id='AVERAGE DATA')
                   return yhat, fitinfo, popt
             else:
                   fits, fitinfo, popt = self.__indx_optimize__(save=save, savepth=savepth)
                   return fits, fitinfo, popt
+
+
+      def __indx_optimize__(self, save=True, savepth='./'):
+
+            ri=0; nc=self.ncond
+            pcols=self.fitinfo.columns
+            for i, y in enumerate(self.dat):
+
+                  fit_id = ''.join(["SUBJECT ",  str(self.indx_list[i])])
+
+                  if self.data_style=='re':
+                        self.flat_y = y.mean(axis=0)
+                  elif self.data_style=='pro':
+                        nquant = len(self.fitparams['prob'])
+                        flatgo = y[:nc].mean()
+                        flatq = y[nc:].reshape(2,nquant).mean(axis=0)
+                        self.flat_y = np.hstack([flatgo, flatq])
+
+                  # OPTIMIZE IDX MODEL
+                  yhat, finfo, popt = self.__opt_routine__(y, fit_id=fit_id)
+
+                  self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
+                  if self.data_style=='re':
+                        self.fits.iloc[ri:ri+nc, :] = yhat.reshape(nc, len(self.fits.columns))
+                        ri+=nc
+                  elif self.data_style=='pro':
+                        self.fits.iloc[i] = yhat
+                  if save:
+                        self.fits.to_csv(savepth+"fits.csv")
+                        self.fitinfo.to_csv(savepth+"fitinfo.csv")
+
+            self.popt=self.fitinfo.mean()
+
+
+
+      def __opt_routine__(self, y, fit_id='AVERAGE DATA'):
+
+            p = dict(deepcopy(self.inits))
+            fp = self.fitparams
+
+            if not self.fit_flat:
+                  self.simulator.ncond = self.ncond
+                  self.simulator.wts = self.wts
+                  self.fit_id=''.join([fit_id, ' FULL'])
+                  yhat, finfo, popt = self.optimize_theta(y=y, inits=p, flat=False)
+            else:
+                  fit_ids = [''.join([fit_id, ' FLAT']), ''.join([fit_id, ' FULL'])]
+                  to_fit = [self.flat_y, y]
+                  wts = [fp['flat_wts'], fp['wts']]
+                  flat=[1, 0]
+                  ncond=[1, self.ncond]
+
+                  for i, yi in enumerate(to_fit):
+                        self.simulator.ncond = ncond[i]
+                        self.simulator.wts = wts[i]
+                        self.fit_id = fit_ids[i]
+                        yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, flat=flat[i], )
+                        p = deepcopy(popt)
+
+            return yhat, finfo, popt
 
 
       def optimize_theta(self, y, inits, flat=False):
@@ -70,10 +135,8 @@ class Optimizer(RADDCore):
 
             self.simulator.y = y.flatten()
             self.simulator.is_flat = flat
-
-            pnames = deepcopy(self.simulator.pnames)
-            pfit = list(set(inits.keys()).intersection(pnames))
-
+            self.simulator.pvc = deepcopy(self.pvc)
+            pfit = list(set(inits.keys()).intersection(self.pnames))
             lim = self.set_bounds()
             fp = self.fitparams
 
@@ -106,18 +169,23 @@ class Optimizer(RADDCore):
             yhat = y.flatten() + self.residual
 
             pkeys = self.depends_on.keys()
-            fitid=self.kind + ": %s" % str(tuple(pkeys))
-
-            if fp['log_fits']:
-                  with open('fit_report.txt', 'a') as f:
-                        f.write(str(fitid)+'\n')
-                        f.write(fit_report(optmod, show_correl=False)+'\n')
-                        f.write('AIC: %.8f' % optmod.aic + '\n')
-                        f.write('BIC: %.8f' % optmod.bic + '\n')
-                        f.write('chi: %.8f' % optmod.chisqr + '\n')
-                        f.write('rchi: %.8f' % optmod.redchi + '\n')
-                        f.write('Converged: %s' % finfo['CNVRG'] + '\n')
-                        f.write('--'*20+'\n\n')
+            pvals = self.depends_on.values()
+            model_id = "MODEL: %s" % self.kind
+            dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
+            wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in self.simulator.wts)+'])'
+            
+            with open('fit_report.txt', 'a') as f:
+                  f.write(str(self.fit_id)+'\n')
+                  f.write(str(model_id)+'\n')
+                  f.write(str(dep_id)+'\n')
+                  f.write(wts_str+'\n\n')
+                  f.write(fit_report(optmod, show_correl=False)+'\n\n')
+                  f.write('AIC: %.8f' % optmod.aic + '\n')
+                  f.write('BIC: %.8f' % optmod.bic + '\n')
+                  f.write('chi: %.8f' % optmod.chisqr + '\n')
+                  f.write('rchi: %.8f' % optmod.redchi + '\n')
+                  f.write('Converged: %s' % finfo['CNVRG'] + '\n')
+                  f.write('--'*20+'\n\n')
 
             return  yhat, finfo, popt
 
@@ -139,59 +207,3 @@ class Optimizer(RADDCore):
 
             bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
             return bounds
-
-
-
-      def __indx_optimize__(self, save=True, savepth='./'):
-
-            ri=0; nc=self.ncond
-            pcols=self.fitinfo.columns
-            for i, y in enumerate(self.dat):
-
-                  if self.data_style=='re':
-                        self.flat_y = y.mean(axis=0)
-                  elif self.data_style=='pro':
-                        nquant = len(self.fitparams['prob'])
-                        flatgo = y[:nc].mean()
-                        flatq = y[nc:].reshape(2,nquant).mean(axis=0)
-                        self.flat_y = np.hstack([flatgo, flatq])
-
-                  # OPTIMIZE IDX MODEL
-                  yhat, finfo, popt = self.__opt_routine__(y)
-
-                  self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
-                  if self.data_style=='re':
-                        self.fits.iloc[ri:ri+nc, nc:] = yhat
-                        ri+=nc
-                  elif self.data_style=='pro':
-                        self.fits.iloc[i] = yhat
-                  if save:
-                        self.fits.to_csv(savepth+"fits.csv")
-                        self.fitinfo.to_csv(savepth+"fitinfo.csv")
-
-            self.popt=self.fitinfo.mean()
-
-
-
-      def __opt_routine__(self, y):
-
-            p = dict(deepcopy(self.inits))
-            fp = self.fitparams
-
-            if not self.fit_flat:
-                  self.simulator.ncond = self.ncond
-                  self.simulator.wts = self.wts
-                  yhat, finfo, popt = self.optimize_theta(y=y, inits=p, flat=False)
-            else:
-                  to_fit = [self.flat_y, y]
-                  wts = [fp['flat_wts'], fp['wts']]
-                  flat=[1, 0]
-                  ncond=[1, self.ncond]
-
-                  for i, yi in enumerate(to_fit):
-                        self.simulator.ncond = ncond[i]
-                        self.simulator.wts = wts[i]
-                        yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, flat=flat[i])
-                        p = deepcopy(popt)
-
-            return yhat, finfo, popt

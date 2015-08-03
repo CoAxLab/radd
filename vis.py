@@ -119,7 +119,7 @@ def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', spli
       elif 'pro' in kind:
             #if split=='HL':
             c = list(gpal(2)) + list(bpal(2))
-            xlim = [.42, .64]
+            xlim = [.43, .65]
             lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']
             sacc = y[:6]; fit_sacc = yhat[:6]
 

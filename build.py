@@ -7,9 +7,8 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd.toolbox.messages import saygo
-from radd import fit
-from radd.models import Simulator
 from radd.CORE import RADDCore
+from radd import fit, models
 
 class Model(RADDCore):
 
@@ -45,7 +44,7 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on={'v':'Cond'}, rtscale=1., niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, rtscale=1., niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
 
             self.data=data
             self.weighted=weighted
@@ -72,7 +71,7 @@ class Model(RADDCore):
             self.residual = self.opt.residual
             # get Simulator object used by
             # Optimizer to fit the model
-            self.sim = self.opt.simulator
+            self.simulator = self.opt.simulator
 
 
       def make_simulator(self):
@@ -85,10 +84,10 @@ class Model(RADDCore):
             else:
                   theta=self.popt
 
-            self.sim=Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
+            self.simulator=models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
 
 
-      def simulate(self, analyze=True):
+      def simulate(self, theta=None, analyze=True):
             """ simulate yhat vector using popt or inits
             if model is not optimized
 
@@ -104,12 +103,14 @@ class Model(RADDCore):
 
             if not hasattr(self, 'popt'):
                   self.make_simulator()
-                  theta=self.inits
-            else:
+                  if theta is None:
+                        theta=self.inits
+
+            elif theta is None:
                   theta=self.popt
 
-            theta = self.sim.vectorize_params(theta, as_dict=True)
-            out = self.sim.sim_fx(theta, analyze=analyze)
+            theta = self.simulator.vectorize_params(theta)
+            out = self.simulator.sim_fx(theta, analyze=analyze)
 
             return out
 
@@ -137,7 +138,7 @@ class Model(RADDCore):
 
             qp_cols = self.__get_header__(params)
             # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
-            observed =  self.__make_dataframes__(qp_cols)
+            self.__make_dataframes__(qp_cols)
             # CALCULATE WEIGHTS FOR COST FX
             if self.weighted:
                   self.get_wts()
@@ -146,6 +147,6 @@ class Model(RADDCore):
                   self.fwts=np.ones_like(self.flat_y.flatten())
                   self.wts=np.ones_like(self.avg_y.flatten())
 
-            self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on)
+            self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
 
             self.set_fitparams()
