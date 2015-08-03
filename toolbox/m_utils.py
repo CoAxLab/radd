@@ -81,3 +81,31 @@ def get_intersection(iter1, iter2):
       intersect_set = set(iter1).intersection(set(iter2))
 
       return ([i for i in intersect_set])
+
+
+def old_proactive_weighting_code():
+
+	pass
+	#upper = self.data[self.data.isin([.6,.8,1.0])].response.mean()
+	#lower = self.data[self.data.pGo.isin([.2,.4,.6])].response.mean()
+	#qvar = self.observed.std().iloc[6:].values
+	#hi = qvar[:5]; lo = qvar[5:]
+	#qwts = np.hstack([upper*(hi[2]/hi), lower*(lo[2]/lo)])
+
+	#pvar = self.data.groupby('pGo').std().response.values
+	#psub1 = np.median(pvar[:-1])/pvar[:-1]
+	#pwts = np.append(psub1, psub1.max())
+	#pwts = np.array([1.5,1,1,1,1,1.5])
+	#self.wts = np.hstack([pwts, qwts])
+	#qvar = self.observed.std().iloc[6:].values.reshape(nrtc, len(prob))
+	#qr = np.median(qvar)/qvar
+	#qwts = np.append(upper*qr[:5], lower*qr[5:])
+	#wt_hi = upper*sq_ratio[0, :]
+	#wt_lo = lower*sq_ratio[1, :]
+	#self.wts = np.hstack([pwts, wt_hi, wt_lo])
+
+	#qwts = np.hstack([upper*(hi[2]/hi), lower*(lo[2]/lo)])
+	#pwts = np.array([1.5,  1,  1,  1,  2, 2])
+	#self.wts = np.hstack([pwts, qwts])
+
+	

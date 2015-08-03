@@ -45,24 +45,24 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, rtscale=1., niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on={'v':'Cond'}, rtscale=1., niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
 
             self.data=data
             self.weighted=weighted
 
-            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, scale=rtscale, fit_noise=fit_noise, pro_ss=pro_ss)
+            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, scale=rtscale, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
 
             self.prepare_fit()
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, ftol=1.e-4, xtol=1.e-4, maxfev=1000, niter=500, log_fits=True, disp=True, prob=array([.1, .3, .5, .7, .9])):
+      def optimize(self, save=True, savepth='./', ntrials=10000, ftol=1.e-20, xtol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=array([.1, .3, .5, .7, .9])):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
 
             fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
-            self.__check_inits__()
 
+            self.__check_inits__()
             inits = dict(deepcopy(self.inits))
 
             self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
@@ -70,10 +70,10 @@ class Model(RADDCore):
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
             # get residuals
             self.residual = self.opt.residual
-
             # get Simulator object used by
             # Optimizer to fit the model
             self.sim = self.opt.simulator
+
 
       def make_simulator(self):
             """ initializes Simulator object as Model attr
@@ -102,8 +102,11 @@ class Model(RADDCore):
                         ndarray of decision traces if False
             """
 
-            if not hasattr(self, 'sim'):
+            if not hasattr(self, 'popt'):
                   self.make_simulator()
+                  theta=self.inits
+            else:
+                  theta=self.popt
 
             theta = self.sim.vectorize_params(theta, as_dict=True)
             out = self.sim.sim_fx(theta, analyze=analyze)
@@ -134,7 +137,7 @@ class Model(RADDCore):
 
             qp_cols = self.__get_header__(params)
             # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
-            self.__make_dataframes__(qp_cols)
+            observed =  self.__make_dataframes__(qp_cols)
             # CALCULATE WEIGHTS FOR COST FX
             if self.weighted:
                   self.get_wts()

@@ -26,11 +26,12 @@ class Optimizer(RADDCore):
       Handles fitting routines for models of average, individual subject, and bootstrapped data
       """
 
-      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, *args, **kws):
+      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, dynamic='hyp', *args, **kws):
 
             self.fits=dframes['fits']
             self.fitinfo=dframes['fitinfo']
             self.data=dframes['data']
+            self.dynamic=dynamic
             self.fitparams=fitparams
 
             if fit_on=='average':
@@ -57,7 +58,7 @@ class Optimizer(RADDCore):
                   yhat, fitinfo, popt = self.__opt_routine__(self.avg_y)
                   return yhat, fitinfo, popt
             else:
-                  fits, fitinfo, popt = self.__indx_optimize__(save=save, savepth=savepth, fitparams=fp)
+                  fits, fitinfo, popt = self.__indx_optimize__(save=save, savepth=savepth)
                   return fits, fitinfo, popt
 
 
@@ -127,6 +128,11 @@ class Optimizer(RADDCore):
             """ set and return boundaries to limit search space
             of parameter optimization in <optimize_theta>
             """
+
+            if self.dynamic == 'exp':
+                  xb = (.01, 10)
+            elif self.dynamic == 'hyp':
+                  xb = (.001, .1)
 
             if 'irace' in self.kind:
                   ssv=(abs(ssv[1]), abs(ssv[0]))
