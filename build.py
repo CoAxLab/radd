@@ -13,9 +13,9 @@ from radd.CORE import RADDCore
 class Model(RADDCore):
 
       """ Main class for instantiating, fitting, and simulating models.
-      Inherits from RADDCore parent class (see RADD.py).
+      Inherits from RADDCore parent class (see CORE module).
 
-      :: Arguments ::
+      ::Arguments::
 
             data (pandas DF):
                   data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
@@ -23,6 +23,8 @@ class Model(RADDCore):
 
             kind (str):
                   declares model type ['radd', 'irace', 'pro']
+                  append 'x' to front of model name to include a dynamic
+                  bias signal in model
 
             inits (dict):
                   dictionary of parameters (v, a, tr, ssv, z) used to initialize model
@@ -40,6 +42,10 @@ class Model(RADDCore):
 
             tb (float):
                   timeboundary: time alloted in task for making a response
+
+            dynamic (str):
+                  set dynamic bias signal to follow an exponential or hyperbolic
+                  form when fitting models with 'x' included in <kind> attr
 
       """
 
@@ -116,7 +122,6 @@ class Model(RADDCore):
 
 
       def prepare_fit(self):
-
             """ performs model setup and initiates dataframes.
             Automatically run when Model object is initialized
             """

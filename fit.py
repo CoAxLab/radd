@@ -57,7 +57,7 @@ class Optimizer(RADDCore):
 
             if self.fit_on=='average':
                   self.yhat, self.fitinfo, self.popt = self.__opt_routine__(self.avg_y, fit_id='AVERAGE')
-            else:
+            elif self.fit_on in ['subjects', 'bootstrap']:
                   self.__indx_optimize__(save=save, savepth=savepth)
 
             return self.yhat, self.fitinfo, self.popt
@@ -133,17 +133,17 @@ class Optimizer(RADDCore):
 
             #get standard (non conditional) parameter names only
             pfit = list(set(inits.keys()).intersection(self.pnames))
-            lim = self.set_bounds(); fp = self.fitparams
+            lim = self.set_bounds(); fp=self.fitparams
 
             ip = deepcopy(inits)
             theta=Parameters()
             if not flat or not fp['fit_whole_model']:
-                  for pkc in array(pc_map.values()).flatten():
+                  for pkc in array(self.pc_map.values()).flatten():
                         pkey, cond = pkc.split('_')
                         mn = lim[pkey][0]; mx=lim[pkey][1]
                         theta.add(pkc, value=ip[pkc], vary=1, min=mn, max=mx)
                   null = map(pfit.remove, self.pc_map.keys())
-                  self.simulator.pvec = set(pfit).intersection(self.pvc)
+                  self.simulator.pvec = deepcopy(set(pfit).intersection(self.pvc))
 
             p0 = [theta.add(k, value=ip[k], vary=flat, min=lim[k][0], max=lim[k][1]) for k in pfit]
             opt_kws = {'disp':fp['disp'], 'xtol':fp['xtol'], 'ftol':fp['ftol'], 'maxfev':fp['maxfev']}

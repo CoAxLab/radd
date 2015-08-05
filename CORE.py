@@ -30,45 +30,48 @@ class RADDCore(object):
             self.depends_on = depends_on
             self.fit_on = fit_on
             self.scale = scale
-            self.fit_whole_model = fit_whole_model
             self.dynamic = dynamic
 
+            # BASIC MODEL STRUCTURE (kind)
             if 'pro' in self.kind:
                   self.data_style='pro'
                   if depends_on is None:
                         depends_on = {'v':'pGo'}
+                  self.pGo = sorted(self.data.pGo.unique())
+                  self.ssd=np.array([.450])
                   self.split=split
                   self.nrt_cond=len(split)
             else:
                   self.data_style='re'
                   if depends_on is None:
                         depends_on = {'v':'Cond'}
-                  self.split=None
-                  self.nrt_cond=None
+                  ssd = data[data.ttype=="stop"].ssd.unique()
+                  self.pGo = len(data[data.ttype=='go'])/len(data)
+                  self.delays = sorted(ssd.astype(np.int))
+                  self.ssd = array(self.delays)*.001
 
+            # CONDITIONAL PARAMETERS
             self.depends_on = depends_on
             self.cond = self.depends_on.values()[0]
             self.labels = np.sort(data[self.cond].unique())
             self.ncond = len(self.labels)
 
+            # PARAMETER INITIALIZATION
             if inits is None:
                   self.__get_default_inits__()
             else:
                   self.inits = inits
-
-            self.__remove_outliers__(sd=1.5, verbose=False)
+            if np.any(hasattr(self.inits.values(), '__iter__')):
+                  self.fit_whole_model=False
+            else:
+                  self.fit_whole_model=True
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
+
+            # DATA TREATMENT AND EXTRACTION
+            self.__remove_outliers__(sd=1.5, verbose=False)
             self.tb = self.data[self.data.response==1].rt.max()
 
-            if self.data_style=='re':
-                  ssd = data[data.ttype=="stop"].ssd.unique()
-                  self.pGo = len(data[data.ttype=='go'])/len(data)
-                  self.delays = sorted(ssd.astype(np.int))
-                  self.ssd = np.array(self.delays)*.001
-            elif self.data_style=='pro':
-                  self.pGo = sorted(self.data.pGo.unique())
-                  self.ssd=np.array([.450])
-
+            # DEFINE ITERABLES
             if self.fit_on=='bootstrap':
                   self.indx = range(niter)
             else:
@@ -151,6 +154,7 @@ class RADDCore(object):
             if get_params:
                   return self.fitparams
 
+
       def __extract_popt_fitinfo__(self, finfo=None):
             """ takes optimized dict or DF of vectorized parameters and
             returns dict with only depends_on.keys() containing vectorized vals.
@@ -185,6 +189,8 @@ class RADDCore(object):
                   popt[pkey]=finfo[pkey]
 
             return popt
+
+
 
       def __make_dataframes__(self, qp_cols):
             """ Generates the following dataframes and arrays:
@@ -256,8 +262,7 @@ class RADDCore(object):
 
 
       def get_wts(self):
-            """
-            wtc: weights applied to correct rt quantiles in cost f(x)
+            """ wtc: weights applied to correct rt quantiles in cost f(x)
                   * P(R | No SSD)j * sdj(.5Qj, ... .95Qj)
             wte: weight applied to error rt quantiles in cost f(x)
                   * P(R | SSD) * sd(.5eQ, ... .95eQ)
@@ -317,7 +322,7 @@ class RADDCore(object):
             self.inits = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on, include_ss=include_ss, fit_noise=fit_noise)
 
       def __check_inits__(self, pro_ss=False, fit_noise=False):
-            self.inits = check_inits(inits=self.inits, kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
+            self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
 
       def __make_proRT_conds__(self):
             self.data = make_proRT_conds(self.data, self.split)

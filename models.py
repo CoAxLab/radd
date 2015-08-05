@@ -38,8 +38,13 @@ class Simulator(object):
                   self.pc_map=pc_map
 
             self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
-            self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
-
+            self.pvc=array(['a', 'tr', 'v', 'xb'])
+            for p in self.fitparams['depends_on'].keys():
+                  try:
+                        self.pvc.remove(p)
+                  except Exception:
+                        pass
+            print self.pvc
             if prepare:
                   self.prepare_simulator()
 
@@ -153,9 +158,14 @@ class Simulator(object):
                   p['xb']=1.0
             if 'z' not in p.keys():
                   p['z'] = 0
-                  
+
             for pkey in self.pvc:
-                  p[pkey]=np.ones(self.ncond)*p[pkey]
+                  try:
+                        p[pkey]=np.ones(self.ncond)*p[pkey]
+                  except Exception:
+                        #naughty
+                        pass
+
 
             for pkey, pkc in self.pc_map.items():
                   if self.ncond==1:
