@@ -56,7 +56,7 @@ class RADDCore(object):
             else:
                   self.inits = inits
 
-            self.__remove_outliers__()
+            self.__remove_outliers__(sd=1.5, verbose=False)
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
             self.tb = self.data[self.data.response==1].rt.max()
 
@@ -301,8 +301,8 @@ class RADDCore(object):
             self.wts, self.fwts = ensure_numerical_wts(self.wts, self.fwts)
 
 
-      def __remove_outliers__(self, sd=1.5):
-            self.data = remove_outliers(self.data, sd=sd)
+      def __remove_outliers__(self, sd=1.5, verbose=False):
+            self.data = remove_outliers(self.data, sd=sd, verbose=verbose)
 
       def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9])):
 

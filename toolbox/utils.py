@@ -7,7 +7,7 @@ import os, re
 
 
 
-def remove_outliers(df, sd=1.5):
+def remove_outliers(df, sd=1.5, verbose=False):
 
       ssdf=df[df.response==0]
       godf = df[df.response==1]
@@ -16,9 +16,10 @@ def remove_outliers(df, sd=1.5):
       clean_go=rmslow[rmslow['rt']>(godf.rt.mean()-bound)]
 
       clean=pd.concat([clean_go, ssdf])
-      pct_removed = len(clean)*1./len(df)
-      print "len(df): %i\nbound: %s \nlen(cleaned): %i\npercent removed: %.5f" % (len(df), str(bound), len(clean), pct_removed)
-
+      if verbose:
+            pct_removed = len(clean)*1./len(df)
+            print "len(df): %i\nbound: %s \nlen(cleaned): %i\npercent removed: %.5f" % (len(df), str(bound), len(clean), pct_removed)
+            
       return clean
 
 
