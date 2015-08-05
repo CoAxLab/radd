@@ -173,15 +173,15 @@ def remove_outliers(df, sd=1.95):
 
       print "len(df) = %s \n\n" % (str(len(df)))
 
-      df_ss=df[df['choice']=='stop']
-      df_go=df[df['choice']=='go']
-      cutoff_go=df_go['rt'].std()*sd + (df_go['rt'].mean())
-      df_go_new=df_go[df_go['rt']<cutoff_go]
+      ssdf=df[df.response==0]
+      godf = df[df.response==1]
+      bound = godf.rt.std()*sd
+      gdf1=godf[godf['rt']<(godf.rt.mean()+bound)]
+      gdf2=gdf1[gdf1['rt']>(gdf1.rt.mean()-bound)]
 
-      df_trimmed=pd.concat([df_go_new, df_ss])
-      df_trimmed.sort('trial', inplace=True)
+      df_trimmed=pd.concat([godf, ssdf])
 
-      print "cutoff_go = %s \nlen(df_go) = %i\n len(df_go_new) = %i\n" % (str(cutoff_go), len(df_go), len(df_go))
+      print "bound = %s \nlen(godf) = %i\n len(trimmed) = %i\n" % (str(bound), len(godf), len(df_trimmed))
 
       return df_trimmed
 

@@ -7,14 +7,35 @@ import os, re
 
 
 
+def remove_outliers(df, sd=1.5):
+
+      ssdf=df[df.response==0]
+      godf = df[df.response==1]
+      bound = godf.rt.std()*sd
+      rmslow=godf[godf['rt']<(godf.rt.mean()+bound)]
+      clean_go=rmslow[rmslow['rt']>(godf.rt.mean()-bound)]
+
+      clean=pd.concat([clean_go, ssdf])
+      pct_removed = len(clean)*1./len(df)
+      print "len(df): %i\nbound: %s \nlen(cleaned): %i\npercent removed: %.5f" % (len(df), str(bound), len(clean), pct_removed)
+
+      return clean
+
+
+
 def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, include_ss=False, fit_noise=False):
 
 	if 'radd' in kind:
-		inits = {'a':0.4441, 'ssv':-0.9473, 'tr':0.3049, 'v':1.0919, 'z':0.1542}
+            if len(depends_on.keys())>1:
+		      inits = {'a':.45, 'ssv':-0.9473, 'tr': 0.2939, 'v': 1.0919}
+            if 'v' in depends_on.keys():
+                  inits = {'a':0.4441, 'ssv':-0.9473, 'tr':0.3049, 'v':1.0919, 'z':0.1542}
+            elif 'tr' in depends_on.keys():
+                  inits = {'a': 0.4550, 'ssv': -0.9788, 'tr':.3392, 'v': 1.1392, 'z': 0.1545}
 
 	elif 'pro' in kind:
-		#if len(self.depends_on.keys())>1:
-		#      inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
+		if len(depends_on.keys())>1:
+		      inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
 		if 'tr' in depends_on.keys():
 			inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
 		elif 'v' in depends_on.keys():

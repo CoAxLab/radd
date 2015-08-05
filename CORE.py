@@ -30,7 +30,7 @@ class RADDCore(object):
             self.depends_on = depends_on
             self.fit_on = fit_on
             self.scale = scale
-            self.fit_flat = fit_whole_model
+            self.fit_whole_model = fit_whole_model
             self.dynamic = dynamic
 
             if 'pro' in self.kind:
@@ -50,14 +50,15 @@ class RADDCore(object):
             self.cond = self.depends_on.values()[0]
             self.labels = np.sort(data[self.cond].unique())
             self.ncond = len(self.labels)
-            self.tb = data[data.response==1].rt.max()
 
             if inits is None:
                   self.__get_default_inits__()
             else:
                   self.inits = inits
 
+            self.__remove_outliers__()
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
+            self.tb = self.data[self.data.response==1].rt.max()
 
             if self.data_style=='re':
                   ssd = data[data.ttype=="stop"].ssd.unique()
@@ -145,13 +146,74 @@ class RADDCore(object):
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'scale':self.scale, 'depends_on': self.depends_on, 'dynamic': self.dynamic}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'scale':self.scale, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model}
 
             if get_params:
                   return self.fitparams
 
+      def __extract_popt_fitinfo__(self, finfo=None):
+            """ takes optimized dict or DF of vectorized parameters and
+            returns dict with only depends_on.keys() containing vectorized vals.
+            Is accessed by fit.Optimizer objects after optimization routine.
+
+            ::Arguments::
+                  finfo (dict/DF):
+                        finfo is dict if self.fit_on is 'average'
+                        and DF if self.fit_on is 'subjects' or 'bootstrap'
+                        contains optimized parameters
+            ::Returns::
+                  popt (dict):
+                        dict with only depends_on.keys() containing
+                        vectorized vals
+            """
+
+
+            if finfo is None:
+                  try:
+                        finfo=self.fitinfo.mean()
+                  except Exception:
+                        finfo=self.fitinfo
+
+            finfo=dict(deepcopy(finfo))
+            popt=dict(deepcopy(self.inits))
+            pc_map = self.pc_map;
+
+            for pkey in popt.keys():
+                  if pkey in self.depends_on.keys():
+                        popt[pkey] = np.array([finfo[pc] for pc in pc_map[pkey]])
+                        continue
+                  popt[pkey]=finfo[pkey]
+
+            return popt
 
       def __make_dataframes__(self, qp_cols):
+            """ Generates the following dataframes and arrays:
+
+            ::Arguments::
+
+                  qp_cols:
+                        header for observed/fits dataframes
+            ::Returns::
+
+                  None (All dataframes and vectors are stored in dict and assigned
+                  as <dframes> attr)
+
+            observed (DF):
+                  Contains Prob and RT quant. for each subject
+                  used to calc. cost fx weights
+            fits (DF):
+                  empty DF shaped like observed DF, used to store simulated
+                  predictions of the optimized model
+            fitinfo (DF):
+                  stores all opt. parameter values and model fit statistics
+            dat (ndarray):
+                  contains all subject/boot. y vectors entered into costfx
+            avg_y (ndarray):
+                  average y vector for each condition entered into costfx
+            flat_y (1d array):
+                  average y vector used to initialize parameters prior to fitting
+                  conditional model. calculated collapsing across conditions
+            """
 
             cond = self.cond; ncond = self.ncond
             data = self.data; indx = self.indx
@@ -239,6 +301,9 @@ class RADDCore(object):
             self.wts, self.fwts = ensure_numerical_wts(self.wts, self.fwts)
 
 
+      def __remove_outliers__(self, sd=1.5):
+            self.data = remove_outliers(self.data, sd=sd)
+
       def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9])):
 
             if not hasattr(self, 'delays'):
@@ -255,7 +320,7 @@ class RADDCore(object):
             self.inits = check_inits(inits=self.inits, kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
 
       def __make_proRT_conds__(self):
-            self.data = make_proRT_conds(self.data)
+            self.data = make_proRT_conds(self.data, self.split)
             self.prort_conds_prepared = True
 
       def __rename_bad_cols__(self):

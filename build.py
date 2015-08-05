@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd.toolbox.messages import saygo
-from radd.CORE import RADDCore
 from radd import fit, models
+from radd.CORE import RADDCore
 
 class Model(RADDCore):
 
@@ -121,7 +121,6 @@ class Model(RADDCore):
             Automatically run when Model object is initialized
             """
 
-
             if not isinstance(self.labels[0], str):
                   ints = sorted([int(l*100) for l in self.labels])
                   self.labels = [str(intl) for intl in ints]
@@ -129,12 +128,17 @@ class Model(RADDCore):
                   self.labels = sorted(self.labels)
 
             params = sorted(self.inits.keys())
+            cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
             self.pc_map = {}
             for d in self.depends_on.keys():
                   params.remove(d)
-                  params_dep = ['_'.join([d, l]) for l in self.labels]
-                  self.pc_map[d] = params_dep
-                  params.extend(params_dep)
+                  self.pc_map[d] = ['_'.join([d, l]) for l in self.labels]
+                  if hasattr(self.inits[d], '__iter__'):
+                        pc = cond_inits(self.pc_map[d], self.inits[d])
+                  else:
+                        pc = cond_inits(self.pc_map[d], [self.inits[d]]*self.ncond)
+                  self.inits = pc.append(pd.Series(self.inits)).to_dict()
+                  params.extend(self.pc_map[d])
 
             qp_cols = self.__get_header__(params)
             # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS

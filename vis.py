@@ -161,6 +161,28 @@ def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', spli
       if save:
             plt.savefig(savestr+'.png', format='png', dpi=300)
 
+
+def plot_idx_fits(obs, sim, kind='radd', save=False):
+
+
+      if kind=='radd':
+            df = df.where(df>0).dropna()
+            for idx, idx_c in obs.iterrows():
+                  try:
+                        save_str = '_'.join([str(idx), idx_c['Cond'], 'pred'])
+                        y = idx_c.loc['Go':'e90'].values.astype(np.float)
+                        yhat = df.iloc[idx, :].values.astype(np.float)
+                        plot_fits(y, yhat, kind='radd', save=save, savestr=save_str)
+                  except Exception:
+                        continue
+      elif kind=='pro':
+            """
+            FILL THIS IN
+            """
+
+            df=None
+
+
 def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
 
       if ax is None:

@@ -29,7 +29,7 @@ class Simulator(object):
             if model:
                   self.fitparams = model.fitparams
                   self.inits = model.inits
-                  self.kind=model.kind
+                  self.kind = model.kind
                   self.pc_map = model.pc_map
             else:
                   self.fitparams = fitparams
@@ -79,6 +79,7 @@ class Simulator(object):
                   self.analyze_fx = self.analyze_reactive
                   self.get_ssbase = lambda x,y,DVg: DVg[0,0,0]*np.ones((ncond, nssd, nss))[:,:,:,None]
 
+
       def __init_analyze_functions__(self):
             """ initiates the analysis function used in
             optimization routine to produce the yhat vector
@@ -109,8 +110,9 @@ class Simulator(object):
                   self.get_lowerb = lambda z, zpd: z+map((lambda x:(.5*x[0])/(1+(x[1]*self.t))), zpd)[0]
 
             # dynamic bias is exponential
-            if 'x' in self.kind and self.dynamic=='exp':
+            elif 'x' in self.kind and self.dynamic=='exp':
                   self.get_xtb = lambda tg, xb: array([np.exp(xtb*self.t) for xtb in xb])
+
 
 
       def vectorize_params(self, p):
@@ -151,7 +153,7 @@ class Simulator(object):
                   p['xb']=1.0
             if 'z' not in p.keys():
                   p['z'] = 0
-
+                  
             for pkey in self.pvc:
                   p[pkey]=np.ones(self.ncond)*p[pkey]
 
@@ -166,6 +168,7 @@ class Simulator(object):
             return p
 
 
+
       def __sample_interactive_ssrt__(self, loc, sigma):
             """ sample SSRT from gaussian distribution
 
@@ -177,10 +180,12 @@ class Simulator(object):
             ::Returns::
                   samples (array) from dist. (nssd, nss)
             """
+            from scipy.stats.distributions import norm
 
             nrvs = self.nss*self.ncond
             rvs_shape = (self.nssd, nrvs/self.nssd)
             return (self.ssd + norm.rvs(loc, sigma, nrvs).reshape(rvs_shape).T).T
+
 
 
       def __update_go_process__(self, p):
@@ -200,25 +205,13 @@ class Simulator(object):
 
             Pg = 0.5*(1 + p['v']*self.dx/self.si)
             Tg = np.ceil((self.tb-p['tr'])/self.dt).astype(int)
+
             self.t=self.get_t(Tg)
             self.lowerb = self.get_lowerb(p['z'], zip(p['a'],p['xb']))
             self.xtb = self.get_xtb(Tg, p['xb'])
 
-            #t = np.cumsum([self.dt]*Tg.max())
-            #if 'x' in self.kind and self.dynamic=='exp':
-            #      # dynamic bias is exponential
-            #      self.xtb = array([np.exp(xtb*t) for xtb in p['xb']])
-            #      self.lowerb = np.ones(len(t))*p['z']
-            #elif 'x' in self.kind and self.dynamic=='hyp':
-            #      # dynamic bias is hyperbolic
-            #      t = np.cumsum(np.ones(Tg.max()))[::-1]
-            #      self.lowerb = p['z'] + map((lambda x: (.5*x[0])/(1+(x[1]*t))), zip(p['a'],p['xb']))[0]
-            #      self.xtb = array([np.ones(len(t)) for i in range(self.ncond)])
-            #else:
-            #      self.xtb = array([np.ones(len(t)) for i in range(self.ncond)])
-            #      self.lowerb = np.ones(len(t))*p['z']
-
             return Pg, Tg
+
 
 
       def __update_stop_process__(self, p):
@@ -243,6 +236,7 @@ class Simulator(object):
             return Ps, Ts
 
 
+
       def __cost_fx__(self, theta):
 
             """ Main cost function used for fitting all models self.sim_fx
@@ -259,6 +253,7 @@ class Simulator(object):
             return (yhat - self.y)*self.wts[:len(self.y)]
 
 
+
       def simulate_reactive(self, p, analyze=True):
 
             p = self.vectorize_params(p)
@@ -267,14 +262,13 @@ class Simulator(object):
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
             DVg = p['z'] + (self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
-            #init_ss = array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
-            #DVs = init_ss[:, :, :, None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
             DVs = self.get_ssbase(Ts,Tg,DVg) + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
 
             if analyze:
                   return self.analyze_reactive(DVg, DVs, p)
             else:
                   return [DVg, DVs]
+
 
 
       def simulate_proactive(self, p, analyze=True):
@@ -289,21 +283,6 @@ class Simulator(object):
             else:
                   return DVg
 
-
-      def simulate_irace(self, p, analyze=True):
-
-            p = self.vectorize_params(p)
-            Pg, Tg = self.__update_go_process__(p)
-            Ps, Ts = self.__update_stop_process__(p)
-
-            # a/tr/v Bias: ALL CONDITIONS, ALL SSD
-            DVg = self.lowerb[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx, -self.dx).T, axis=2))
-            init_ss = self.lowerb*np.ones((self.ncond, self.nssd, self.nss))
-            DVs = init_ss[:,:,:,None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
-            if analyze:
-                  return self.analyze_irace(DVg, DVs, p)
-            else:
-                  return [DVg, DVs]
 
 
       def analyze_reactive(self, DVg, DVs, p):
@@ -325,6 +304,7 @@ class Simulator(object):
             return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
+
       def analyze_proactive(self, DVg, p):
 
             prob = self.prob; tb = self.tb
@@ -340,6 +320,7 @@ class Simulator(object):
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
             return hs([gac, qrt])
+
 
 
       def mean_pgo_rts(self, p, return_vals=True):
@@ -360,6 +341,7 @@ class Simulator(object):
             self.pgo_rts = {'mu': mu, 'ci': ci, 'std':std}
             if return_vals:
                   return self.pgo_rts
+
 
 
       def simulate_interactive(self, p, analyze=True):
