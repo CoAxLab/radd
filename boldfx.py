@@ -127,29 +127,21 @@ class BOLD(object):
             rt = np.asarray(map(self.get_rt, zipped_input_rt))
 
             # zip dvg[ncond, ntrials, ntime], rt[rt_c..rt_ncond], [tb]*ncond
-            zipped_input_traces = zip(self.dvg, rt, [self.tb]*len(rt))
+            zipped_rt_traces = zip(self.dvg, rt, [self.tb]*len(rt))
             # boolean index traces so that DVg[RT<=TB]
-            resp_trial_arrays = map(self.get_go_traces, zipped_input_traces)
-            nogo_trial_arrays = map(self.get_nogo_traces, zipped_input_traces)
+            go_trial_arrays = map(self.get_go_traces, zipped_rt_traces)
+            nogo_trial_arrays = map(self.get_nogo_traces, zipped_rt_traces)
             # zip dvg(resp=1), bound[a_c..a_ncond], [decay]*ncond
-            zipped_input_caproll = zip(resp_trial_arrays, self.bound, [decay]*self.ncond)
+
+            zipped_go_caproll = zip(go_trial_arrays, self.bound, [decay]*self.ncond)
             zipped_nogo_caproll = zip(nogo_trial_arrays, self.bound, [decay]*self.ncond)
             # generate dataframe of capped and time-thresholded go traces
-            self.traces = map(self.cap_roll_traces, zipped_input_caproll)
-            self.nogo = map(self.cap_roll_traces, zipped_nogo_caproll)
+            self.go_traces = map(self.cap_roll_traces, zipped_go_caproll)
+            self.nogo_traces = map(self.cap_roll_traces, zipped_nogo_caproll)
 
             if hemodynamic:
-                  #bold_df_super = map(lambda x: x.cumsum(), self.bold_df_list)
-                  #self.hemodynamics = np.array(map(self.get_hemo, self.bold_df_list))
-                  hemo = map(self.get_hemo, self.traces)
-                  nogo_hemo = map(self.get_hemo, self.nogo)
-
-                  self.hemo = np.array([np.mean(np.cumsum(gtrace, axis=0).max().values) for gtrace in self.traces])
-                  self.nogo_hemo = np.array([np.mean(np.cumsum(strace, axis=0).max().values) for strace in self.nogo])
-
-            if get_dfs:
-                  return self.traces
-
+                  self.go_hemo = np.array([np.mean(np.cumsum(gt, axis=0).max().values) for gt in self.go_traces])
+                  self.no_hemo = np.array([np.mean(np.cumsum(ngt, axis=0).max().values) for ngt in self.nogo_traces])
 
 
       def cap_n_bound(self, traces, bound, decay=False):
