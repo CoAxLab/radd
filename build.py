@@ -138,12 +138,12 @@ class Model(RADDCore):
             for d in self.depends_on.keys():
                   params.remove(d)
                   self.pc_map[d] = ['_'.join([d, l]) for l in self.labels]
-                  if hasattr(self.inits[d], '__iter__'):
-                        pc = cond_inits(self.pc_map[d], self.inits[d])
-                  else:
-                        pc = cond_inits(self.pc_map[d], [self.inits[d]]*self.ncond)
-                  self.inits = pc.append(pd.Series(self.inits)).to_dict()
                   params.extend(self.pc_map[d])
+                  #if hasattr(self.inits[d], '__iter__'):
+                  #      pc = cond_inits(self.pc_map[d], self.inits[d])
+                  #else:
+                  #      pc = cond_inits(self.pc_map[d], [self.inits[d]]*self.ncond)
+                  #self.inits = pc.append(pd.Series(self.inits)).to_dict()
 
             qp_cols = self.__get_header__(params)
             # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS

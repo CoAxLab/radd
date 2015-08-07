@@ -21,8 +21,6 @@ class RADDCore(object):
       TODO: COMPLETE DOCSTRINGS
       """
 
-
-
       def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, scale=1., fit_whole_model=True, tb=None, scale_rts=False, fit_noise=False, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
 
             self.data = data
@@ -31,7 +29,7 @@ class RADDCore(object):
             self.fit_on = fit_on
             self.scale = scale
             self.dynamic = dynamic
-
+            self.fit_whole_model=fit_whole_model
             # BASIC MODEL STRUCTURE (kind)
             if 'pro' in self.kind:
                   self.data_style='pro'
@@ -61,10 +59,10 @@ class RADDCore(object):
                   self.__get_default_inits__()
             else:
                   self.inits = inits
-            if np.any(hasattr(self.inits.values(), '__iter__')):
-                  self.fit_whole_model=False
-            else:
-                  self.fit_whole_model=True
+            #if np.any(hasattr(self.inits.values(), '__iter__')):
+                  #self.fit_whole_model=False
+            #else:
+            #      self.fit_whole_model=True
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
 
             # DATA TREATMENT AND EXTRACTION
@@ -319,10 +317,10 @@ class RADDCore(object):
             return qp_cols[0]
 
       def __get_default_inits__(self, include_ss=False, fit_noise=False):
-            self.inits = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on, include_ss=include_ss, fit_noise=fit_noise)
+            self.inits = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on, fit_whole_model=self.fit_whole_model, include_ss=include_ss, fit_noise=fit_noise)
 
       def __check_inits__(self, pro_ss=False, fit_noise=False):
-            self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
+                  self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
 
       def __make_proRT_conds__(self):
             self.data = make_proRT_conds(self.data, self.split)

@@ -2,10 +2,9 @@
 from __future__ import division
 import pandas as pd
 import numpy as np
-from numpy import array
 from scipy.io import loadmat
 import os, re
-
+from numpy import array
 
 
 def remove_outliers(df, sd=1.5, verbose=False):
@@ -24,13 +23,12 @@ def remove_outliers(df, sd=1.5, verbose=False):
       return clean
 
 
-
-def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, include_ss=False, fit_noise=False):
+def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False):
 
       if 'radd' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.45, 'ssv':-0.9473, 'tr': 0.2939, 'v': 1.0919, 'z':0.1542}
-            elif ['v'] in depends_on.keys():
+            elif ['v'] == depends_on.keys():
                   inits = {'a':0.4441, 'v':array([1.1078, 1.0651]), 'ssv':-0.9473, 'tr':0.3049, 'z':0.1542}
             elif ['tr'] == depends_on.keys():
                   inits = {'a': 0.4442, 'ssv': -0.9519, 'tr': array([.3027, 0.3104]), 'v': 1.0959, 'z':0.1541}
@@ -41,9 +39,9 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, include_ss=Fals
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
             elif ['tr']==depends_on.keys():
-                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
+                  inits = {'a':0.3267, 'tr': array([ 0.28082,  0.28855,  0.30535,  0.32555,  0.34669,  0.36803]), 'v': 1.3813}
             elif ['v']==depends_on.keys():
-                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
+                  inits = {'a':0.4748, 'tr':0.2725, 'v': array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936])}
             elif ['xb']==depends_on.keys():
                   inits={'a': 0.473022, "tr":0.330223, "v":1.64306}
                   inits['xb'] = array([0.257877,0.649422,1.03762,1.307329,1.934637,2.101918])
@@ -63,7 +61,28 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, include_ss=Fals
             else:
                   inits = {'v': 1.0306, 'a': 0.3926741, 'tr': 0.3379, 'ssv': 1.1243, 'z': 0.1500}
 
+      if fit_whole_model and np.any(hasattr(inits, '__iter__')):
+            for p in depends_on.keys():
+                  inits[p]=np.mean(inits[p])
+
       return inits
+
+
+def get_xbias_theta(model):
+      """ hyperbolic simulation parameters
+      """
+      if model.dynamic=='hyp':
+            return {'a': array([ 0.47302,  0.47302,  0.47302,  0.47302,  0.47302,  0.47302]),
+                  'tr': array([ 0.33022,  0.33022,  0.33022,  0.33022,  0.33022,  0.33022]),
+                  'v': array([ 0.69306,  0.81906,  0.94506,  1.07106,  1.19706,  1.32306]),
+                  'xb': array([ 0.01,  0.01,  0.01,  0.01,  0.01,  0.01]),
+                  'z': 0}
+      elif model.dynamic=='exp':
+            return {'a': array([ 0.4836,  0.4836,  0.4836,  0.4836,  0.4836,  0.4836]),
+                  'tr': array([ 0.3375,  0.3375,  0.3375,  0.3375,  0.3375,  0.3375]),
+                  'v': array([ 1.08837,  1.31837,  1.54837,  1.77837,  2.00837,  2.23837]),
+                  'xb': array([ 1.4604,  1.4604,  1.4604,  1.4604,  1.4604,  1.4604]),
+                  'z': 0}
 
 
 def ensure_numerical_wts(wts, fwts):
@@ -97,7 +116,9 @@ def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array
       else:
             return [qp_cols]
 
-def check_inits(inits={}, pdep=[], kind='radd', dynamic='hyp', single_bound_models=['xirace', 'irace', 'xpro', 'pro'], pro_ss=False, fit_noise=False):
+def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit_noise=False):
+
+      single_bound_models = ['xirace', 'irace', 'xpro', 'pro']
 
       for k, val in inits.items():
             if isinstance(val, np.ndarray) and k not in pdep:
@@ -106,6 +127,10 @@ def check_inits(inits={}, pdep=[], kind='radd', dynamic='hyp', single_bound_mode
             del inits['ssd']
       if 'pGo' in inits.keys():
             del inits['pGo']
+
+      if pro_ss and 'ssv' not in inits.keys():
+            inits['ssv'] = -0.9976
+
       if kind in single_bound_models and 'z' in inits.keys():
             z=inits.pop('z')
             inits['a']=inits['a']-z
@@ -147,9 +172,41 @@ def make_proRT_conds(data, split):
       return data
 
 
+
 def rename_bad_cols(data):
 
       if 'trial_type' in data.columns:
             data.rename(columns={'trial_type':'ttype'}, inplace=True)
 
       return data
+
+
+def logger(optmod, finfo, fit_id='FLAT', kind='radd', depends_on={}, ):
+
+      finfo['chi'] = optmod.chisqr
+      finfo['rchi'] = optmod.redchi
+      finfo['CNVRG'] = optmod.pop('success')
+      finfo['nfev'] = optmod.pop('nfev')
+      finfo['AIC']= optmod.aic
+      finfo['BIC']= optmod.bic
+
+      pkeys = depends_on.keys()
+      pvals = depends_on.values()
+      model_id = "MODEL: %s" % kind
+      dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
+      #wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in self.simulator.wts)+'])'
+
+      with open('fit_report.txt', 'a') as f:
+            f.write(str(fit_id)+'\n')
+            f.write(str(model_id)+'\n')
+            f.write(str(dep_id)+'\n')
+            #f.write(wts_str+'\n\n')
+            f.write(fit_report(optmod, show_correl=False)+'\n\n')
+            f.write('AIC: %.8f' % optmod.aic + '\n')
+            f.write('BIC: %.8f' % optmod.bic + '\n')
+            f.write('chi: %.8f' % optmod.chisqr + '\n')
+            f.write('rchi: %.8f' % optmod.redchi + '\n')
+            f.write('Converged: %s' % finfo['CNVRG'] + '\n')
+            f.write('--'*20+'\n\n')
+
+      return finfo

@@ -11,14 +11,15 @@ from lmfit import Parameters, minimize, fit_report, Minimizer
 from radd.CORE import RADDCore
 
 class Optimizer(RADDCore):
-
       """ Optimizer class acts as interface between Model and Simulator (see fit.py) objects.
       Structures fitting routines so that Models are first optimized with the full set of
       parameters free, data collapsing across conditions.
 
+      wayward pines
+
       The fitted parameters are then used as the initial parameters for fitting conditional
       models with only a subset of parameters are left free to vary across levels of a given
-      experimental condition.
+      experimental conditionself.
 
       Parameter dependencies are specified when initializing Model object via
       <depends_on> arg (i.e.{parameter: condition})
@@ -53,6 +54,7 @@ class Optimizer(RADDCore):
 
       def optimize_model(self, save=True, savepth='./'):
 
+            # initate simulator object of model being optimized
             self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
             if self.fit_on=='average':
@@ -79,7 +81,7 @@ class Optimizer(RADDCore):
                         flatq = y[nc:].reshape(2,nquant).mean(axis=0)
                         self.flat_y = np.hstack([flatgo, flatq])
 
-                  # OPTIMIZE IDX MODEL
+                  # optimize params iterating over subjects/bootstraps
                   yhat, finfo, popt = self.__opt_routine__(y, fit_id=fit_id)
 
                   self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
@@ -93,6 +95,7 @@ class Optimizer(RADDCore):
                         self.fitinfo.to_csv(savepth+"fitinfo.csv")
 
             self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
+
 
 
       def __opt_routine__(self, y, fit_id='AVERAGE'):
@@ -122,6 +125,7 @@ class Optimizer(RADDCore):
             return yhat, finfo, popt
 
 
+
       def optimize_theta(self, y, inits, flat=False):
 
             """ Optimizes parameters following specified parameter
@@ -130,23 +134,22 @@ class Optimizer(RADDCore):
 
             self.simulator.y = y.flatten()
             self.simulator.is_flat = flat
-
-            #get standard (non conditional) parameter names only
+            self.simulator.pvc = deepcopy(self.pvc)
             pfit = list(set(inits.keys()).intersection(self.pnames))
-            lim = self.set_bounds(); fp=self.fitparams
+            lim = self.set_bounds()
+            fp = self.fitparams
 
             ip = deepcopy(inits)
             theta=Parameters()
-            if not flat or not fp['fit_whole_model']:
-                  for pkc in array(self.pc_map.values()).flatten():
-                        pkey, cond = pkc.split('_')
-                        mn = lim[pkey][0]; mx=lim[pkey][1]
-                        theta.add(pkc, value=ip[pkc], vary=1, min=mn, max=mx)
-                  null = map(pfit.remove, self.pc_map.keys())
-                  self.simulator.pvec = deepcopy(set(pfit).intersection(self.pvc))
+            for pkey, pc_list in self.pc_map.items():
+                  if flat: break
+                  self.simulator.pvc.remove(pkey)
+                  pfit.remove(pkey)
+                  mn = lim[pkey][0]; mx=lim[pkey][1]
+                  d0 = [theta.add(pc, value=ip[pkey], vary=1, min=mn, max=mx) for pc in pc_list]
 
             p0 = [theta.add(k, value=ip[k], vary=flat, min=lim[k][0], max=lim[k][1]) for k in pfit]
-            opt_kws = {'disp':fp['disp'], 'xtol':fp['xtol'], 'ftol':fp['ftol'], 'maxfev':fp['maxfev']}
+            opt_kws = {'disp':fp['disp'], 'xtol':fp['xtol'], 'ftol':['ftol'], 'maxfev':fp['maxfev']}
 
             # OPTIMIZE THETA
             optmod = minimize(self.simulator.__cost_fx__, theta, method=self.method, options=opt_kws)

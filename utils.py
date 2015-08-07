@@ -9,7 +9,7 @@ import os, re
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.neighbors.kde import KernelDensity
-
+import functools
 
 def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='radd', prob=([.1, .3, .5, .7, .9])):
 
@@ -68,6 +68,9 @@ def resample_data(data, n=120, kind='radd'):
             bootdf = df.irow(resampled_ix)
             bootdf_list.append(bootdf)
             return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
+
+
+
 
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """

@@ -4,7 +4,7 @@ import time
 from copy import deepcopy
 import numpy as np
 from numpy import array
-from numpy.random import random_sample as rs
+from numpy.random import sample as rs
 from scipy.stats.mstats import mquantiles as mq
 from numpy import hstack as hs
 
@@ -29,7 +29,7 @@ class Simulator(object):
             if model:
                   self.fitparams = model.fitparams
                   self.inits = model.inits
-                  self.kind = model.kind
+                  self.kind=model.kind
                   self.pc_map = model.pc_map
             else:
                   self.fitparams = fitparams
@@ -38,15 +38,11 @@ class Simulator(object):
                   self.pc_map=pc_map
 
             self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
-            self.pvc=array(['a', 'tr', 'v', 'xb'])
-            for p in self.fitparams['depends_on'].keys():
-                  try:
-                        self.pvc.remove(p)
-                  except Exception:
-                        pass
-            print self.pvc
+            self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
+
             if prepare:
                   self.prepare_simulator()
+
 
 
       def prepare_simulator(self):
@@ -57,7 +53,7 @@ class Simulator(object):
             self.tb=fp['tb']; self.wts=fp['wts']; self.ncond=fp['ncond']
             self.ntot=fp['ntrials']; self.prob=fp['prob']; self.ssd=fp['ssd']
             self.scale=fp['scale']; self.dynamic=fp['dynamic']; self.nssd=len(self.ssd)
-            self.nss=int(.5*self.ntot); self.lowerb = 0; self.y=None
+            self.nss=int(.5*self.ntot); self.base = 0; self.y=None
 
             self.__init_model_functions__()
             self.__init_analyze_functions__()
@@ -84,7 +80,6 @@ class Simulator(object):
                   self.analyze_fx = self.analyze_reactive
                   self.get_ssbase = lambda x,y,DVg: DVg[0,0,0]*np.ones((ncond, nssd, nss))[:,:,:,None]
 
-
       def __init_analyze_functions__(self):
             """ initiates the analysis function used in
             optimization routine to produce the yhat vector
@@ -92,6 +87,11 @@ class Simulator(object):
 
             prob=self.prob; nss =self.nss;
             ssd=self.ssd; tb = self.tb
+
+
+            #GO RT as SINGLE FUNC
+            #go_rt = np.where(dvg.max(axis=2)>=p['a'][:,None], p['tr'][:,None]+np.argmax((dvg.T>=p['a']).T, axis=2)*.0005, 999)
+            #go prob = np.where(go_rt<self.tb, 1, 0).mean(axis=1)
 
             # INIT RESPONSE FUNCTIONS
             self.go_resp = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.0005
@@ -106,18 +106,17 @@ class Simulator(object):
 
             # SET STATIC/DYNAMIC BASIS FUNCTIONS
             self.get_t = lambda tg: np.cumsum([self.dt]*tg.max())
-            self.get_lowerb = lambda z, xxx: z*np.ones(len(self.t))
+            self.get_base = lambda z, xxx: z*np.ones(len(self.t))
             self.get_xtb = lambda tg, xb: array([np.ones(len(self.t)) for i in range(self.ncond)])
 
             # dynamic bias is hyperbolic
             if 'x' in self.kind and self.dynamic=='hyp':
                   self.get_t = lambda tg: np.cumsum(np.ones(tg.max()))[::-1]
-                  self.get_lowerb = lambda z, zpd: z+map((lambda x:(.5*x[0])/(1+(x[1]*self.t))), zpd)[0]
+                  self.get_base = lambda z, zpd: z+map((lambda x:(.5*x[0])/(1+(x[1]*self.t))), zpd)[0]
 
             # dynamic bias is exponential
-            elif 'x' in self.kind and self.dynamic=='exp':
+            if 'x' in self.kind and self.dynamic=='exp':
                   self.get_xtb = lambda tg, xb: array([np.exp(xtb*self.t) for xtb in xb])
-
 
 
       def vectorize_params(self, p):
@@ -155,17 +154,12 @@ class Simulator(object):
             if 'si' in p.keys():
                   self.dx=np.sqrt(p['si']*self.dt)
             if 'xb' not in p.keys():
-                  p['xb']=1.0
+                  p['xb'] = 1
             if 'z' not in p.keys():
                   p['z'] = 0
 
             for pkey in self.pvc:
-                  try:
-                        p[pkey]=np.ones(self.ncond)*p[pkey]
-                  except Exception:
-                        #naughty
-                        pass
-
+                  p[pkey]=np.ones(self.ncond)*p[pkey]
 
             for pkey, pkc in self.pc_map.items():
                   if self.ncond==1:
@@ -176,7 +170,6 @@ class Simulator(object):
                         p[pkey] = array([p[pc] for pc in pkc])
 
             return p
-
 
 
       def __sample_interactive_ssrt__(self, loc, sigma):
@@ -190,12 +183,10 @@ class Simulator(object):
             ::Returns::
                   samples (array) from dist. (nssd, nss)
             """
-            from scipy.stats.distributions import norm
 
             nrvs = self.nss*self.ncond
             rvs_shape = (self.nssd, nrvs/self.nssd)
             return (self.ssd + norm.rvs(loc, sigma, nrvs).reshape(rvs_shape).T).T
-
 
 
       def __update_go_process__(self, p):
@@ -215,13 +206,10 @@ class Simulator(object):
 
             Pg = 0.5*(1 + p['v']*self.dx/self.si)
             Tg = np.ceil((self.tb-p['tr'])/self.dt).astype(int)
-
             self.t=self.get_t(Tg)
-            self.lowerb = self.get_lowerb(p['z'], zip(p['a'],p['xb']))
+            self.base = self.get_base(p['z'], zip(p['a'],p['xb']))
             self.xtb = self.get_xtb(Tg, p['xb'])
-
             return Pg, Tg
-
 
 
       def __update_stop_process__(self, p):
@@ -246,9 +234,7 @@ class Simulator(object):
             return Ps, Ts
 
 
-
       def __cost_fx__(self, theta):
-
             """ Main cost function used for fitting all models self.sim_fx
             determines which model is simulated (determined when Simulator
             is initiated)
@@ -263,7 +249,6 @@ class Simulator(object):
             return (yhat - self.y)*self.wts[:len(self.y)]
 
 
-
       def simulate_reactive(self, p, analyze=True):
 
             p = self.vectorize_params(p)
@@ -271,7 +256,7 @@ class Simulator(object):
             Ps, Ts = self.__update_stop_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
-            DVg = p['z'] + (self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
+            DVg = self.base[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
             DVs = self.get_ssbase(Ts,Tg,DVg) + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
 
             if analyze:
@@ -280,19 +265,33 @@ class Simulator(object):
                   return [DVg, DVs]
 
 
-
       def simulate_proactive(self, p, analyze=True):
 
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
 
-            DVg = self.lowerb[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
+            DVg = self.base[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
 
             if analyze:
                   return self.analyze_proactive(DVg, p)
             else:
                   return DVg
 
+
+      def simulate_irace(self, p, analyze=True):
+
+            p = self.vectorize_params(p)
+            Pg, Tg = self.__update_go_process__(p)
+            Ps, Ts = self.__update_stop_process__(p)
+
+            # a/tr/v Bias: ALL CONDITIONS, ALL SSD
+            DVg = self.base[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx, -self.dx).T, axis=2))
+            init_ss = self.base*np.ones((self.ncond, self.nssd, self.nss))
+            DVs = init_ss[:,:,:,None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
+            if analyze:
+                  return self.analyze_irace(DVg, DVs, p)
+            else:
+                  return [DVg, DVs]
 
 
       def analyze_reactive(self, DVg, DVs, p):
@@ -314,7 +313,6 @@ class Simulator(object):
             return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
-
       def analyze_proactive(self, DVg, p):
 
             prob = self.prob; tb = self.tb
@@ -330,7 +328,6 @@ class Simulator(object):
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
             return hs([gac, qrt])
-
 
 
       def mean_pgo_rts(self, p, return_vals=True):
@@ -353,7 +350,6 @@ class Simulator(object):
                   return self.pgo_rts
 
 
-
       def simulate_interactive(self, p, analyze=True):
 
             p = self.vectorize_params(p)
@@ -361,7 +357,7 @@ class Simulator(object):
             Ps, Ts = self.__update_stop_process__(p)
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
-            DVg = self.lowerb[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
+            DVg = self.base[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
 
             allcond_interacted = []
             for i, DVc in enumerate(DVg):
