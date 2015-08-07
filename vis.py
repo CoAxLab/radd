@@ -7,19 +7,16 @@ from numpy import array
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd import utils
+from radd.toolbox import analyze, colors
 from scipy.stats.mstats import mquantiles as mq
-
-rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
-bpal = lambda nc: sns.blend_palette(['#81aedb', '#3A539B'], n_colors=nc)
-gpal = lambda nc: sns.blend_palette(['#65b88f', '#27ae60'], n_colors=nc)
-ppal = lambda nc: sns.blend_palette(['#848bb6', '#663399'], n_colors=nc)
-heat = lambda nc: sns.blend_palette(['#f39c12', '#c0392b'], n_colors=nc)
-cool = lambda nc: sns.blend_palette(["#4168B7", "#27ae60"], n_colors=nc)
-slate = lambda nc: sns.blend_palette(['#95A5A6', "#6C7A89"], n_colors=nc)
 
 sns.set(font='Helvetica')
 sns.set(style='ticks', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
+
+cdict = colors.get_colors('all')
+rpal = cdict['rpal']; bpal = cdict['bpal']; gpal = cdict['gpal']; ppal = cdict['ppal']; heat = cdict['heat'];
+cool = cdict['cool']; slate = cdict['slate']
+
 
 def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
 
@@ -57,15 +54,15 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
             mc = cool(len(x)); mclinealpha=[.6, .8]*len(lines)
             markers=True
 
-      x=utils.res(-x, lower=x[-1]/10, upper=x[0]/10)
+      x=analyze.res(-x, lower=x[-1]/10, upper=x[0]/10)
       for i, yi in enumerate(lines):
 
-            y=utils.res(yi, lower=yi[-1], upper=yi[0])
+            y=analyze.res(yi, lower=yi[-1], upper=yi[0])
             p_guess=(np.mean(x),np.mean(y),.5,.5)
-            p, cov, infodict, mesg, ier = optimize.leastsq(utils.residuals, p_guess, args=(x,y), full_output=1, maxfev=5000, ftol=1.e-20)
+            p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x,y), full_output=1, maxfev=5000, ftol=1.e-20)
             x0,y0,c,k=p
             xp = xsim
-            pxp=utils.sigmoid(p,xp)
+            pxp=analyze.sigmoid(p,xp)
             idx = (np.abs(pxp - pstop)).argmin()
 
             pse.append(xp[idx]/scale_factor)
@@ -139,9 +136,9 @@ def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', spli
             #      quant_list = [hq, fit_hq, mq, fit_mq, lq, fit_lq]
             #      lbs=['Data Hi', 'Fit Hi', 'Data Md', 'Fit Md', 'Data Lo', 'Fit Lo']
 
-      # Fit RT quantiles to KDE function in radd.utils
+      # Fit RT quantiles to KDE function in radd.analyze
       linestyles = ['-', '--']*3
-      kdefits = [utils.kde_fit_quantiles(q, bw=bw) for q in quant_list]
+      kdefits = [analyze.kde_fit_quantiles(q, bw=bw) for q in quant_list]
 
       for i, q in enumerate(kdefits):
 
@@ -189,7 +186,7 @@ def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
             f, ax = plt.subplots(1, figsize=(5,5))
       if color is None:
             color='k'
-      kdefits = utils.kde_fit_quantiles(quant, bw=bw)
+      kdefits = analyze.kde_fit_quantiles(quant, bw=bw)
       sns.kdeplot(kdefits, cumulative=True,  color=color, ax=ax, linewidth=2.5)
 
       ax.set_xlim(kdefits.min()*.94, kdefits.max()*1.05)
@@ -200,6 +197,7 @@ def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
 
       plt.tight_layout()
       sns.despine()
+
 
 def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, return_exec_ss=False, pgo=np.arange(0, 1.2, .2)):
 

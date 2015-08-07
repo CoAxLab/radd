@@ -1,6 +1,5 @@
 #!/usr/local/bin/env python
 from __future__ import division
-import time
 from copy import deepcopy
 import numpy as np
 from numpy import array
@@ -80,6 +79,7 @@ class Simulator(object):
                   self.analyze_fx = self.analyze_reactive
                   self.get_ssbase = lambda x,y,DVg: DVg[0,0,0]*np.ones((ncond, nssd, nss))[:,:,:,None]
 
+
       def __init_analyze_functions__(self):
             """ initiates the analysis function used in
             optimization routine to produce the yhat vector
@@ -87,8 +87,6 @@ class Simulator(object):
 
             prob=self.prob; nss =self.nss;
             ssd=self.ssd; tb = self.tb
-
-
             #GO RT as SINGLE FUNC
             #go_rt = np.where(dvg.max(axis=2)>=p['a'][:,None], p['tr'][:,None]+np.argmax((dvg.T>=p['a']).T, axis=2)*.0005, 999)
             #go prob = np.where(go_rt<self.tb, 1, 0).mean(axis=1)

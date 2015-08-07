@@ -1,7 +1,5 @@
 #!/usr/local/bin/env python
 from __future__ import division
-import os
-import time
 from copy import deepcopy
 import numpy as np
 import pandas as pd

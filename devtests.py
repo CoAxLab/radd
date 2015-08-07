@@ -144,7 +144,6 @@ def recost_collector(theta, y=None, ntrials=5000, collector=[], track='residuals
       return cost
 
 
-
 def recost_scipy(x0, y=None, wts=None, ntrials=2000, pGo=.5, ssd=np.arange(.2, .45, .05)):
 
       a, tr, v, ssv, z  = p[0], p[1], p[2], p[3], p[4]

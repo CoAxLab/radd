@@ -5,9 +5,11 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.toolbox.utils import *
+from radd.toolbox.theta import *
+from radd.toolbox.analyze import *
 from scipy.stats.mstats import mquantiles as mq
 from radd.toolbox.messages import saygo
+
 
 class RADDCore(object):
 
@@ -308,7 +310,6 @@ class RADDCore(object):
             self.data = remove_outliers(self.data, sd=sd, verbose=verbose)
 
       def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9])):
-
             if not hasattr(self, 'delays'):
                   self.delays = self.ssd
             qp_cols = get_header(params=params, data_style=self.data_style, labels=self.labels, prob=prob, delays=self.delays)

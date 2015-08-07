@@ -5,7 +5,7 @@ from pandas import DataFrame as pDF
 import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
-from radd.toolbox.utils import get_xbias_theta
+from radd.toolbox.theta import get_xbias_theta
 
 class BOLD(object):
       """ Simulated BOLD response // neural activity
@@ -60,6 +60,7 @@ class BOLD(object):
             # x[1] = timeboundary (simulator.tb)
             self.get_go_traces = lambda x: x[0][np.where(x[1]<=x[2], True, False)]
             self.get_nogo_traces = lambda x: x[0][np.where(x[1]>=x[2], True, False)]
+
             ###################################################################################
             # LAMBDA FUNC: CAP_ROLL_TRACES cap traces at bound and roll nans to back (opt. decay)
             # x[0] = DVg (go accumulator: all trials in single condition)

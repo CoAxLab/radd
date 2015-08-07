@@ -71,7 +71,6 @@ def resample_data(data, n=120, kind='radd'):
 
 
 
-
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """
       takes quantile estimates and fits cumulative density function
@@ -79,7 +78,6 @@ def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       """
 
       kdefit = KernelDensity(kernel='gaussian', bandwidth=bw).fit(rtquants)
-
       samples = kdefit.sample(n_samples=nsamples).flatten()
 
       return samples

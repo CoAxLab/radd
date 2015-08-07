@@ -7,22 +7,6 @@ import os, re
 from numpy import array
 
 
-def remove_outliers(df, sd=1.5, verbose=False):
-
-      ssdf=df[df.response==0]
-      godf = df[df.response==1]
-      bound = godf.rt.std()*sd
-      rmslow=godf[godf['rt']<(godf.rt.mean()+bound)]
-      clean_go=rmslow[rmslow['rt']>(godf.rt.mean()-bound)]
-
-      clean=pd.concat([clean_go, ssdf])
-      if verbose:
-            pct_removed = len(clean)*1./len(df)
-            print "len(df): %i\nbound: %s \nlen(cleaned): %i\npercent removed: %.5f" % (len(df), str(bound), len(clean), pct_removed)
-
-      return clean
-
-
 def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False):
 
       if 'radd' in kind:
@@ -85,19 +69,6 @@ def get_xbias_theta(model):
                   'z': 0}
 
 
-def ensure_numerical_wts(wts, fwts):
-
-      # test inf
-      wts[np.isinf(wts)] = np.median(wts[~np.isinf(wts)])
-      fwts[np.isinf(fwts)] = np.median(fwts[~np.isinf(fwts)])
-
-      # test nan
-      wts[np.isnan(wts)] = np.median(wts[~np.isnan(wts)])
-      fwts[np.isnan(fwts)] = np.median(fwts[~np.isnan(fwts)])
-
-      return wts, fwts
-
-
 def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array([.1, .3, .5, .7, .9])):
 
       info = ['nfev','chi','rchi','AIC','BIC','CNVRG']
@@ -115,6 +86,7 @@ def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array
             return [qp_cols, infolabels]
       else:
             return [qp_cols]
+
 
 def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit_noise=False):
 
@@ -158,27 +130,58 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
       return inits
 
 
-def make_proRT_conds(data, split):
+def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):
 
-      if np.any(data['pGo'].values > 1):
-            data['pGo']=data['pGo']*.01
-      if np.any(data['rt'].values > 5):
-            data['rt']=data['rt']*.001
+      if not type(theta)==dict:
+            theta=theta.to_dict()['mean']
 
-      if split=='HL':
-            data['HL']='x'
-            data.ix[data.pGo>.5, 'HL']=1
-            data.ix[data.pGo<=.5, 'HL']=2
-      return data
+      keep=['a', 'z', 'v', 'tr', 'ssv', 'ssd']
+      keep.pop(keep.index(dep))
+
+      pdict={pg:theta[dep+str(pg)] for pg in pgo}
+
+      for k in theta.keys():
+            if k not in keep:
+                  theta.pop(k)
+
+      return theta, pdict
+
+
+def update_params(theta):
+
+      if 't_hi' in theta.keys():
+            theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
+      else:
+            theta['tr']=theta['tr']
+
+      if 'z_hi' in theta.keys():
+            theta['z'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
+      else:
+            theta['z']=theta['z']
+
+      if 'sv' in theta.keys():
+            theta['v'] = theta['sv'] * np.random.randn() + theta['v']
+      else:
+            theta['v']=theta['v']
+
+      return theta
 
 
 
-def rename_bad_cols(data):
+def get_intervar_ranges(theta):
+      """
+      :args:
+            parameters (dict):	dictionary of theta (Go/NoGo Signal Parameters)
+                              and sp (Stop Signal Parameters)
+      """
+      if 'st' in theta.keys():
+            theta['t_lo'] = theta['tr'] - theta['st']/2
+            theta['t_hi'] = theta['tr'] + theta['st']/2
+      if 'sz' in theta.keys():
+            theta['z_lo'] = theta['z'] - theta['sz']/2
+            theta['z_hi'] = theta['z'] + theta['sz']/2
+      return theta
 
-      if 'trial_type' in data.columns:
-            data.rename(columns={'trial_type':'ttype'}, inplace=True)
-
-      return data
 
 
 def logger(optmod, finfo, fit_id='FLAT', kind='radd', depends_on={}, ):
