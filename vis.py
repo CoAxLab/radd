@@ -13,7 +13,7 @@ from scipy.stats.mstats import mquantiles as mq
 sns.set(font='Helvetica')
 sns.set(style='ticks', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
 
-cdict = colors.get_colors('all')
+cdict = colors.get_cpals('all')
 rpal = cdict['rpal']; bpal = cdict['bpal']; gpal = cdict['gpal']; ppal = cdict['ppal']; heat = cdict['heat'];
 cool = cdict['cool']; slate = cdict['slate']
 
@@ -320,10 +320,15 @@ def pro_animate(i, x, protraces, prolines):
 
 
 def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05)):
+      ncond = DVg.shape[0]
+      nssd = DVs.shape[1]
+      f, axes = plt.subplots(nssd, ncond, figsize=(12,14))
 
-      for i, trace in enumerate(DVs[0,:]):
-            theta['ssd'] = ssd[i]
-            plot_traces(DVg[0], trace, theta)
+      for i in range(ncond):
+            params = {k:v[i] if hasattr(v, '__iter__') else v for k,v in theta.items()}
+            for ii in range(nssd):
+                  plot_traces(DVg=DVg[i], DVs=DVs[i, ii], ssd=ssd[ii], sim_theta=params, ax=axes[ii,i])
+      return f
 
 
 def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='radd', ssd=.450, ax=None, tau=.0005, tb=.650, cg='#2c724f', cr='#c0392b'):
@@ -360,6 +365,7 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='radd', ssd=.450, ax=None, ta
       ax.hlines(y=ylow, xmin=xlow, xmax=tb, linewidth=2, linestyle='-', color="k")
       ax.vlines(x=xlow, ymin=ylow*.998, ymax=a*1.002, linewidth=2, linestyle='-', color="k")
       sns.despine(top=True,bottom=True, right=True, left=True)
+      xlim = (xlow*.95, 1.05*tb)
       ax.set_xticklabels([])
       ax.set_yticklabels([])
       ax.set_xticks([])

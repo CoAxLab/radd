@@ -23,21 +23,13 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
             elif ['tr']==depends_on.keys():
-                  inits = {'a':0.3267, 'tr': array([ 0.28082,  0.28855,  0.30535,  0.32555,  0.34669,  0.36803]), 'v': 1.3813}
+                  inits = {'a':0.3267, 'tr': array([0.36803, 0.34669, 0.32555, 0.30535, 0.28855, 0.28082]), 'v': 1.3813}
             elif ['v']==depends_on.keys():
-                  inits = {'a':0.4748, 'tr':0.2725, 'v': array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936])}
+                  inits = {'a':0.4748, 'tr':0.2725}
+                  inits['v'] = array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936])
             elif ['xb']==depends_on.keys():
                   inits={'a': 0.473022, "tr":0.330223, "v":1.64306}
                   inits['xb'] = array([0.257877,0.649422,1.03762,1.307329,1.934637,2.101918])
-
-            if 'x' in kind:
-                  if 'xb' in depends_on.keys():
-                        pass
-                  elif dynamic == 'exp':
-                        inits = {'a':0.4836, 'xb': 1.4604 , 'tr': 0.3375}
-                        inits['v'] = array([1.2628, 1.4304, 1.5705, 1.701, 1.8682, 1.9973])
-                  elif dynamic == 'hyp':
-                        inits = {'xb': .01, 'a': 0.473022,"tr":0.330223, "v":1.24306}
 
       elif 'race' in kind:
             if ['v']==depends_on.keys():
@@ -52,8 +44,8 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
       return inits
 
 
-def get_xbias_theta(model):
-      """ hyperbolic simulation parameters
+def get_xbias_theta(model=None):
+      """ hyperbolic and expon. simulation parameters
       """
       if model.dynamic=='hyp':
             return {'a': array([ 0.47302,  0.47302,  0.47302,  0.47302,  0.47302,  0.47302]),
@@ -62,11 +54,18 @@ def get_xbias_theta(model):
                   'xb': array([ 0.01,  0.01,  0.01,  0.01,  0.01,  0.01]),
                   'z': 0}
       elif model.dynamic=='exp':
-            return {'a': array([ 0.4836,  0.4836,  0.4836,  0.4836,  0.4836,  0.4836]),
-                  'tr': array([ 0.3375,  0.3375,  0.3375,  0.3375,  0.3375,  0.3375]),
-                  'v': array([ 1.08837,  1.31837,  1.54837,  1.77837,  2.00837,  2.23837]),
-                  'xb': array([ 1.4604,  1.4604,  1.4604,  1.4604,  1.4604,  1.4604]),
-                  'z': 0}
+            if 'v' in model.depends_on.keys():
+                  return {'a': array([ 0.4836,  0.4836,  0.4836,  0.4836,  0.4836,  0.4836]),
+                        'tr': array([ 0.3375,  0.3375,  0.3375,  0.3375,  0.3375,  0.3375]),
+                        'v': array([ 1.08837,  1.31837,  1.54837,  1.77837,  2.00837,  2.23837]),
+                        'xb': array([ 1.4604,  1.4604,  1.4604,  1.4604,  1.4604,  1.4604]),
+                        'z': 0}
+            elif 'tr' in model.depends_on.keys():
+                  return {'a': array([ 0.39142,  0.39142,  0.39142,  0.39142,  0.39142,  0.39142]),
+                        'tr': array([ 0.36599,  0.34991,  0.33453,  0.3239 ,  0.29896,  0.30856]),
+                        'v': array([ 1.66214,  1.66214,  1.66214,  1.66214,  1.66214,  1.66214]),
+                        'xb': array([ 0.09997,  0.09997,  0.09997,  0.09997,  0.09997,  0.09997]),
+                        'z': 0}
 
 
 def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array([.1, .3, .5, .7, .9])):

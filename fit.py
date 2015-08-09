@@ -10,6 +10,7 @@ from radd import models
 from lmfit import Parameters, minimize, fit_report, Minimizer
 from radd.CORE import RADDCore
 
+
 class Optimizer(RADDCore):
       """ Optimizer class acts as interface between Model and Simulator (see fit.py) objects.
       Structures fitting routines so that Models are first optimized with the full set of
@@ -134,7 +135,6 @@ class Optimizer(RADDCore):
 
             self.simulator.y = y.flatten()
             self.simulator.is_flat = flat
-            self.simulator.pvc = deepcopy(self.pvc)
             pfit = list(set(inits.keys()).intersection(self.pnames))
             lim = self.set_bounds()
             fp = self.fitparams
@@ -143,13 +143,12 @@ class Optimizer(RADDCore):
             theta=Parameters()
             for pkey, pc_list in self.pc_map.items():
                   if flat: break
-                  self.simulator.pvc.remove(pkey)
-                  pfit.remove(pkey)
+                  map((lambda l: l.remove(pkey)), [pfit, self.simulator.pvc])
                   mn = lim[pkey][0]; mx=lim[pkey][1]
                   d0 = [theta.add(pc, value=ip[pkey], vary=1, min=mn, max=mx) for pc in pc_list]
 
             p0 = [theta.add(k, value=ip[k], vary=flat, min=lim[k][0], max=lim[k][1]) for k in pfit]
-            opt_kws = {'disp':fp['disp'], 'xtol':fp['xtol'], 'ftol':['ftol'], 'maxfev':fp['maxfev']}
+            opt_kws = {'disp':fp['disp'], 'xtol':fp['tol'], 'ftol':fp['tol'], 'maxfev':fp['maxfev']}
 
             # OPTIMIZE THETA
             optmod = minimize(self.simulator.__cost_fx__, theta, method=self.method, options=opt_kws)
@@ -187,7 +186,6 @@ class Optimizer(RADDCore):
                   f.write('--'*20+'\n\n')
 
             return  yhat, finfo, popt
-
 
 
       def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):

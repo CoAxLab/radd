@@ -23,7 +23,7 @@ class RADDCore(object):
       TODO: COMPLETE DOCSTRINGS
       """
 
-      def __init__(self, kind='radd', inits=None, data=None, fit_on='subjects', depends_on=None, niter=50, scale=1., fit_whole_model=True, tb=None, scale_rts=False, fit_noise=False, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
+      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, scale=1., fit_whole_model=True, tb=None, scale_rts=False, fit_noise=False, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
 
             self.data = data
             self.kind = kind
@@ -56,6 +56,9 @@ class RADDCore(object):
             self.labels = np.sort(data[self.cond].unique())
             self.ncond = len(self.labels)
 
+            # GET TB BEFORE REMOVING OUTLIERS!!!
+            self.tb = data[data.response==1].rt.max()
+
             # PARAMETER INITIALIZATION
             if inits is None:
                   self.__get_default_inits__()
@@ -69,7 +72,6 @@ class RADDCore(object):
 
             # DATA TREATMENT AND EXTRACTION
             self.__remove_outliers__(sd=1.5, verbose=False)
-            self.tb = self.data[self.data.response==1].rt.max()
 
             # DEFINE ITERABLES
             if self.fit_on=='bootstrap':
@@ -144,12 +146,12 @@ class RADDCore(object):
                   return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 
-      def set_fitparams(self, ntrials=10000, ftol=1.e-20, xtol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
+      def set_fitparams(self, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
 
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'ftol':ftol, 'xtol':xtol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'scale':self.scale, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'scale':self.scale, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model}
 
             if get_params:
                   return self.fitparams
@@ -297,7 +299,7 @@ class RADDCore(object):
                   sq_ratio = (np.median(qvar, axis=1)/qvar.T).T
                   qwts = np.hstack((presponse.values.T * sq_ratio.T).T)
                   self.wts = np.hstack([pwts, qwts])
-                  #self.wts[self.wts>=5] = 2.5
+                  self.wts[self.wts>5]=2.5
                   #calculate flat weights (collapsing across conditions)
                   nogo = self.wts[:nc].mean()
                   quant = self.wts[nc:].reshape(nrtc, 5).mean(axis=0)

@@ -4,6 +4,7 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
+from radd.toolbox.analyze import *
 from radd.toolbox.messages import saygo
 from radd import fit, models
 from radd.CORE import RADDCore
@@ -58,12 +59,12 @@ class Model(RADDCore):
             self.prepare_fit()
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, ftol=1.e-20, xtol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=array([.1, .3, .5, .7, .9])):
+      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=array([.1, .3, .5, .7, .9])):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
 
-            fp = self.set_fitparams(xtol=xtol, ftol=xtol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
+            fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
 
             self.__check_inits__()
             inits = dict(deepcopy(self.inits))

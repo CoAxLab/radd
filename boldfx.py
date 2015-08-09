@@ -1,13 +1,17 @@
 from __future__ import division
 from copy import deepcopy
 import numpy as np
+from numpy import array
 from pandas import DataFrame as pDF
 import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
 from radd.toolbox.theta import get_xbias_theta
+from radd.toolbox.messages import describe_model
+from radd.models import Simulator
 
-class BOLD(object):
+
+class BOLD(Simulator):
       """ Simulated BOLD response // neural activity
       from optimized RADD models
 
@@ -21,10 +25,6 @@ class BOLD(object):
 
       def __init__(self, model, sim_xbias=False):
 
-            if not hasattr(model, 'simulator'):
-                  # GENERATE MODEL SIMULATOR
-                  model.make_simulator()
-
             if hasattr(model, 'popt'):
                   self.p = model.popt
             elif sim_xbias:
@@ -37,9 +37,12 @@ class BOLD(object):
                         pass
                   self.p = model.inits
 
+            # GENERATE MODEL SIMULATOR
+            super(BOLD, self).__init__(model=model, inits=model.inits, pc_map=model.pc_map, kind=model.kind, prepare=True, is_flat=False, is_bold=True)
+
             self.ncond = model.ncond
-            self.simulator = model.simulator
-            self.dt = self.simulator.dt
+            self.depends_on = model.depends_on
+            self.simulator = self.sim_fx
 
             self.__init_process_functions__()
 
@@ -52,6 +55,7 @@ class BOLD(object):
             # x[1] = a   (boundary, single condition)
             # x[2] = tr  (onset time, cond i)
             self.get_rt = lambda x: np.where(x[0].max(axis=1)>=x[1], x[2]+np.argmax(x[0]>=x[1], axis=1)*self.dt, 999)
+            self.get_ssrt = lambda dvs, delay: np.where(dvs.min(axis=3)<=0, delay+np.argmax(dvs<=0, axis=3)*self.dt, 999)
 
             ###############################################################
             # LAMBDA FUNC: GET_GO_TRACES FOR ALL THAT CROSS BOUND BEFORE TB
@@ -82,20 +86,64 @@ class BOLD(object):
             self.get_hemo = lambda d: d.cumsum(axis=0).apply(get_last_numeric, axis=0).dropna().values
 
 
-      def generate_go_traces(self):
+
+      def generate_radd_traces(self):
+
+            """ Get go,ssrt using same function as proactive then use the indices for
+            correct go and correct stop trials to slice summed, but momentary, dvg/dvs evidence vectors
+            (not accumulated over time just a basic sum of the vectors)
+            """
+
+
+            # ensure parameters are all vectorized
+            self.p = self.vectorize_params(self.p)
+            Pg, Tg = self.__update_go_process__(self.p)
+            Ps, Ts = self.__update_stop_process__(self.p)
+
+            ncond = self.ncond; ntot=self.ntot; dx=self.dx;
+            base=self.base; self.nss_all=self.nss; nssd=self.nssd;
+            ssd=self.ssd; nss = self.nss_all/self.nssd; xtb=self.xtb;
+
+            get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss/nssd, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,None]
+
+            self.gomoments = xtb[:,None]*np.where((rs((ncond, ntot, Tg.max())).T<Pg), dx,-dx).T
+            self.ssmoments = np.where(rs((ncond, nssd, nss, Ts.max()))<Ps, dx, -dx)
+            self.dvg = base[:, None]+xtb[:,None]* np.cumsum(self.gomoments, axis=2)
+            self.dvs = self.get_ssbase(Ts,Tg,DVg) + np.cumsum(self.ssmoments, axis=3)
+
+            #gomoments = np.where((rs((ncond, ntot, Tg.max())).T<Pg), dx,-dx).T
+            #ssmoments = np.where(rs((ncond, nssd, nss, Ts.max()))<Ps, dx, -dx)
+            dg = self.gomoments[:,nss_all:,:].reshape(ncond,nssd,nss,Tg.max())
+            ds = self.ssmoments.copy()
+            ss_list, go_list=[],[]
+
+            for i, (s, g) in enumerate(zip(ds, dg)):
+                  diff = Ts-Tg[i]
+                  pad_go = diff[diff>0]
+                  pad_ss = abs(diff[diff<0])
+
+                  go_list.extend([np.concatenate((np.zeros((nss, gpadd)), g[i]), axis=1) for pi, gpadd in enumerate(pad_go)])
+                  go_list.extend([g[x] for x in range(len(pad_ss))])
+
+                  ss_list.extend([s[i,:,-tss:] for tss in Ts[:len(pad_go)]])
+                  ss_list.extend([np.concatenate((np.zeros((nss, abs(spad))), s[i, :, -(Tg[i]-spad):]), axis=1) for spad in pad_ss])
+
+            r = map((lambda x: np.cumsum((x[0] + x[1]), axis=1)), zip(go_list, ss_list))
+
+
+      def generate_pro_traces(self):
             """ ensures parameters are vectorized and sets
             bound and onset attr. before generating simulated traces
             """
 
             # ensure parameters are all vectorized
-            self.p = self.simulator.vectorize_params(self.p)
+            self.p = self.vectorize_params(self.p)
 
             # init timebound, bound, onset-time attr
-            self.tb = self.simulator.tb
             self.bound = self.p['a']
             self.onset = self.p['tr']
             #simulate decision traces
-            self.dvg = self.simulator.sim_fx(self.p, analyze=False)
+            self.dvg = self.sim_fx(self.p, analyze=False)
 
 
       def get_bold_dfs(self, hemodynamic=True, decay=False, get_dfs=False):
@@ -118,9 +166,12 @@ class BOLD(object):
                         return list of simulated bold dataframes
             """
 
-            if not hasattr(self, 'dvg'):
+            if not hasattr(self, 'dvg') and 'pro' in self.kind:
                   # simulate decision traces
-                  self.generate_go_traces()
+                  self.generate_pro_traces()
+            elif not hasattr(self, 'dvg') and 'radd' in self.kind:
+                  # simulate decision traces
+                  self.generate_radd_traces()
 
             # zip dvg[ncond, ntrials, ntime], bound[a_c..a_ncond], onset[tr_c..tr_ncond]
             zipped_input_rt = zip(self.dvg, self.bound[:, None], self.onset[:,None])
@@ -131,8 +182,17 @@ class BOLD(object):
             zipped_rt_traces = zip(self.dvg, rt, [self.tb]*len(rt))
             # boolean index traces so that DVg[RT<=TB]
             go_trial_arrays = map(self.get_go_traces, zipped_rt_traces)
-            nogo_trial_arrays = map(self.get_nogo_traces, zipped_rt_traces)
-            # zip dvg(resp=1), bound[a_c..a_ncond], [decay]*ncond
+
+            if 'pro' in self.kind:
+                  # zip dvg(resp=1), bound[a_c..a_ncond], [decay]*ncond
+                  nogo_trial_arrays = map(self.get_nogo_traces, zipped_rt_traces)
+            elif 'radd' in self.kind:
+                  ssrt = self.get_ssrt(self.dvs, self.ssd[:,None])
+                  strial_gorts = rt[:,:self.nss_all].reshape(self.ncond,self.nssd,self.nss)
+                  # zip DVs, SSRT, ssGoRT
+                  zipped_rt_traces = zip(self.dvs, ssrt, strial_gorts)
+                  nogo_trial_arrays = map(self.get_nogo_traces, zipped_rt_traces)
+
 
             zipped_go_caproll = zip(go_trial_arrays, self.bound, [decay]*self.ncond)
             zipped_nogo_caproll = zip(nogo_trial_arrays, self.bound, [decay]*self.ncond)
@@ -247,15 +307,17 @@ class BOLD(object):
 
             redgreen = lambda nc: sns.blend_palette(["#c0392b", "#27ae60"], n_colors=nc)
 
+            titl=describe_model(self.depends_on)
+
             x=np.array(['0', '25', '50', '50', '75', '100'])
-            y=np.concatenate((self.nogo_hemo[:3], self.hemo[:3]))
+            y=np.concatenate((self.no_hemo[:3], self.go_hemo[:3]))
             sns.set(style='ticks', font_scale=1.5)
-            ax = sns.barplot(x=np.arange(len(x)), y=y, color=redgreen(6))
+            ax = sns.barplot(x=np.arange(len(x)), y=y, palette=redgreen(6))
             ax.set_xticklabels(x)
             ax.set_xlabel('pGo')
             ax.set_ylabel('$\Sigma \Theta_{Go}$', fontsize=26)
-            ax.set_title('Drift-Rate Effect on BOLD Activity (no decay assumed)')
-            ax.set_ylim(50, 100)
+            ax.set_title(" ".join([titl, 'effect(s) on BOLD Simulations']))
+            ax.set_ylim(y.min()*.6, y.max()*1.08)
             sns.despine()
             if save:
-                  plt.savefig('bold_pred_drift.png', dpi=300)
+                  plt.savefig(''.join([titl,'.png']), dpi=300)
