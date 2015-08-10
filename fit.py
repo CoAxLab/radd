@@ -171,19 +171,24 @@ class Optimizer(RADDCore):
             model_id = "MODEL: %s" % self.kind
             dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
             wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in self.simulator.wts)+'])'
-
+            yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
             with open('fit_report.txt', 'a') as f:
+                  f.write('=='*20+'\n\n')
                   f.write(str(self.fit_id)+'\n')
+                  f.write('=='*20+'\n\n')
                   f.write(str(model_id)+'\n')
                   f.write(str(dep_id)+'\n')
+                  f.write('--'*20+'\n\n')
                   f.write(wts_str+'\n\n')
+                  f.write(yhat_str+'\n\n')
+                  f.write('--'*20+'\n\n')
                   f.write(fit_report(optmod, show_correl=False)+'\n\n')
                   f.write('AIC: %.8f' % optmod.aic + '\n')
                   f.write('BIC: %.8f' % optmod.bic + '\n')
                   f.write('chi: %.8f' % optmod.chisqr + '\n')
                   f.write('rchi: %.8f' % optmod.redchi + '\n')
                   f.write('Converged: %s' % finfo['CNVRG'] + '\n')
-                  f.write('--'*20+'\n\n')
+                  f.write('=='*20+'\n\n')
 
             return  yhat, finfo, popt
 

@@ -7,7 +7,7 @@ import os, re
 from numpy import array
 
 
-def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False):
+def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False, inits = {}):
 
       if 'radd' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
@@ -18,6 +18,12 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
                   inits = {'a': 0.4442, 'ssv': -0.9519, 'tr': array([.3027, 0.3104]), 'v': 1.0959, 'z':0.1541}
             elif ['a'] == depends_on.keys():
                   inits = {'a': array([0.43864876, 44879925]), 'tr': 0.3049, 'v': 1.0842, 'ssv': -0.9293, 'z': 0.1539}
+            if 'x' in kind:
+                  if dynamic=='hyp' and 'xb' not in inits:
+                        inits['xb']=.01
+                  elif dynamic=='exp' and 'xb' not in inits:
+                        inits['xb']=1.5
+
 
       elif 'pro' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
@@ -25,17 +31,27 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
             elif ['tr']==depends_on.keys():
                   inits = {'a':0.3267, 'tr': array([0.36803, 0.34669, 0.32555, 0.30535, 0.28855, 0.28082]), 'v': 1.3813}
             elif ['v']==depends_on.keys():
-                  inits = {'a':0.4748, 'tr':0.2725}
-                  inits['v'] = array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936])
+                  if 'x' not in kind:
+                        inits = {'a': 0.474838, 'tr': 0.27253, 'v': array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936]), 'z': 0}
+                  else:
+                        if dynamic=='hyp' and 'x' in kind:
+                              inits = {'a':0.4748, 'tr':0.2725, 'v': array([ 1.39321, 1.52084, 1.65874,  1.75702, 1.89732, 1.94936]), 'z':0, 'xb': .009}
+                        elif dynamic=='exp' and 'x' in kind:
+                              inits = {'a':0.4836, 'tr': 0.3375, 'v': array([ 1.08837, 1.31837, 1.54837,  1.77837, 2.00837, 2.23837]), 'xb':  1.4604, 'z': 0}
             elif ['xb']==depends_on.keys():
-                  inits={'a': 0.473022, "tr":0.330223, "v":1.64306}
-                  inits['xb'] = array([0.257877,0.649422,1.03762,1.307329,1.934637,2.101918])
+                  inits={'a': 0.473022, "tr":0.330223, "v":1.64306, 'xb': array([0.257877, 0.649422, 1.03762, 1.307329, 1.934637, 2.101918])}
 
       elif 'race' in kind:
             if ['v']==depends_on.keys():
                   inits = {'v': array([1.0687, 1.0057]),'a': 0.3926741, 'tr': 0.3379, 'ssv': 1.1243, 'z': 0.1500}
             else:
                   inits = {'v': 1.0306, 'a': 0.3926741, 'tr': 0.3379, 'ssv': 1.1243, 'z': 0.1500}
+
+      if 'x' in kind and 'xb' not in inits.keys():
+            if dynamic=='hyp':
+                  inits['xb']=.01
+            elif dynamic=='exp':
+                  inits['xb']=1.5
 
       if fit_whole_model and np.any(hasattr(inits, '__iter__')):
             for p in depends_on.keys():
@@ -48,11 +64,15 @@ def get_xbias_theta(model=None):
       """ hyperbolic and expon. simulation parameters
       """
       if model.dynamic=='hyp':
-            return {'a': array([ 0.47302,  0.47302,  0.47302,  0.47302,  0.47302,  0.47302]),
-                  'tr': array([ 0.33022,  0.33022,  0.33022,  0.33022,  0.33022,  0.33022]),
-                  'v': array([ 0.69306,  0.81906,  0.94506,  1.07106,  1.19706,  1.32306]),
-                  'xb': array([ 0.01,  0.01,  0.01,  0.01,  0.01,  0.01]),
-                  'z': 0}
+
+            return {'a': 0.47548, 'tr': 0.27264, 'v': array([1.38303, .53767, 1.6675, 1.7762, 1.967, 2.0506]), 'xb': 0.009}
+
+            #return {'a': array([ 0.47302,  0.47302,  0.47302,  0.47302,  0.47302,  0.47302]),
+            #      'tr': array([ 0.33022,  0.33022,  0.33022,  0.33022,  0.33022,  0.33022]),
+            #      'v': array([ 0.69306,  0.81906,  0.94506,  1.07106,  1.19706,  1.32306]),
+            #      'xb': array([ 0.01,  0.01,  0.01,  0.01,  0.01,  0.01]),
+            #      'z': 0}
+
       elif model.dynamic=='exp':
             if 'v' in model.depends_on.keys():
                   return {'a': array([ 0.4836,  0.4836,  0.4836,  0.4836,  0.4836,  0.4836]),
