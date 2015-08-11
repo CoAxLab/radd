@@ -49,22 +49,23 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, rtscale=1., niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', verbose=True, *args, **kws):
 
             self.data=data
             self.weighted=weighted
+            self.verbose=verbose
 
-            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, scale=rtscale, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
+            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
 
             self.prepare_fit()
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=array([.1, .3, .5, .7, .9])):
+      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9])):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
 
-            fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, log_fits=log_fits, prob=prob, get_params=True)
+            fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, prob=prob, get_params=True)
 
             self.__check_inits__()
             inits = dict(deepcopy(self.inits))
@@ -154,7 +155,9 @@ class Model(RADDCore):
                   # MAKE PSEUDO WEIGHTS
                   self.fwts=np.ones_like(self.flat_y.flatten())
                   self.wts=np.ones_like(self.avg_y.flatten())
-
-            self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
+            if self.verbose:
+                  self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
+            else:
+                  self.prepared=True
 
             self.set_fitparams()

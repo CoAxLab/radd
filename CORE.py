@@ -23,13 +23,12 @@ class RADDCore(object):
       TODO: COMPLETE DOCSTRINGS
       """
 
-      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, scale=1., fit_whole_model=True, tb=None, scale_rts=False, fit_noise=False, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
+      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
 
             self.data = data
             self.kind = kind
             self.depends_on = depends_on
             self.fit_on = fit_on
-            self.scale = scale
             self.dynamic = dynamic
             self.fit_whole_model=fit_whole_model
             # BASIC MODEL STRUCTURE (kind)
@@ -90,7 +89,7 @@ class RADDCore(object):
                   ert = data.query('response==1 & acc==0').rt.values
                   gq = mq(grt, prob=prob)
                   eq = mq(ert, prob=prob)
-                  return np.hstack([gac, sacc, gq*self.scale, eq*self.scale])
+                  return np.hstack([gac, sacc, gq, eq])
 
             elif self.data_style=='pro':
                   godf = data[data.response==1]
@@ -146,12 +145,12 @@ class RADDCore(object):
                   return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 
-      def set_fitparams(self, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, log_fits=True, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
+      def set_fitparams(self, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
 
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'log_fits':log_fits, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'scale':self.scale, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model}
 
             if get_params:
                   return self.fitparams

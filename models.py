@@ -50,7 +50,7 @@ class Simulator(object):
             fp=dict(deepcopy(self.fitparams))
             self.tb=fp['tb']; self.wts=fp['wts']; self.ncond=fp['ncond']
             self.ntot=fp['ntrials']; self.prob=fp['prob']; self.ssd=fp['ssd']
-            self.scale=fp['scale']; self.dynamic=fp['dynamic']; self.nssd=len(self.ssd)
+            self.dynamic=fp['dynamic']; self.nssd=len(self.ssd)
             self.nss=int(.5*self.ntot); self.base = 0; self.y=None
 
             self.__init_model_functions__()

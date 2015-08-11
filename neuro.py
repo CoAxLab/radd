@@ -1,3 +1,4 @@
+#!/usr/local/bin/env python
 from __future__ import division
 from copy import deepcopy
 from collections import OrderedDict
@@ -5,7 +6,6 @@ import numpy as np
 from numpy import array
 import pandas as pd
 from numpy import concatenate as concat
-from pandas import DataFrame as pDF
 import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
@@ -13,7 +13,6 @@ from radd.toolbox.colors import get_cpals
 from radd.toolbox.theta import get_xbias_theta
 from radd.toolbox.messages import describe_model
 from radd.models import Simulator
-
 
 
 class BOLD(Simulator):
@@ -154,7 +153,7 @@ class BOLD(Simulator):
             self.dvg = self.sim_fx(self.p, analyze=False)
 
 
-      def simulate_bold(self, hemodynamic=True, decay=False, get_dfs=False):
+      def simulate_bold(self, hemodynamic=True, decay=False, get_dfs=False, shape='long', savestr='./',  save=False):
 
             """ gets RT of boundary crossing for boolean selecting
             go traces which are then filtered and stored in DF
@@ -210,24 +209,24 @@ class BOLD(Simulator):
             self.ng_traces = map(self.cap_roll_traces, zipped_ng_caproll)
 
             if hemodynamic:
-                  self.make_bold_dfs()
+                  self.make_bold_dfs(shape=shape, save=save)
                   self.mean_go_traces = [gt.mean(axis=1).dropna().values for gt in self.go_traces]
                   self.mean_ng_traces = [ng.mean(axis=1).dropna().values for ng in self.ng_traces]
 
 
-      def make_bold_dfs(self, shape='fat'):
+      def make_bold_dfs(self, shape='long', savestr='./', save=False):
 
             go_csum = [gt.cumsum(axis=0).max(axis=0).values for gt in self.go_traces]
             ng_csum = [ng.cumsum(axis=0).max(axis=0).values for ng in self.ng_traces]
 
             if shape=='fat':
-                  dfgo_csum = pDF.from_dict(OrderedDict(zip(self.labels, go_csum)), orient='index').T
-                  dfng_csum = pDF.from_dict(OrderedDict(zip(self.labels, ng_csum)), orient='index').T
+                  dfgo_csum = pd.DataFrame.from_dict(OrderedDict(zip(self.labels, go_csum)), orient='index').T
+                  dfng_csum = pd.DataFrame.from_dict(OrderedDict(zip(self.labels, ng_csum)), orient='index').T
                   dfgo_csum.insert(0, 'choice', 'go')
                   dfng_csum.insert(0, 'choice', 'nogo')
 
                   self.bold_mag = pd.concat([dfgo_csum, dfng_csum])
-
+                  self.bold_mag.index.name='cond'
             elif shape=='long':
                   go_csum.extend(ng_csum)
                   boldf_list = []
@@ -235,8 +234,11 @@ class BOLD(Simulator):
                   lbls=[int(lbl) for lbl in self.labels]*2
                   for i, gb in enumerate(go_csum):
                         boldf_list.append(pd.DataFrame.from_dict({'cond':lbls[i],'csum':gb, 'choice': choices[i]}))
-
                   self.bold_mag = pd.concat(boldf_list)
+
+            if save:
+                  self.bold_mag.to_csv(''.join([savepth, 'bold_mag.csv']))
+
 
 
       def cap_n_bound(self, traces, bound, decay=False):
@@ -263,7 +265,7 @@ class BOLD(Simulator):
                   traces_capped = concat((traces, traces[:,::-1]), axis=1)
             else:
                   traces_capped = traces
-            traces_df = pDF(traces_capped.T)
+            traces_df = pd.DataFrame(traces_capped.T)
             return traces_df
 
 
@@ -365,8 +367,10 @@ class BOLD(Simulator):
             df.ix[(df.choice=='go')&(df.cond<=50), 'cond']=60
             df.ix[(df.choice=='nogo')&(df.cond>=50), 'cond']=40
             ax = sns.barplot('cond', 'csum', data=df, order=np.sort(df.cond.unique()), palette=redgreen(6))
+
             mu = df.groupby(['choice','cond']).mean()['csum']
             ax.set_ylim(mu.min()*.55, mu.max()*1.15)
+
             ax.set_xlabel('pGo', fontsize=22)
             ax.set_ylabel('$\Sigma \Theta_{G}$',fontsize=26)
             ax.set_title(" ".join([titl, 'effect(s) on BOLD Simulations']))
