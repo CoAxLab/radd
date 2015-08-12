@@ -39,22 +39,27 @@ class Simulator(object):
 
             self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
             self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
-
             if prepare:
                   self.prepare_simulator()
 
 
+      def prepare_simulator(self, flat_model=True):
 
-      def prepare_simulator(self):
+            if not self.is_flat:
+                  try:
+                        map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
+                  except ValueError:
+                        pass
 
-            fp=dict(deepcopy(self.fitparams))
-            self.tb=fp['tb']; self.wts=fp['wts']; self.ncond=fp['ncond']
-            self.ntot=fp['ntrials']; self.prob=fp['prob']; self.ssd=fp['ssd']
-            self.dynamic=fp['dynamic']; self.nssd=len(self.ssd)
-            self.nss=int(.5*self.ntot); self.base = 0; self.y=None
+            if not hasattr(self, 'sim_fx'):
+                  fp=dict(deepcopy(self.fitparams))
+                  self.tb=fp['tb']; self.wts=fp['wts']; self.ncond=fp['ncond']
+                  self.ntot=fp['ntrials']; self.prob=fp['prob']; self.ssd=fp['ssd']
+                  self.dynamic=fp['dynamic']; self.nssd=len(self.ssd)
+                  self.nss=int(.5*self.ntot); self.base = 0; self.y=None
 
-            self.__init_model_functions__()
-            self.__init_analyze_functions__()
+                  self.__init_model_functions__()
+                  self.__init_analyze_functions__()
 
 
       def __init_model_functions__(self):
@@ -93,6 +98,10 @@ class Simulator(object):
             #GO RT as SINGLE FUNC
             #go_rt = np.where(dvg.max(axis=2)>=p['a'][:,None], p['tr'][:,None]+np.argmax((dvg.T>=p['a']).T, axis=2)*.0005, 999)
             #go prob = np.where(go_rt<self.tb, 1, 0).mean(axis=1)
+
+            self.get_rt = lambda x: np.where(x[0].max(axis=1)>=x[1], x[2]+np.argmax(x[0]>=x[1], axis=1)*self.dt, 999)
+            self.get_ssrt = lambda dvs, delay: np.where(dvs.min(axis=3)<=0, delay+np.argmax(dvs<=0, axis=3)*self.dt, 999)
+            self.get_resp = lambda x: x[0][np.where(x[1]<=x[2], 1, 0)]
 
             # INIT RESPONSE FUNCTIONS
             self.go_resp = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.0005
@@ -255,8 +264,9 @@ class Simulator(object):
                   p = theta.valuesdict()
 
             yhat = self.sim_fx(p, analyze=True)
-            return (yhat - self.y)*self.wts[:len(self.y)]
-
+            cost = yhat-self.y
+            wtd_cost = cost*self.wts#[:len(self.y)]
+            return wtd_cost
 
       def simulate_reactive(self, p, analyze=True):
 
@@ -325,18 +335,35 @@ class Simulator(object):
       def analyze_proactive(self, DVg, p):
 
             prob = self.prob; tb = self.tb
+            ncond = self.ncond
+            #gdec = self.go_resp(DVg, p['a'])
+            #rt = self.RT(p['tr'], gdec)
+            #if self.ncond==1:
+            #      qrt = mq(rt[rt<tb], prob=prob)
+            #else:
+            #      zipped = zip([hs(rt[3:]),hs(rt[:3])],[tb]*2)
+            #      qrt = hs(self.fRTQ(zipped))
 
-            gdec = self.go_resp(DVg, p['a'])
-            rt = self.RT(p['tr'], gdec)
-            if self.ncond==1:
+            rt = (p['tr']+(np.where((DVg.max(axis=2).T>=p['a']).T, np.argmax((DVg.T>=p['a']).T,axis=2)*self.dt, np.nan).T)).T
+            if ncond==1:
                   qrt = mq(rt[rt<tb], prob=prob)
             else:
-                  zipped = zip([hs(rt[3:]),hs(rt[:3])],[tb]*2)
-                  qrt = hs(self.fRTQ(zipped))
+                  hi = np.nanmean(rt[ncond/2:], axis=0)
+                  lo = np.nanmean(rt[:ncond/2], axis=0)
+                  hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
+                  # compute RT quantiles for correct and error resp.
+                  qrt = np.hstack([mq(rtc[rtc<tb], prob=prob) for rtc in hilo])
 
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
-            return hs([gac, qrt])
+            #return gq, eq, gac, sacc
+            #if return_traces:
+            #      return DVg, DVs
+            return np.hstack([gac, qrt])
+
+            # Get response and stop accuracy information
+            #gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
+            #return hs([gac, qrt])
 
 
       def mean_pgo_rts(self, p, return_vals=True):
@@ -382,9 +409,6 @@ class Simulator(object):
                   return self.analyze_interactive(DVg_interacted, p)
             else:
                   return DVg_interacted
-
-
-
 
 
 

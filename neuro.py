@@ -28,24 +28,26 @@ class BOLD(Simulator):
 
       def __init__(self, model, sim_xbias=False):
 
-            model.fit_whole_model=False
-
             if hasattr(model, 'popt'):
                   self.p = model.popt
+                  for pkey, pkc_list in model.pc_map.items():
+                        self.p[pkey] = np.array([model.popt[pkc] for pkc in pkc_list])
             elif sim_xbias:
                   self.p = get_xbias_theta(model)
             else:
+                  model.fit_whole_model=False
                   try:
-                        model.fit_whole_model=False
                         model.__get_default_inits__()
                   except Exception:
                         pass
-
-                  model.fit_whole_model=False
                   self.p = model.inits
 
+            #pfit = list(set(self.p.keys()).intersection(self.pnames))
+            #for pkey, pc_list in self.pc_map.items():
+            #      map((lambda l: l.remove(pkey)), [pfit, self.pvc])
+
             # GENERATE MODEL SIMULATOR
-            super(BOLD, self).__init__(model=model, inits=model.inits, pc_map=model.pc_map, kind=model.kind, prepare=True, is_flat=False, is_bold=True)
+            super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind, prepare=True, is_flat=False, is_bold=True)
 
             self.ncond = model.ncond
             self.depends_on = model.depends_on
@@ -214,7 +216,7 @@ class BOLD(Simulator):
                   self.mean_ng_traces = [ng.mean(axis=1).dropna().values for ng in self.ng_traces]
 
 
-      def make_bold_dfs(self, shape='long', savestr='./', save=False):
+      def make_bold_dfs(self, shape='long', savestr='sim', save=False):
 
             go_csum = [gt.cumsum(axis=0).max(axis=0).values for gt in self.go_traces]
             ng_csum = [ng.cumsum(axis=0).max(axis=0).values for ng in self.ng_traces]
@@ -237,7 +239,7 @@ class BOLD(Simulator):
                   self.bold_mag = pd.concat(boldf_list)
 
             if save:
-                  self.bold_mag.to_csv(''.join([savepth, 'bold_mag.csv']))
+                  self.bold_mag.to_csv('_'.join([savestr, 'bold_mag.csv']), index=False)
 
 
 
@@ -354,28 +356,27 @@ class BOLD(Simulator):
             theta=self.p
             theta = self.simulator.vectorize_params(theta)
             out = self.simulator.sim_fx(theta, analyze=analyze)
-
             return out
+
 
       def plot_means(self, save=False):
 
             redgreen = lambda nc: sns.blend_palette(["#c0392b", "#27ae60"], n_colors=nc)
 
+            f, ax = plt.subplots(1, figsize=(5,5))
+
             titl=describe_model(self.depends_on)
             df = self.bold_mag.copy()
-
             df.ix[(df.choice=='go')&(df.cond<=50), 'cond']=60
             df.ix[(df.choice=='nogo')&(df.cond>=50), 'cond']=40
-            ax = sns.barplot('cond', 'csum', data=df, order=np.sort(df.cond.unique()), palette=redgreen(6))
+            sns.barplot('cond', 'csum', data=df, order=np.sort(df.cond.unique()), palette=redgreen(6), ax=ax)
 
             mu = df.groupby(['choice','cond']).mean()['csum']
             ax.set_ylim(mu.min()*.55, mu.max()*1.15)
-
             ax.set_xlabel('pGo', fontsize=22)
             ax.set_ylabel('$\Sigma \Theta_{G}$',fontsize=26)
             ax.set_title(" ".join([titl, 'effect(s) on BOLD Simulations']))
             sns.despine()
-
             if save:
                   plt.savefig(''.join([titl,'.png']), dpi=300)
 

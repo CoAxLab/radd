@@ -58,3 +58,42 @@ def describe_model(depends_on=None):
             pdep = deplist[0]
 
       return pdep
+
+
+
+def logger(optmod, finfo={}, depends_on={}, fit_arrays={}):
+
+      wts, y, yhat = fit_arrays['wts'], fit_arrays['y'], fit_arrays['yhat']
+
+      finfo['chi'] = optmod.chisqr
+      finfo['rchi'] = optmod.redchi
+      finfo['CNVRG'] = optmod.pop('success')
+      finfo['nfev'] = optmod.pop('nfev')
+      finfo['AIC']=optmod.aic
+      finfo['BIC']=optmod.bic
+
+      pkeys = depends_on.keys()
+      pvals = depends_on.values()
+      model_id = "MODEL: %s" % self.kind
+      dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
+      wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in wts)+'])'
+      yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
+      y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y.flatten())+'])'
+
+      with open('fit_report.txt', 'a') as f:
+            f.write('=='*20+'\n')
+            f.write(str(self.fit_id)+'\n')
+            f.write(str(model_id)+'\n')
+            f.write(str(dep_id)+'\n')
+            f.write('--'*20+'\n')
+            f.write(wts_str+'\n')
+            f.write(yhat_str+'\n')
+            f.write(y_str+'\n')
+            f.write('--'*20+'\n')
+            f.write(fit_report(optmod, show_correl=False)+'\n\n')
+            f.write('AIC: %.8f' % optmod.aic + '\n')
+            f.write('BIC: %.8f' % optmod.bic + '\n')
+            f.write('chi: %.8f' % optmod.chisqr + '\n')
+            f.write('rchi: %.8f' % optmod.redchi + '\n')
+            f.write('Converged: %s' % finfo['CNVRG'] + '\n')
+            f.write('=='*20+'\n\n')

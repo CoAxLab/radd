@@ -68,7 +68,7 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
       return inits
 
 
-def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False, inits={}):
+def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False, inits={}, get_bias_vectors=False):
 
 
       if 'radd' in kind:
@@ -119,6 +119,9 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
                   inits['xb']=.01
             elif dynamic=='exp':
                   inits['xb']=1.5
+      if get_bias_vectors:
+            bias = {k: inits[k] for k in depends_on.keys()}
+            return bias
 
       if fit_whole_model and np.any(hasattr(inits, '__iter__')):
             for pkey in depends_on.keys():

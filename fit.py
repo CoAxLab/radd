@@ -56,7 +56,7 @@ class Optimizer(RADDCore):
       def optimize_model(self, save=True, savepth='./'):
 
             # initate simulator object of model being optimized
-            self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
+            self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map, is_flat=True)
 
             if self.fit_on=='average':
                   self.yhat, self.fitinfo, self.popt = self.__opt_routine__(self.avg_y, fit_id='AVERAGE')
@@ -122,12 +122,19 @@ class Optimizer(RADDCore):
                         self.fit_id = fit_ids[i]
                         yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, flat=flat[i], )
                         p = deepcopy(popt)
+                        try:
+                              bias = self.__get_default_inits__(get_bias_vectors=True)
+                              for k in bias.keys():
+                                    diff = bias[k] - np.mean(bias[k])
+                                    p[k] = p[k] + diff
+                        except Exception:
+                              pass
 
             return yhat, finfo, popt
 
 
 
-      def optimize_theta(self, y, inits, flat=False):
+      def optimize_theta(self, y, inits, flat=True):
 
             """ Optimizes parameters following specified parameter
             dependencies on task conditions (i.e. depends_on={param: cond})
@@ -135,7 +142,9 @@ class Optimizer(RADDCore):
 
             self.simulator.y = y.flatten()
             self.simulator.is_flat = flat
+            self.simulator.prepare_simulator()
             pfit = list(set(inits.keys()).intersection(self.pnames))
+
             lim = self.set_bounds()
             fp = self.fitparams
 
@@ -143,9 +152,13 @@ class Optimizer(RADDCore):
             theta=Parameters()
             for pkey, pc_list in self.pc_map.items():
                   if flat: break
-                  map((lambda l: l.remove(pkey)), [pfit, self.simulator.pvc])
+                  if hasattr(ip[pkey], '__iter__'):
+                        ivals = ip[pkey]
+                  else:
+                        ivals = ip[pkey]*np.ones(len(pc_list))
+                  pfit.remove(pkey)
                   mn = lim[pkey][0]; mx=lim[pkey][1]
-                  d0 = [theta.add(pc, value=ip[pkey], vary=1, min=mn, max=mx) for pc in pc_list]
+                  d0 = [theta.add(pc, value=ivals[i], vary=1, min=mn, max=mx) for i, pc in enumerate(pc_list)]
 
             p0 = [theta.add(k, value=ip[k], vary=flat, min=lim[k][0], max=lim[k][1]) for k in pfit]
             opt_kws = {'disp':fp['disp'], 'xtol':fp['tol'], 'ftol':fp['tol'], 'maxfev':fp['maxfev']}
@@ -172,16 +185,17 @@ class Optimizer(RADDCore):
             dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
             wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in self.simulator.wts)+'])'
             yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
+            y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y.flatten())+'])'
             with open('fit_report.txt', 'a') as f:
-                  f.write('=='*20+'\n\n')
+                  f.write('=='*20+'\n')
                   f.write(str(self.fit_id)+'\n')
-                  f.write('=='*20+'\n\n')
                   f.write(str(model_id)+'\n')
                   f.write(str(dep_id)+'\n')
-                  f.write('--'*20+'\n\n')
-                  f.write(wts_str+'\n\n')
-                  f.write(yhat_str+'\n\n')
-                  f.write('--'*20+'\n\n')
+                  f.write('--'*20+'\n')
+                  f.write(wts_str+'\n')
+                  f.write(yhat_str+'\n')
+                  f.write(y_str+'\n')
+                  f.write('--'*20+'\n')
                   f.write(fit_report(optmod, show_correl=False)+'\n\n')
                   f.write('AIC: %.8f' % optmod.aic + '\n')
                   f.write('BIC: %.8f' % optmod.bic + '\n')

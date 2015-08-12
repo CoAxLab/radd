@@ -298,7 +298,7 @@ class RADDCore(object):
                   sq_ratio = (np.median(qvar, axis=1)/qvar.T).T
                   qwts = np.hstack((presponse.values.T * sq_ratio.T).T)
                   self.wts = np.hstack([pwts, qwts])
-                  self.wts[self.wts>5]=2.5
+                  self.wts[self.wts>3]=3.
                   #calculate flat weights (collapsing across conditions)
                   nogo = self.wts[:nc].mean()
                   quant = self.wts[nc:].reshape(nrtc, 5).mean(axis=0)
@@ -318,8 +318,12 @@ class RADDCore(object):
                   self.infolabels = qp_cols[1]
             return qp_cols[0]
 
-      def __get_default_inits__(self, include_ss=False, fit_noise=False):
-            self.inits = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on, fit_whole_model=self.fit_whole_model, include_ss=include_ss, fit_noise=fit_noise)
+      def __get_default_inits__(self, include_ss=False, fit_noise=False, get_bias_vectors=False):
+            params = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on, fit_whole_model=self.fit_whole_model, include_ss=include_ss, fit_noise=fit_noise, get_bias_vectors=get_bias_vectors)
+            if get_bias_vectors:
+                  return params
+            else:
+                  self.inits = params
 
       def __check_inits__(self, pro_ss=False, fit_noise=False):
                   self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
