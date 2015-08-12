@@ -23,23 +23,29 @@ class RADDCore(object):
       TODO: COMPLETE DOCSTRINGS
       """
 
-      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split='HL', *args, **kws):
+      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
 
             self.data = data
             self.kind = kind
-            self.depends_on = depends_on
             self.fit_on = fit_on
             self.dynamic = dynamic
             self.fit_whole_model=fit_whole_model
+
             # BASIC MODEL STRUCTURE (kind)
             if 'pro' in self.kind:
                   self.data_style='pro'
                   if depends_on is None:
                         depends_on = {'v':'pGo'}
-                  self.pGo = sorted(self.data.pGo.unique())
                   self.ssd=np.array([.450])
+
                   self.split=split
-                  self.nrt_cond=len(split)
+                  if isinstance(self.split, int):
+                        self.nrt_cond=2
+                  elif isinstance(self.split, list):
+                        self.nrt_cond=len(self.split)
+
+                  self.pGo=sorted(self.data.pGo.unique())
+                  self.include_zero_rts=include_zero_rts
             else:
                   self.data_style='re'
                   if depends_on is None:
@@ -55,6 +61,11 @@ class RADDCore(object):
             self.labels = np.sort(data[self.cond].unique())
             self.ncond = len(self.labels)
 
+            # index to split pro. rts during fit
+            # if split!=None (is set during prep in
+            # analyze.__make_proRT_conds__())
+            self.rt_cix = None
+
             # GET TB BEFORE REMOVING OUTLIERS!!!
             self.tb = data[data.response==1].rt.max()
 
@@ -63,10 +74,7 @@ class RADDCore(object):
                   self.__get_default_inits__()
             else:
                   self.inits = inits
-            #if np.any(hasattr(self.inits.values(), '__iter__')):
-                  #self.fit_whole_model=False
-            #else:
-            #      self.fit_whole_model=True
+
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
 
             # DATA TREATMENT AND EXTRACTION
@@ -98,18 +106,22 @@ class RADDCore(object):
                   return 1-data.response.mean()
 
 
-      def rt_quantiles(self, data, split='HL', prob=np.arange(0.1,1.0,0.2)):
+      def rt_quantiles(self, data, split='HL', prob=np.array([.1, .3, .5, .7, .9])):
 
             if not hasattr(self, "prort_conds_prepared"):
                   self.__make_proRT_conds__()
 
-            godfx = data[(data.response==1)]# & (data.pGo>0.)]
-            godfx.loc[:, 'response'] = np.where(godfx.rt<=self.tb, 1, 0)
-            godf = godfx.query('response==1')
+            if self.include_zero_rts:
+                  godf = data[(data.response==1)]
+            else:
+                  godf = data[(data.response==1) & (data.pGo>0.)]
+            #godfx.loc[:, 'response'] = np.where(godfx.rt<self.tb, 1, 0)
+            #godf = godfx.query('response==1')
 
             if split == None:
                   rts = godf[godf.rt<=self.tb].rt.values
                   return mq(rts, prob=prob)
+
             rtq = []
             for i in range(1, self.nrt_cond+1):
                   if i not in godf[split].unique():
@@ -150,7 +162,7 @@ class RADDCore(object):
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'wts':self.wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.fwts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model, 'rt_cix': self.rt_cix}
 
             if get_params:
                   return self.fitparams
@@ -246,7 +258,6 @@ class RADDCore(object):
 
             elif self.data_style=='pro':
                   datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
-
                   rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
                   rtdat[rtdat<.1] = np.nan
                   rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split=None).values), index=indx)
@@ -270,6 +281,7 @@ class RADDCore(object):
             """
 
             nc = self.ncond; cond=self.cond;
+
             if self.data_style=='re':
                   obs_var = self.observed.groupby(cond).sem().loc[:,'Go':]
                   qvar = obs_var.values[:,6:]
@@ -288,22 +300,32 @@ class RADDCore(object):
 
             elif self.data_style=='pro':
 
-                  nrtc = self.nrt_cond;
-                  pvar = self.data.groupby(cond).std().response.values
+                  upper = self.data[self.data.isin([.6,.8,1.0])].response.mean()
+                  lower = self.data[self.data.pGo.isin([.2,.4,.6])].response.mean()
+
+                  pvar = self.data.groupby('pGo').std().response.values
                   psub1 = np.median(pvar[:-1])/pvar[:-1]
                   pwts = np.append(psub1, psub1.max())
+                  #pwts = np.array([1.5,1,1,1,1,1.5])
 
-                  presponse = self.data.groupby(self.split).mean().response
-                  qvar = self.observed.std().iloc[nc:].values.reshape(nrtc, 5)
-                  sq_ratio = (np.median(qvar, axis=1)/qvar.T).T
-                  qwts = np.hstack((presponse.values.T * sq_ratio.T).T)
-                  self.wts = np.hstack([pwts, qwts])
-                  self.wts[self.wts>3]=3.
-                  #calculate flat weights (collapsing across conditions)
+                  qvar = self.observed.std().iloc[6:].values
+                  # round to nearest millisecond (otherwise screws up range)
+                  # no rounding: ~.01 <--> ~35 /// with rounding: ~.3 <--> ~5
+                  qvar_r = np.round(qvar, 3)
+                  qvar_r[qvar_r<=.001] = .001
+                  #sq_ratio = (np.median(qvar_r, axis=1)/qvar_r.T).T
+
+                  sq_ratio = (np.median(qvar_r)/qvar_r).reshape(2,5)
+                  wt_hi = upper*sq_ratio[0, :]
+                  wt_lo = lower*sq_ratio[1, :]
+
+                  self.wts = np.hstack([pwts, wt_hi, wt_lo])
                   nogo = self.wts[:nc].mean()
-                  quant = self.wts[nc:].reshape(nrtc, 5).mean(axis=0)
+                  quant = self.wts[nc:].reshape(2, 5).mean(axis=0)
+                  #calculate flat weights (collapsing across conditions)
                   self.fwts = np.hstack([nogo, quant])
-
+                  #pwts = np.array([1.5,  1,  1,  1,  2, 2])
+                  #self.wts = np.hstack([pwts, qwts])
             self.wts, self.fwts = ensure_numerical_wts(self.wts, self.fwts)
 
 
@@ -318,18 +340,18 @@ class RADDCore(object):
                   self.infolabels = qp_cols[1]
             return qp_cols[0]
 
-      def __get_default_inits__(self, include_ss=False, fit_noise=False, get_bias_vectors=False):
-            params = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on, fit_whole_model=self.fit_whole_model, include_ss=include_ss, fit_noise=fit_noise, get_bias_vectors=get_bias_vectors)
-            if get_bias_vectors:
-                  return params
-            else:
-                  self.inits = params
+      def __get_default_inits__(self):
+            self.inits = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+
+      def __get_optimized_params__(self, include_ss=False, fit_noise=False):
+            params = get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+            return params
 
       def __check_inits__(self, pro_ss=False, fit_noise=False):
-                  self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
+            self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
 
       def __make_proRT_conds__(self):
-            self.data = make_proRT_conds(self.data, self.split)
+            self.data, self.rt_cix = make_proRT_conds(self.data, self.split)
             self.prort_conds_prepared = True
 
       def __rename_bad_cols__(self):

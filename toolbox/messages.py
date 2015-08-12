@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from numpy.random import randint
+from lmfit import fit_report
 
 def get_one():
 
@@ -61,9 +62,9 @@ def describe_model(depends_on=None):
 
 
 
-def logger(optmod, finfo={}, depends_on={}, fit_arrays={}):
+def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, fit_id=None):
 
-      wts, y, yhat = fit_arrays['wts'], fit_arrays['y'], fit_arrays['yhat']
+      wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
 
       finfo['chi'] = optmod.chisqr
       finfo['rchi'] = optmod.redchi
@@ -74,15 +75,15 @@ def logger(optmod, finfo={}, depends_on={}, fit_arrays={}):
 
       pkeys = depends_on.keys()
       pvals = depends_on.values()
-      model_id = "MODEL: %s" % self.kind
+      model_id = "MODEL: %s" % kind
       dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
       wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in wts)+'])'
       yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
-      y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y.flatten())+'])'
+      y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y)+'])'
 
       with open('fit_report.txt', 'a') as f:
             f.write('=='*20+'\n')
-            f.write(str(self.fit_id)+'\n')
+            f.write(str(fit_id)+'\n')
             f.write(str(model_id)+'\n')
             f.write(str(dep_id)+'\n')
             f.write('--'*20+'\n')
@@ -90,7 +91,10 @@ def logger(optmod, finfo={}, depends_on={}, fit_arrays={}):
             f.write(yhat_str+'\n')
             f.write(y_str+'\n')
             f.write('--'*20+'\n')
-            f.write(fit_report(optmod, show_correl=False)+'\n\n')
+            try:
+                  f.write(fit_report(optmod, show_correl=False)+'\n\n')
+            except Exception:
+                  pass
             f.write('AIC: %.8f' % optmod.aic + '\n')
             f.write('BIC: %.8f' % optmod.bic + '\n')
             f.write('chi: %.8f' % optmod.chisqr + '\n')

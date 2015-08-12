@@ -129,18 +129,22 @@ def ssrt_calc(df, avgrt=.3):
       return ssrt_list
 
 
-def make_proRT_conds(data, split):
+def make_proRT_conds(data, split=None, rt_cix=None):
 
       if np.any(data['pGo'].values > 1):
             data['pGo']=data['pGo']*.01
       if np.any(data['rt'].values > 5):
             data['rt']=data['rt']*.001
 
-      if split=='HL':
+      if split != None:
+            pg = split*.01
             data['HL']='x'
-            data.ix[data.pGo>.5, 'HL']=1
-            data.ix[data.pGo<=.5, 'HL']=2
-      return data
+            data.ix[data.pGo>pg, 'HL']=1
+            data.ix[data.pGo<=pg, 'HL']=2
+
+      # get index to split rts during fits
+      rt_cix = len(data.query('HL==1').pGo.unique())
+      return data, rt_cix
 
 
 def get_obs_quant_counts(df, prob=([.10, .30, .50, .70, .90])):

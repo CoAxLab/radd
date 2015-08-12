@@ -124,18 +124,6 @@ def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', spli
             fit_gq = yhat[6:11]; fit_eq = yhat[11:]
             quant_list = [gq, fit_gq, eq, fit_eq]
 
-            #elif split=='HML':
-            #      c1=gpal(2); c2=rpal(2); c3=ppal(2)
-            #      c = list(c1) + list(c2) + list(c3)
-            #      xlim = [.46, .58]
-            #
-            #      sacc = y[:5]; fit_sacc = yhat[:5]
-            #
-            #      hq = y[5:10]; mq = y[10:15]; lq = y[15:]
-            #      fit_hq = yhat[5:10]; fit_mq = yhat[10:15]; fit_lq = yhat[15:]
-            #      quant_list = [hq, fit_hq, mq, fit_mq, lq, fit_lq]
-            #      lbs=['Data Hi', 'Fit Hi', 'Data Md', 'Fit Md', 'Data Lo', 'Fit Lo']
-
       # Fit RT quantiles to KDE function in radd.analyze
       linestyles = ['-', '--']*3
       kdefits = [analyze.kde_fit_quantiles(q, bw=bw) for q in quant_list]

@@ -49,12 +49,12 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', verbose=True, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', verbose=True, include_zero_rts=False, multiopt=False, *args, **kws):
 
             self.data=data
             self.weighted=weighted
             self.verbose=verbose
-
+            self.multiopt=multiopt
             super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
 
             self.prepare_fit()
@@ -70,25 +70,27 @@ class Model(RADDCore):
             self.__check_inits__()
             inits = dict(deepcopy(self.inits))
 
-            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
+            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map, multiopt=self.multiopt)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
             # get residuals
             self.residual = self.opt.residual
             # get Simulator object used by
             # Optimizer to fit the model
+
             self.simulator = self.opt.simulator
 
 
-      def make_simulator(self):
+      def make_simulator(self, theta=None):
             """ initializes Simulator object as Model attr
             using popt or inits if model is not optimized
             """
 
-            if not hasattr(self, 'popt'):
-                  theta=self.inits
-            else:
-                  theta=self.popt
+            if not theta:
+                  if hasattr(self, 'popt'):
+                        theta=self.popt
+                  else:
+                        theta=self.inits
 
             self.simulator=models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
 
@@ -107,13 +109,14 @@ class Model(RADDCore):
                         ndarray of decision traces if False
             """
 
-            if not hasattr(self, 'popt'):
+            if not hasattr(self, 'simulator'):
                   self.make_simulator()
-                  if theta is None:
-                        theta=self.inits
 
-            elif theta is None:
-                  theta=self.popt
+            if not theta:
+                  if hasattr(self, 'popt'):
+                        theta=self.popt
+                  else:
+                        theta=self.inits
 
             theta = self.simulator.vectorize_params(theta)
             out = self.simulator.sim_fx(theta, analyze=analyze)
@@ -139,11 +142,6 @@ class Model(RADDCore):
                   params.remove(d)
                   self.pc_map[d] = ['_'.join([d, l]) for l in self.labels]
                   params.extend(self.pc_map[d])
-                  #if hasattr(self.inits[d], '__iter__'):
-                  #      pc = cond_inits(self.pc_map[d], self.inits[d])
-                  #else:
-                  #      pc = cond_inits(self.pc_map[d], [self.inits[d]]*self.ncond)
-                  #self.inits = pc.append(pd.Series(self.inits)).to_dict()
 
             qp_cols = self.__get_header__(params)
             # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
