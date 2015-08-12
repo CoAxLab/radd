@@ -332,48 +332,23 @@ class Simulator(object):
             return hs([gac, qrt])
 
 
-
-      def analyze_proXXXX(self, DVg, p):
-
-            """
-
-            CURRENT
-
-            """
-
-            prob=self.prob;  ssd=self.ssd;
-            tb=self.tb;  ncond=self.ncond;
-            ix=self.rt_cix;
-
-            Pg = 0.5*(1 + p['v']*self.dx/self.si)
-            #Ps = 0.5*(1 + ssv*dx/si)
-            Tg = np.ceil((tb-p['tr'])/self.dt).astype(int)
-            #Ts = np.ceil((tb-ssd)/self.dt).astype(int)
-
-            # a/tr/v Bias: ALL CONDITIONS
-            DVg = self.base + np.cumsum(np.where((rs((ncond, int(self.ntot/ncond), Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
-            grt = (p['tr']+(np.where((DVg.max(axis=2).T>=p['a']).T, np.argmax((DVg.T>=p['a']).T,axis=2)*self.dt, np.nan).T)).T
-
-            if self.ncond==1:
-                  gq = mq(grt[grt<tb], prob=prob)
-
-            else:
-                  hi = np.nanmean(grt[:ncond/2], axis=0)
-                  lo = np.nanmean(grt[ncond/2:], axis=0)
-                  hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
-                  # compute RT quantiles for correct and error resp.
-                  gq = hs([mq(rtc[rtc<tb], prob=prob) for rtc in hilo])
-
-            # Get response and stop accuracy information
-            gac = 1-np.mean(np.where(grt<tb, 1, 0), axis=1)
-
-            #return hs([gac, qrt])
-            return hs([gac, gq])
-
-
       def basinhopping_minimizer(self, x):
-            """ pre-optimizes pkey individually
-            to condition data using basinhopping algorithm
+            """ used specifically by fit.perform_basinhopping()
+            for Model objects with multiopt attr. parameters are
+            pre-optimized to individual conditions (ncond=1) between
+            flat and final conditional parameter fits.
+
+            assigns parameter vector prior to entering this function.
+            the "x" argument is a list containing a single float which is
+            passed by scipy.basinhopping(). The residual is then passed
+            to scipy.fmin() and minimized with simplex.
+
+            Each optimized parameter is stored in a vector which is then
+            used to initiate conditional parameters in the final
+            fitting routine.
+
+            SEE __opt_routine__ and perform_basinhopping
+            methods of Optimizer object
             """
 
             p = self.minimize_simulator_params
