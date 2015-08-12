@@ -7,8 +7,10 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd import models
-from lmfit import Parameters, minimize, fit_report, Minimizer
+from radd.toolbox.messages import logger
+from lmfit import Parameters, minimize
 from radd.CORE import RADDCore
+from scipy.optimize import basinhopping
 
 
 class Optimizer(RADDCore):
@@ -28,11 +30,13 @@ class Optimizer(RADDCore):
       Handles fitting routines for models of average, individual subject, and bootstrapped data
       """
 
-      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, dynamic='hyp', *args, **kws):
+      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, dynamic='hyp', multiopt=False, *args, **kws):
 
             self.data=dframes['data']
             self.dynamic=dynamic
             self.fitparams=fitparams
+            self.multiopt=multiopt
+            self.kind = kind
 
             if fit_on=='average':
                   self.avg_y=dframes['avg_y']
@@ -56,7 +60,7 @@ class Optimizer(RADDCore):
       def optimize_model(self, save=True, savepth='./'):
 
             # initate simulator object of model being optimized
-            self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map, is_flat=True)
+            self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
             if self.fit_on=='average':
                   self.yhat, self.fitinfo, self.popt = self.__opt_routine__(self.avg_y, fit_id='AVERAGE')
@@ -108,106 +112,115 @@ class Optimizer(RADDCore):
                   self.simulator.ncond = self.ncond
                   self.simulator.wts = self.wts
                   self.fit_id=''.join([fit_id, ' FULL'])
-                  yhat, finfo, popt = self.optimize_theta(y=y, inits=p, flat=False)
+                  yhat, finfo, popt = self.optimize_theta(y=y, inits=p, is_flat=False)
+
             else:
                   fit_ids = [''.join([fit_id, ' FLAT']), ''.join([fit_id, ' FULL'])]
                   to_fit = [self.flat_y, y]
                   wts = [fp['flat_wts'], fp['wts']]
-                  flat=[1, 0]
                   ncond=[1, self.ncond]
+                  flat = [True, False]
 
-                  for i, yi in enumerate(to_fit):
-                        self.simulator.ncond = ncond[i]
-                        self.simulator.wts = wts[i]
-                        self.fit_id = fit_ids[i]
-                        yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, flat=flat[i], )
-                        p = deepcopy(popt)
-                        try:
-                              bias = self.__get_default_inits__(get_bias_vectors=True)
-                              for k in bias.keys():
-                                    diff = bias[k] - np.mean(bias[k])
-                                    p[k] = p[k] + diff
-                        except Exception:
-                              pass
+            for i, yi in enumerate(to_fit):
+                  # set attributes for fit
+                  self.simulator.ncond = ncond[i]
+                  self.simulator.wts = wts[i]
+                  self.fit_id = fit_ids[i]
+                  # run parameter, model setup and optimize
+                  yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, is_flat=flat[i])
+                  p = deepcopy(popt)
+
+                  if self.multiopt and i<1:
+                        x = self.perform_basinhopping(p)
+                        p[self.pc_map.keys()[0]] = x
 
             return yhat, finfo, popt
 
 
 
-      def optimize_theta(self, y, inits, flat=True):
+      def perform_basinhopping(self, p):
+            """ uses basin hopping to pre-optimize init cond parameters
+            to individual conditions to prevent terminating in local minima
+            """
+
+            fp = self.fitparams
+            self.simulator.__update_pvc__(is_flat=False, basinhopping=True)
+            minimizer_kwargs = {"method":"Nelder-Mead", "jac":True}
+
+            def print_fun(x, f, accepted):
+                  print("at minimum %.4f accepted %d" % (f, int(accepted)))
+
+            for pkey, pc_list in self.pc_map.items():
+                  bump = np.linspace(.98, 1.0, self.ncond)
+                  if pkey in ['a', 'tr']:
+                        bump = bump[::-1]
+                  vals = p[pkey]*bump
+
+            cond_basins = []
+            # regroup y vectors into conditions
+            if self.kind=='pro':
+                  nogo = self.avg_y.flatten()[:self.ncond]
+                  cond_data = [np.append(ng, self.flat_y[1:]) for ng in nogo]
+            else:
+                  cond_data = self.avg_y
+
+            for i, v in enumerate(vals):
+                  p[pkey] = v
+                  self.simulator.minimize_simulator_params = p
+                  self.simulator.y = cond_data[i]
+                  basin = basinhopping(self.simulator.basinhopping_minimizer, [v], stepsize=.05, minimizer_kwargs=minimizer_kwargs, niter_success=1, callback=print_fun)
+                  cond_basins.append(basin.x[0])
+
+            return np.hstack(cond_basins)
+
+
+      def optimize_theta(self, y, inits, is_flat=True):
 
             """ Optimizes parameters following specified parameter
             dependencies on task conditions (i.e. depends_on={param: cond})
             """
 
             self.simulator.y = y.flatten()
-            self.simulator.is_flat = flat
-            self.simulator.prepare_simulator()
-            pfit = list(set(inits.keys()).intersection(self.pnames))
+            self.simulator.__update_pvc__(is_flat=is_flat)
 
+            pnames = deepcopy(self.pnames)
+            pfit = list(set(inits.keys()).intersection(pnames))
             lim = self.set_bounds()
             fp = self.fitparams
 
             ip = deepcopy(inits)
-            theta=Parameters()
-            for pkey, pc_list in self.pc_map.items():
-                  if flat: break
-                  if hasattr(ip[pkey], '__iter__'):
-                        ivals = ip[pkey]
-                  else:
-                        ivals = ip[pkey]*np.ones(len(pc_list))
-                  pfit.remove(pkey)
-                  mn = lim[pkey][0]; mx=lim[pkey][1]
-                  d0 = [theta.add(pc, value=ivals[i], vary=1, min=mn, max=mx) for i, pc in enumerate(pc_list)]
+            lmParams=Parameters()
 
-            p0 = [theta.add(k, value=ip[k], vary=flat, min=lim[k][0], max=lim[k][1]) for k in pfit]
+            for pkey, pc_list in self.pc_map.items():
+                  if is_flat: break
+                  pfit.remove(pkey)
+                  if hasattr(ip[pkey], '__iter__'):
+                        vals=ip[pkey]*np.ones(self.ncond)
+                  else:
+                        vals=ip[pkey]*np.ones(len(pc_list))
+                  mn = lim[pkey][0]; mx=lim[pkey][1]
+                  d0 = [lmParams.add(pc, value=vals[i], vary=1, min=mn, max=mx) for i, pc in enumerate(pc_list)]
+
+            p0 = [lmParams.add(k, value=ip[k], vary=is_flat) for k in pfit]
             opt_kws = {'disp':fp['disp'], 'xtol':fp['tol'], 'ftol':fp['tol'], 'maxfev':fp['maxfev']}
 
             # OPTIMIZE THETA
-            optmod = minimize(self.simulator.__cost_fx__, theta, method=self.method, options=opt_kws)
+            optmod = minimize(self.simulator.__cost_fx__, lmParams, method=self.method, options=opt_kws)
 
             optp = optmod.params
             finfo = {k:optp[k].value for k in optp.keys()}
             popt = deepcopy(finfo)
-
-            finfo['chi'] = optmod.chisqr
-            finfo['rchi'] = optmod.redchi
-            finfo['CNVRG'] = optmod.pop('success')
-            finfo['nfev'] = optmod.pop('nfev')
-            finfo['AIC']=optmod.aic
-            finfo['BIC']=optmod.bic
             self.residual = optmod.residual
-            yhat = y.flatten() + self.residual
+            yhat = self.simulator.y + self.residual
+            wts = self.simulator.wts
+            log_arrays = {'y':self.simulator.y, 'yhat':yhat, 'wts':wts}
 
-            pkeys = self.depends_on.keys()
-            pvals = self.depends_on.values()
-            model_id = "MODEL: %s" % self.kind
-            dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
-            wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in self.simulator.wts)+'])'
-            yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
-            y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y.flatten())+'])'
-            with open('fit_report.txt', 'a') as f:
-                  f.write('=='*20+'\n')
-                  f.write(str(self.fit_id)+'\n')
-                  f.write(str(model_id)+'\n')
-                  f.write(str(dep_id)+'\n')
-                  f.write('--'*20+'\n')
-                  f.write(wts_str+'\n')
-                  f.write(yhat_str+'\n')
-                  f.write(y_str+'\n')
-                  f.write('--'*20+'\n')
-                  f.write(fit_report(optmod, show_correl=False)+'\n\n')
-                  f.write('AIC: %.8f' % optmod.aic + '\n')
-                  f.write('BIC: %.8f' % optmod.bic + '\n')
-                  f.write('chi: %.8f' % optmod.chisqr + '\n')
-                  f.write('rchi: %.8f' % optmod.redchi + '\n')
-                  f.write('Converged: %s' % finfo['CNVRG'] + '\n')
-                  f.write('=='*20+'\n\n')
+            logger(optmod=optmod, finfo=finfo, depends_on=fp['depends_on'], log_arrays=log_arrays, kind=self.kind, fit_id=self.fit_id)
 
             return  yhat, finfo, popt
 
 
-      def set_bounds(self, a=(.001, 1.000), tr=(.001, .550), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
+      def set_bounds(self, a=(.001, 1.000), tr=(.1, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
 
             """ set and return boundaries to limit search space
             of parameter optimization in <optimize_theta>
@@ -216,7 +229,8 @@ class Optimizer(RADDCore):
             if self.dynamic == 'exp':
                   xb = (.01, 10)
             elif self.dynamic == 'hyp':
-                  xb = (.001, .1)
+                  #xb = (.001, .1)
+                  xb = (.01, 10)
 
             if 'irace' in self.kind:
                   ssv=(abs(ssv[1]), abs(ssv[0]))

@@ -37,14 +37,10 @@ class BOLD(Simulator):
             else:
                   model.fit_whole_model=False
                   try:
-                        model.__get_default_inits__()
+                        #model.__get_default_inits__()
+                        self.p = model.__get_optimized_params___()
                   except Exception:
-                        pass
-                  self.p = model.inits
-
-            #pfit = list(set(self.p.keys()).intersection(self.pnames))
-            #for pkey, pc_list in self.pc_map.items():
-            #      map((lambda l: l.remove(pkey)), [pfit, self.pvc])
+                        self.p = model.inits
 
             # GENERATE MODEL SIMULATOR
             super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind, prepare=True, is_flat=False, is_bold=True)

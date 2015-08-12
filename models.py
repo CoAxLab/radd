@@ -18,13 +18,11 @@ class Simulator(object):
             for multiple conditions.
       """
 
-      def __init__(self, model=None, fitparams=None, inits=None, pc_map=None, kind='radd', prepare=True, is_flat=False, is_bold=False):
+      def __init__(self, model=None, fitparams=None, inits=None, pc_map=None, kind='radd'):
 
             self.dt=.0005
             self.si=.01
             self.dx=np.sqrt(self.si*self.dt)
-            self.is_flat=is_flat
-            self.is_bold=is_bold
 
             if model:
                   self.fitparams = model.fitparams
@@ -37,55 +35,78 @@ class Simulator(object):
                   self.kind=kind
                   self.pc_map=pc_map
 
-            self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si']
-            self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
-            if prepare:
-                  self.prepare_simulator()
+            self.__prepare_simulator__()
 
 
-      def prepare_simulator(self, flat_model=True):
+      def __prepare_simulator__(self):
 
-            if not self.is_flat:
-                  try:
-                        map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
-                  except ValueError:
-                        pass
+            fp=dict(deepcopy(self.fitparams))
+            self.tb=fp['tb']
+            self.wts=fp['wts']
+            self.ncond=fp['ncond']
+            self.ntot=fp['ntrials']
+            self.prob=fp['prob']
+            self.ssd=fp['ssd']
+            self.dynamic=fp['dynamic']
+            self.nssd=len(self.ssd)
+            self.nss=int(.5*self.ntot)
+            self.rt_cix=fp['rt_cix']
 
-            if not hasattr(self, 'sim_fx'):
-                  fp=dict(deepcopy(self.fitparams))
-                  self.tb=fp['tb']; self.wts=fp['wts']; self.ncond=fp['ncond']
-                  self.ntot=fp['ntrials']; self.prob=fp['prob']; self.ssd=fp['ssd']
-                  self.dynamic=fp['dynamic']; self.nssd=len(self.ssd)
-                  self.nss=int(.5*self.ntot); self.base = 0; self.y=None
+            self.base=0
+            self.y=None
 
-                  self.__init_model_functions__()
-                  self.__init_analyze_functions__()
+            if not hasattr(self, 'pvc'):
+                  self.__update_pvc__()
+
+            self.__init_model_functions__()
+            self.__init_analyze_functions__()
+
+
+      def __update_pvc__(self, is_flat=False, basinhopping=False):
+
+            if basinhopping:
+                  self.minimize_simulator_params = {}
+                  self.minimize_simulator_name = self.pc_map.keys()[0]
+                  self.ncond = 1
+                  self.wts = self.fitparams['wts']
+
+            if self.ncond==1 or is_flat==True:
+                  self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
+            else:
+                  self.pvc = ['a', 'tr', 'v', 'xb']
+                  map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
 
 
       def __init_model_functions__(self):
             """ initiates the simulation function used in
             optimization routine
             """
-            nss=self.nss; ssd=self.ssd; ncond=self.ncond; nssd=self.nssd
 
             if 'radd' in self.kind:
-                  self.sim_fx = self.simulate_reactive
-                  self.analyze_fx = self.analyze_reactive
-                  self.get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,None]
+                  self.sim_fx = self.simulate_radd
+                  self.analyze_fx = self.analyze_radd
+                  #self.get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,None]
 
             elif 'pro' in self.kind:
-                  self.sim_fx = self.simulate_proactive
-                  self.analyze_fx = self.analyze_proactive
+                  self.sim_fx = self.simulate_pro
+                  self.analyze_fx = self.analyze_pro
                   self.ntot = int(self.ntot/self.ncond)
 
             elif 'irace' in self.kind:
-                  self.sim_fx = self.simulate_reactive
-                  self.analyze_fx = self.analyze_reactive
-                  self.get_ssbase = lambda x,y,DVg: DVg[0,0,0]*np.ones((ncond, nssd, nss))[:,:,:,None]
+                  self.sim_fx = self.simulate_irace
+                  self.analyze_fx = self.analyze_irace
+                  #self.get_ssbase = lambda x,y,DVg: DVg[0,0,0]*np.ones((ncond, nssd, nss))[:,:,:,None]
 
-            if self.is_bold:
-                  self.get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss/nssd, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,None]
+            # SET STATIC/DYNAMIC BASIS FUNCTIONS
+            self.temporal_dynamics = lambda p, t: np.ones((self.ncond, len(t)))
 
+            if 'x' in self.kind and self.dynamic=='hyp':
+                  # dynamic bias is hyperbolic
+                  self.temporal_dynamics = lambda p, t: np.cosh(p['xb'][:,None]*t)
+
+            elif 'x' in self.kind and self.dynamic=='exp':
+                  # dynamic bias is exponential
+                  self.temporal_dynamics = lambda p, t: np.exp(p['xb'][:,None]*t)
 
 
       def __init_analyze_functions__(self):
@@ -93,39 +114,15 @@ class Simulator(object):
             optimization routine to produce the yhat vector
             """
 
-            prob=self.prob; nss =self.nss;
+            prob=self.prob; nss=self.nss;
             ssd=self.ssd; tb = self.tb
-            #GO RT as SINGLE FUNC
-            #go_rt = np.where(dvg.max(axis=2)>=p['a'][:,None], p['tr'][:,None]+np.argmax((dvg.T>=p['a']).T, axis=2)*.0005, 999)
-            #go prob = np.where(go_rt<self.tb, 1, 0).mean(axis=1)
 
-            self.get_rt = lambda x: np.where(x[0].max(axis=1)>=x[1], x[2]+np.argmax(x[0]>=x[1], axis=1)*self.dt, 999)
-            self.get_ssrt = lambda dvs, delay: np.where(dvs.min(axis=3)<=0, delay+np.argmax(dvs<=0, axis=3)*self.dt, 999)
-            self.get_resp = lambda x: x[0][np.where(x[1]<=x[2], 1, 0)]
+            self.resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.0005
+            self.resp_lo = lambda trace: np.argmax((trace.T<=0).T, axis=3)*.0005
 
-            # INIT RESPONSE FUNCTIONS
-            self.go_resp = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.0005
-            self.ss_resp = lambda trace, xxx: np.argmax((trace.T<=0).T, axis=3)*.0005
-
-            if 'irace' in self.kind:
-                  self.ss_resp = lambda trace, a: np.argmax((trace.T>=a).T, axis=3)*.0005
-
-            # SET RT FUNCTIONS
             self.RT = lambda ontime, rbool: ontime[:, None]+(rbool*np.where(rbool==0, np.nan, 1))
-            self.fRTQ = lambda zpd: map((lambda x:mq(x[0][x[0]<x[1]], prob)), zpd)
-
-            # SET STATIC/DYNAMIC BASIS FUNCTIONS
-            self.get_t = lambda tg: np.cumsum([self.dt]*tg.max())
-            self.get_base = lambda z, a, xb: z*np.ones((self.ncond, len(self.t)))
-            self.get_xtb = lambda xxx: np.ones((self.ncond, len(self.t)))
-
-            # dynamic bias is hyperbolic
-            if 'x' in self.kind and self.dynamic=='hyp':
-                  self.get_t = lambda tg: np.cumsum(np.ones(tg.max()))[::-1]
-                  self.get_base = lambda z, a, xb: z + (.5*a[:, None])/(1+(xb[:,None]*self.t))
-            # dynamic bias is exponential
-            if 'x' in self.kind and self.dynamic=='exp':
-                  self.get_xtb = lambda xb: np.exp(xb[:,None]*self.t)
+            self.RTQ = lambda zpd: map((lambda x:mq(x[0][x[0]<x[1]], prob)), zpd)
+            #self.ss_resp = lambda trace, a: np.argmax((trace.T>=a).T, axis=3)*.0005
 
 
       def vectorize_params(self, p):
@@ -160,12 +157,11 @@ class Simulator(object):
 
             """
 
-            #if 'si' in p.keys():
-            #      self.dx=np.sqrt(p['si']*self.dt)
+
+            if 'si' in p.keys():
+                  self.dx=np.sqrt(p['si']*self.dt)
             if 'xb' not in p.keys():
-                  p['xb'] = 1
-            if 'z' not in p.keys():
-                  p['z'] = 0
+                  p['xb']=1.0
 
             for pkey in self.pvc:
                   p[pkey]=np.ones(self.ncond)*p[pkey]
@@ -176,7 +172,12 @@ class Simulator(object):
                   elif pkc[0] not in p.keys():
                         p[pkey] = p[pkey]*np.ones(len(pkc))
                   else:
-                        p[pkey] = array([p[pc] for pc in pkc])
+                        #if pkey in ['a', 'tr']:
+                        #      pkc = pkc[::-1]
+                        p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
+
+            if 'z' in p.keys():
+                  self.base = p['z']
 
             return p
 
@@ -207,52 +208,28 @@ class Simulator(object):
 
             return Pg, Ps, Tg, Ts
 
-      def __update_go_process__(self, p):
-            """ calculate go process params (Pg, Tg)
-            and hyperbolic or exponential dynamic bias
-            across time (exp/hyp specified in dynamic attr.)
 
-            ::Arguments::
-                  p (dict):
-                        parameter dictionary
-            ::Returns::
-                  Pg (array):
-                        Probability DVg(t)=+dx
-                  Tg (array):
-                        nTimepoints tr --> tb
-            """
+      def __update_go_process__(self, p):
 
             Pg = 0.5*(1 + p['v']*self.dx/self.si)
             Tg = np.ceil((self.tb-p['tr'])/self.dt).astype(int)
-            self.t=self.get_t(Tg)
-            self.base = self.get_base(p['z'], p['a'], p['xb'])
-            self.xtb = self.get_xtb(p['xb'])
+            t = np.cumsum([self.dt]*Tg.max())
+            self.xtb = self.temporal_dynamics(p, t)
             return Pg, Tg
 
 
       def __update_stop_process__(self, p):
-            """ calculate stop process params (Ps, Ts)
-
-            ::Arguments::
-                  p (dict):
-                        parameter dictionary
-            ::Returns::
-                  Ps (array):
-                        Probability DVs(t)=+dx
-                  Tg (array):
-                        nTimepoints ssd[i] --> tb
-            """
 
             Ps = 0.5*(1 + p['ssv']*self.dx/self.si)
             if self.kind=='interactive':
                   Ts = np.ceil((self.tb-(self.ssd + p['toff']))/self.dt).astype(int)
             else:
                   Ts = np.ceil((self.tb-self.ssd)/self.dt).astype(int)
-
             return Ps, Ts
 
 
       def __cost_fx__(self, theta):
+
             """ Main cost function used for fitting all models self.sim_fx
             determines which model is simulated (determined when Simulator
             is initiated)
@@ -262,37 +239,37 @@ class Simulator(object):
                   p = dict(deepcopy(theta))
             else:
                   p = theta.valuesdict()
-
             yhat = self.sim_fx(p, analyze=True)
-            cost = yhat-self.y
-            wtd_cost = cost*self.wts#[:len(self.y)]
-            return wtd_cost
+            return (yhat - self.y)*self.wts[:len(self.y)].astype(np.float32)
 
-      def simulate_reactive(self, p, analyze=True):
+
+      def simulate_radd(self, p, analyze=True):
 
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
             Ps, Ts = self.__update_stop_process__(p)
 
-            # a/tr/v Bias: ALL CONDITIONS, ALL SSD
-            DVg = self.base[:, None]+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
-            DVs = self.get_ssbase(Ts,Tg,DVg) + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
+            DVg = self.base+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
+            # INITIALIZE DVs FROM DVg(t=SSD)
+            init_ss = array([[DVc[:self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])
+            DVs = init_ss[:, :, :, None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
 
             if analyze:
-                  return self.analyze_reactive(DVg, DVs, p)
+                  return self.analyze_radd(DVg, DVs, p)
             else:
                   return [DVg, DVs]
 
 
-      def simulate_proactive(self, p, analyze=True):
+
+      def simulate_pro(self, p, analyze=True):
 
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
 
-            DVg = self.base[:, None]+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
+            DVg = self.base+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
 
             if analyze:
-                  return self.analyze_proactive(DVg, p)
+                  return self.analyze_pro(DVg, p)
             else:
                   return DVg
 
@@ -305,65 +282,132 @@ class Simulator(object):
 
             # a/tr/v Bias: ALL CONDITIONS, ALL SSD
             DVg = self.base[:, None].T+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T<Pg), self.dx, -self.dx).T, axis=2))
-            init_ss = self.base*np.ones((self.ncond, self.nssd, self.nss))
-            DVs = init_ss[:,:,:,None]+np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
+            DVs = self.base[:, None].T + np.cumsum(np.where(rs((self.nss, Ts.max()))<Ps, self.dx, -self.dx), axis=1)
             if analyze:
                   return self.analyze_irace(DVg, DVs, p)
             else:
                   return [DVg, DVs]
 
 
-      def analyze_reactive(self, DVg, DVs, p):
+      def analyze_radd(self, DVg, DVs, p):
 
             nss = self.nss; prob = self.prob
             ssd = self.ssd; tb = self.tb
             ncond = self.ncond
 
-            gdec = self.go_resp(DVg, p['a'])
-            sdec = self.ss_resp(DVs, p['a'])
+            gdec = self.resp_up(DVg, p['a'])
+            sdec = self.resp_lo(DVs)
             gort = self.RT(p['tr'], gdec)
             ssrt = self.RT(ssd, sdec)
 
             ert = gort[:, :nss][:, None] * np.ones_like(ssrt)
-            eq = self.fRTQ(zip(ert, ssrt))
-            gq = self.fRTQ(zip(gort,[tb]*ncond))
+            eq = self.RTQ(zip(ert, ssrt))
+            gq = self.RTQ(zip(gort,[tb]*ncond))
             gac = np.nanmean(np.where(gort<tb, 1, 0), axis=1)
             sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
-            return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
+
+            return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(self.ncond)])
 
 
-      def analyze_proactive(self, DVg, p):
 
-            prob = self.prob; tb = self.tb
-            ncond = self.ncond
-            #gdec = self.go_resp(DVg, p['a'])
-            #rt = self.RT(p['tr'], gdec)
-            #if self.ncond==1:
-            #      qrt = mq(rt[rt<tb], prob=prob)
-            #else:
-            #      zipped = zip([hs(rt[3:]),hs(rt[:3])],[tb]*2)
-            #      qrt = hs(self.fRTQ(zipped))
+      def analyze_pro(self, DVg, p):
 
-            rt = (p['tr']+(np.where((DVg.max(axis=2).T>=p['a']).T, np.argmax((DVg.T>=p['a']).T,axis=2)*self.dt, np.nan).T)).T
-            if ncond==1:
+            prob=self.prob;  ssd=self.ssd;
+            tb=self.tb;  ncond=self.ncond;
+            ix=self.rt_cix;
+
+            gdec = self.resp_up(DVg, p['a'])
+            rt = self.RT(p['tr'], gdec)
+
+            if self.ncond==1:
                   qrt = mq(rt[rt<tb], prob=prob)
             else:
-                  hi = np.nanmean(rt[ncond/2:], axis=0)
-                  lo = np.nanmean(rt[:ncond/2], axis=0)
-                  hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
-                  # compute RT quantiles for correct and error resp.
-                  qrt = np.hstack([mq(rtc[rtc<tb], prob=prob) for rtc in hilo])
-
+                  #hi = hs(rt[self.rt_cix:])
+                  #lo = hs(rt[:self.rt_cix])
+                  zpd = zip([hs(rt[ix:]), hs(rt[1:ix])], [tb]*2)
+                  qrt = hs(self.RTQ(zpd))
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
-            #return gq, eq, gac, sacc
-            #if return_traces:
-            #      return DVg, DVs
-            return np.hstack([gac, qrt])
+
+            return hs([gac, qrt])
+
+
+
+      def analyze_proXXXX(self, DVg, p):
+
+            """
+
+            CURRENT
+
+            """
+
+            prob=self.prob;  ssd=self.ssd;
+            tb=self.tb;  ncond=self.ncond;
+            ix=self.rt_cix;
+
+            Pg = 0.5*(1 + p['v']*self.dx/self.si)
+            #Ps = 0.5*(1 + ssv*dx/si)
+            Tg = np.ceil((tb-p['tr'])/self.dt).astype(int)
+            #Ts = np.ceil((tb-ssd)/self.dt).astype(int)
+
+            # a/tr/v Bias: ALL CONDITIONS
+            DVg = self.base + np.cumsum(np.where((rs((ncond, int(self.ntot/ncond), Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2)
+            grt = (p['tr']+(np.where((DVg.max(axis=2).T>=p['a']).T, np.argmax((DVg.T>=p['a']).T,axis=2)*self.dt, np.nan).T)).T
+
+            if self.ncond==1:
+                  gq = mq(grt[grt<tb], prob=prob)
+
+            else:
+                  hi = np.nanmean(grt[:ncond/2], axis=0)
+                  lo = np.nanmean(grt[ncond/2:], axis=0)
+                  hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
+                  # compute RT quantiles for correct and error resp.
+                  gq = hs([mq(rtc[rtc<tb], prob=prob) for rtc in hilo])
 
             # Get response and stop accuracy information
-            #gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
+            gac = 1-np.mean(np.where(grt<tb, 1, 0), axis=1)
+
             #return hs([gac, qrt])
+            return hs([gac, gq])
+
+
+      def basinhopping_minimizer(self, x):
+            """ pre-optimizes pkey individually
+            to condition data using basinhopping algorithm
+            """
+
+            p = self.minimize_simulator_params
+            for pkey in self.pvc:
+                  p[pkey]=np.ones(self.ncond)*p[pkey]
+
+            p[self.minimize_simulator_name]=x
+            Pg, Tg = self.__update_go_process__(p)
+
+            DVg = self.base+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
+
+            yhat =  self.analyze_pro(DVg, p)
+            cost = ((yhat-self.y)**2).astype(np.float32)
+
+            return cost
+
+
+      def analyze_irace(self, DVg, DVs, p):
+
+            dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd;
+            tb=self.tb; prob=self.prob; scale=self.scale; a=p['a']; tr=p['tr']
+
+            grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
+            ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
+            ssrt = ((np.where((DVs.max(axis=3).T>=a).T,ssd[:, None]+np.argmax((DVs.T>=a).T,axis=3)*dt,np.nan).T)).T
+
+            # compute RT quantiles for correct and error resp.
+            ert = array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
+            gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*scale for rtc in grt])
+            eq = [mq(ert[i][ert[i]<ssrt[i]], prob=prob)*scale for i in range(ncond)]
+            # Get response and stop accuracy information
+            gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
+            sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
+            return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
       def mean_pgo_rts(self, p, return_vals=True):
@@ -480,7 +524,7 @@ def RADD(model, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05
       if return_traces:
             return DVg, DVs
 
-      return np.hstack([np.hstack([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
+      return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
 
 
 
@@ -537,10 +581,10 @@ def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=([.1, .3, .5, .7, .9]), s
       hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
 
       # compute RT quantiles for correct and error resp.
-      gq = np.hstack([mq(rtc[rtc<tb], prob=prob)*10 for rtc in hilo])
+      gq = hs([mq(rtc[rtc<tb], prob=prob)*10 for rtc in hilo])
       # Get response and stop accuracy information
       gac = 1-np.mean(np.where(grt<tb, 1, 0), axis=1)
       #return gq, eq, gac, sacc
       if return_traces:
             return DVg, DVs
-      return np.hstack([gac, gq])
+      return hs([gac, gq])

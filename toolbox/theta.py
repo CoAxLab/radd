@@ -26,13 +26,34 @@ def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array
             return [qp_cols]
 
 
+def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
+
+      if 'radd' in kind:
+            inits = {'a':0.4441, 'ssv':-0.9473, 'tr':0.3049, 'v':1.0919, 'z':0.1542}
+
+      elif 'pro' in kind:
+            if set(['v', 'tr']).issubset(depends_on.keys()):
+                  inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919, 'z':0}
+            elif 'tr' in depends_on.keys():
+                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813, 'z':0} 
+            elif 'v' in depends_on.keys():
+                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961, 'z':0}
+
+      elif 'race' in kind:
+            inits = {'a':0.3926740, 'ssv':1.1244, 'tr':0.33502, 'v':1.0379,  'z':0.1501}
+
+      if 'x' in kind:
+            if dynamic=='hyp':
+                  inits['xb']=.09#.01
+            elif dynamic=='exp':
+                  inits['xb']=1.5
+
+      return inits
+
+
+
 def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit_noise=False):
 
-      single_bound_models = ['xirace', 'irace', 'xpro', 'pro']
-
-      for k, val in inits.items():
-            if isinstance(val, np.ndarray) and k not in pdep:
-                  inits[k]=val[0]
       if 'ssd' in inits.keys():
             del inits['ssd']
       if 'pGo' in inits.keys():
@@ -40,10 +61,6 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
 
       if pro_ss and 'ssv' not in inits.keys():
             inits['ssv'] = -0.9976
-
-      if kind in single_bound_models and 'z' in inits.keys():
-            z=inits.pop('z')
-            inits['a']=inits['a']-z
 
       if 'race' in kind:
             inits['ssv']=abs(inits['ssv'])
@@ -60,7 +77,7 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
             if dynamic == 'exp':
                   inits['xb'] = 2
             elif dynamic == 'hyp':
-                  inits['xb'] = .02
+                  inits['xb'] = 2
 
       if fit_noise and 'si' not in inits.keys():
             inits['si'] = .01
@@ -68,8 +85,8 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
       return inits
 
 
-def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model=True, include_ss=False, fit_noise=False, inits={}, get_bias_vectors=False):
 
+def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
 
       if 'radd' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
@@ -94,7 +111,7 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
                   if 'x' not in kind:
                         inits = {'a': 0.474838, 'tr': 0.27253, 'v': array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936]), 'z': 0}
                   elif dynamic=='hyp':
-                        inits = {'a':0.4748, 'tr':0.2725, 'v': array([ 1.39321, 1.52084, 1.65874,  1.75702, 1.89732, 1.94936]), 'z':0, 'xb': .009}
+                        inits = {'a':0.4748, 'tr':0.2725, 'v': array([ 1.39321, 1.52084, 1.65874,  1.75702, 1.89732, 1.94936]), 'z':0, 'xb': .09}# .009}
                   elif dynamic=='exp':
                         inits = {'a':0.4836, 'tr': 0.3375, 'v': array([ 1.08837, 1.31837, 1.54837,  1.77837, 2.00837, 2.23837]), 'xb':  1.4604, 'z': 0}
             elif ['xb']==depends_on.keys():
@@ -113,21 +130,8 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}, fit_whole_model
                   # DEFAULT BASELINE PROACTIVE INITS
                   inits = {'a': .45, 'tr':.3, 'v': 1.05, 'ssv': -1, 'z':.15}
 
-
-      if 'x' in kind and 'xb' not in inits.keys():
-            if dynamic=='hyp':
-                  inits['xb']=.01
-            elif dynamic=='exp':
-                  inits['xb']=1.5
-      if get_bias_vectors:
-            bias = {k: inits[k] for k in depends_on.keys()}
-            return bias
-
-      if fit_whole_model and np.any(hasattr(inits, '__iter__')):
-            for pkey in depends_on.keys():
-                  if hasattr(inits[pkey], '__iter__'):
-                        inits[pkey]=np.mean(inits[pkey])
       return inits
+
 
 
 def get_xbias_theta(model=None):
@@ -190,35 +194,3 @@ def get_intervar_ranges(theta):
             theta['z_lo'] = theta['z'] - theta['sz']/2
             theta['z_hi'] = theta['z'] + theta['sz']/2
       return theta
-
-
-
-def logger(optmod, finfo, fit_id='FLAT', kind='radd', depends_on={}, ):
-
-      finfo['chi'] = optmod.chisqr
-      finfo['rchi'] = optmod.redchi
-      finfo['CNVRG'] = optmod.pop('success')
-      finfo['nfev'] = optmod.pop('nfev')
-      finfo['AIC']= optmod.aic
-      finfo['BIC']= optmod.bic
-
-      pkeys = depends_on.keys()
-      pvals = depends_on.values()
-      model_id = "MODEL: %s" % kind
-      dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
-      #wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in self.simulator.wts)+'])'
-
-      with open('fit_report.txt', 'a') as f:
-            f.write(str(fit_id)+'\n')
-            f.write(str(model_id)+'\n')
-            f.write(str(dep_id)+'\n')
-            #f.write(wts_str+'\n\n')
-            f.write(fit_report(optmod, show_correl=False)+'\n\n')
-            f.write('AIC: %.8f' % optmod.aic + '\n')
-            f.write('BIC: %.8f' % optmod.bic + '\n')
-            f.write('chi: %.8f' % optmod.chisqr + '\n')
-            f.write('rchi: %.8f' % optmod.redchi + '\n')
-            f.write('Converged: %s' % finfo['CNVRG'] + '\n')
-            f.write('--'*20+'\n\n')
-
-      return finfo
