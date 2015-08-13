@@ -285,6 +285,10 @@ class RADDCore(object):
             if self.data_style=='re':
                   obs_var = self.observed.groupby(cond).sem().loc[:,'Go':]
                   qvar = obs_var.values[:,6:]
+                  # round to precision of rt collection (~2ms)
+                  # no rounding: ~.01 <--> ~35 /// with rounding: ~.3 <--> ~2.5
+                  qvar_r = np.round(qvar, 5)
+                  qvar[qva_r<=.002] = .002
                   pvar = obs_var.values[:,:6]
                   go = self.data.query('ttype=="go"').response.mean()
                   st = self.data.query('ttype=="stop"').response.mean()
@@ -300,8 +304,8 @@ class RADDCore(object):
 
             elif self.data_style=='pro':
 
-                  upper = self.data[self.data.isin([.6,.8,1.0])].response.mean()
-                  lower = self.data[self.data.pGo.isin([.2,.4,.6])].response.mean()
+                  upper = self.data[self.data['HL']==1].mean()['response']
+                  lower = self.data[self.data['HL']==2].mean()['response']
 
                   pvar = self.data.groupby('pGo').std().response.values
                   psub1 = np.median(pvar[:-1])/pvar[:-1]
@@ -309,10 +313,10 @@ class RADDCore(object):
                   #pwts = np.array([1.5,1,1,1,1,1.5])
 
                   qvar = self.observed.std().iloc[6:].values
-                  # round to nearest millisecond (otherwise screws up range)
-                  # no rounding: ~.01 <--> ~35 /// with rounding: ~.3 <--> ~5
-                  qvar_r = np.round(qvar, 3)
-                  qvar_r[qvar_r<=.001] = .001
+                  # round to precision of rt collection (~2ms)
+                  # no rounding: ~.01 <--> ~35 /// with rounding: ~.3 <--> ~2.5
+                  qvar_r = np.round(qvar, 5)
+                  qvar_r[qvar_r<=.002] = .002
                   #sq_ratio = (np.median(qvar_r, axis=1)/qvar_r.T).T
 
                   sq_ratio = (np.median(qvar_r)/qvar_r).reshape(2,5)

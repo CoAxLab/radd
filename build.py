@@ -49,12 +49,13 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', verbose=True, include_zero_rts=False, multiopt=False, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split='HL', verbose=True, include_zero_rts=False, multiopt=True, *args, **kws):
 
             self.data=data
             self.weighted=weighted
             self.verbose=verbose
             self.multiopt=multiopt
+
             super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
 
             self.prepare_fit()
@@ -77,7 +78,6 @@ class Model(RADDCore):
             self.residual = self.opt.residual
             # get Simulator object used by
             # Optimizer to fit the model
-
             self.simulator = self.opt.simulator
 
 
@@ -127,6 +127,27 @@ class Model(RADDCore):
       def prepare_fit(self):
             """ performs model setup and initiates dataframes.
             Automatically run when Model object is initialized
+
+            pc_map is a dict containing parameter names as keys with values
+            corresponding to the names given to that parameter in Parameters object
+            (see optmize.Optimizer). i.e.
+
+            * Parameters (p[pkey]=pval) that are constant across conditions
+            are broadcast as [pval]*n. Conditional parameters are treated as arrays with
+            distinct values [V1, V2...Vn], one for each condition.
+
+            pc_map (dict):    keys: conditional parameter names (i.e. 'v')
+                              values: keys + condition names ('v_bsl, v_pnl')
+
+            |<--- PARAMETERS OBJECT [LMFIT] <-------- [IN]
+            |
+            |---> p = {'v_bsl': V1, 'v_pnl': V2..} --->|
+                                                       |
+            |<--- pc_map = {'v': 'v_bsl', 'v_pnl'} <---|
+            |
+            |---> p['v'] = array([V1, V2]) --------> [OUT]
+
+
             """
 
             if not isinstance(self.labels[0], str):

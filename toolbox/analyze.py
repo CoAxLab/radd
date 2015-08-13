@@ -167,7 +167,6 @@ def get_exp_counts(simdf, obs_quant, n_obs, prob=([.10, .30, .50, .70, .90])):
             simrt=simdf.copy()
       else:
             simrt = simdf.rt.copy()
-
       exp_quant = mq(simrt, prob); oq = obs_quant
       expected = np.ceil(np.diff([0] + [pscore(simrt, oq_rt)*.01 for oq_rt in oq] + [1]) * n_obs)
 

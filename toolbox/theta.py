@@ -35,8 +35,10 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919, 'z':0}
             elif 'tr' in depends_on.keys():
-                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813, 'z':0} 
+                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813, 'z':0}
             elif 'v' in depends_on.keys():
+                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961, 'z':0}
+            else:
                   inits = {'a':0.4748, 'tr':0.2725,'v':1.6961, 'z':0}
 
       elif 'race' in kind:
@@ -44,9 +46,9 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
 
       if 'x' in kind:
             if dynamic=='hyp':
-                  inits['xb']=.09#.01
+                  inits['xb']=1#.01
             elif dynamic=='exp':
-                  inits['xb']=1.5
+                  inits['xb']=1
 
       return inits
 

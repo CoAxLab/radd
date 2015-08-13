@@ -62,7 +62,7 @@ def describe_model(depends_on=None):
 
 
 
-def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, fit_id=None):
+def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=None, fit_id=None, basindf=None):
 
       wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
 
@@ -76,12 +76,30 @@ def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, fit_id=Non
       pkeys = depends_on.keys()
       pvals = depends_on.values()
       model_id = "MODEL: %s" % kind
+      if 'x' in kind:
+            model_id = ' ('.join([model_id, dynamic])+')'
       dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
       wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in wts)+'])'
       yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
       y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y)+'])'
 
+      try:
+            write_basin=True
+            bpopt_str = 'basin par = array(['+ ', '.join(str(elem) for elem in basindf['popt'].values)+'])'
+            bfail_str = 'basin fails: '+ ', '.join(str(elem) for elem in  basindf['fails'].values)
+            bfnev_str = 'basin fnev: '+ ', '.join(str(elem) for elem in basindf['nfev'].values)
+      except Exception:
+            write_basin=False
+
       with open('fit_report.txt', 'a') as f:
+
+            if write_basin:
+                  f.write('BASINHOPPING RESULTS\n')
+                  f.write('--'*20+'\n')
+                  f.write(bpopt_str+'\n')
+                  f.write(bfail_str+'\n')
+                  f.write(bfnev_str+'\n')
+                  f.write('--'*20+'\n')
             f.write('=='*20+'\n')
             f.write(str(fit_id)+'\n')
             f.write(str(model_id)+'\n')
