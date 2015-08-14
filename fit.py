@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd import models
-from radd.toolbox.messages import logger
+from radd.toolbox.messages import logger, basin_accept_fun
 from lmfit import Parameters, minimize
 from radd.CORE import RADDCore
-from scipy.optimize import basinhopping
+from scipy.optimize import basinhopping, differential_evolution, brute
 
 
 class Optimizer(RADDCore):
@@ -30,16 +30,20 @@ class Optimizer(RADDCore):
       Handles fitting routines for models of average, individual subject, and bootstrapped data
       """
 
-      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, dynamic='hyp', multiopt=False, *args, **kws):
+      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', *args, **kws):
 
             self.data=dframes['data']
-            self.dynamic=dynamic
             self.fitparams=fitparams
             self.multiopt=multiopt
-            self.kind = kind
+            self.global_method=global_method
+            self.kind=kind
+            self.xbasin=[]
+            self.dynamic=self.fitparams['dynamic']
+            nq = len(self.fitparams['prob'])
+            nc = self.fitparams['ncond']
 
             if fit_on=='average':
-                  self.avg_y=dframes['avg_y']
+                  self.y=dframes['avg_y']
                   self.flat_y=dframes['flat_y']
 
             elif fit_on in ['subjects', 'bootstrap']:
@@ -47,6 +51,13 @@ class Optimizer(RADDCore):
                   self.fitinfo = dframes['fitinfo']
                   self.indx_list = dframes['observed'].index
                   self.dat=dframes['dat']
+
+                  self.get_id = lambda x: ''.join(['Idx ', str(self.indx_list[x])])
+
+                  if self.data_style=='re':
+                        self.get_flaty = lambda x: x.mean(axis=0)
+                  elif self.data_style=='pro':
+                        self.get_flaty = lambda x:np.hstack([x[:nc].mean(),x[nc:].reshape(2,nq).mean(axis=0)])
 
             self.method=method
             self.wts=wts
@@ -63,7 +74,8 @@ class Optimizer(RADDCore):
             self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
             if self.fit_on=='average':
-                  self.yhat, self.fitinfo, self.popt = self.__opt_routine__(self.avg_y, fit_id='AVERAGE')
+                  self.fit_id='AVERAGE'
+                  self.yhat, self.fitinfo, self.popt = self.__opt_routine__()
             elif self.fit_on in ['subjects', 'bootstrap']:
                   self.__indx_optimize__(save=save, savepth=savepth)
 
@@ -72,22 +84,15 @@ class Optimizer(RADDCore):
 
       def __indx_optimize__(self, save=True, savepth='./'):
 
-            ri=0; nc=self.ncond
+            ri=0; nc=self.ncond; nquant=len(self.fitparams['prob'])
             pcols=self.fitinfo.columns
+
             for i, y in enumerate(self.dat):
-
-                  fit_id = ''.join(["SUBJECT ",  str(self.indx_list[i])])
-
-                  if self.data_style=='re':
-                        self.flat_y = y.mean(axis=0)
-                  elif self.data_style=='pro':
-                        nquant = len(self.fitparams['prob'])
-                        flatgo = y[:nc].mean()
-                        flatq = y[nc:].reshape(2,nquant).mean(axis=0)
-                        self.flat_y = np.hstack([flatgo, flatq])
-
+                  self.y = y
+                  self.fit_id = getid(i)
+                  self.flat_y = self.get_flaty(y)
                   # optimize params iterating over subjects/bootstraps
-                  yhat, finfo, popt = self.__opt_routine__(y, fit_id=fit_id)
+                  yhat, finfo, popt = self.__opt_routine__()
 
                   self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
                   if self.data_style=='re':
@@ -98,84 +103,94 @@ class Optimizer(RADDCore):
                   if save:
                         self.fits.to_csv(savepth+"fits.csv")
                         self.fitinfo.to_csv(savepth+"fitinfo.csv")
-
             self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
 
 
+      def __opt_routine__(self):
 
-      def __opt_routine__(self, y, fit_id='AVERAGE'):
-
-            p = dict(deepcopy(self.inits))
             fp = self.fitparams
 
-            if not fp['fit_whole_model']:
-                  self.simulator.ncond = self.ncond
-                  self.simulator.wts = self.wts
-                  self.fit_id=''.join([fit_id, ' FULL'])
-                  yhat, finfo, popt = self.optimize_theta(y=y, inits=p, is_flat=False)
+            # p0X: Initials
+            p0 = dict(deepcopy(self.inits))
+            #yh1, finfo1, p1 = self.perform_diffevolution(inits=p0)
+            # p1: STAGE 1 (Initial Simplex)
+            self.simulator.ncond=1; self.simulator.wts=fp['flat_wts']
+            yh1, finfo1, p1 = self.optimize_theta(y=self.flat_y, inits=p0, is_flat=True)
 
-            else:
-                  fit_ids = [''.join([fit_id, ' FLAT']), ''.join([fit_id, ' FULL'])]
-                  to_fit = [self.flat_y, y]
-                  wts = [fp['flat_wts'], fp['wts']]
-                  ncond=[1, self.ncond]
-                  flat = [True, False]
+            # p2: STAGE 2 (BasinHopping)
+            self.bdata, self.bwts = self.__prep_basin_data__()
+            for pkey in self.pc_map.keys():
+                  p2 = self.__nudge_params__(p1, pkey)
+                  p2[pkey] = self.perform_global_min(method='basinhopping', inits=p2, basin_key=pkey)
 
-            for i, yi in enumerate(to_fit):
-                  # set attributes for fit
-                  self.simulator.ncond = ncond[i]
-                  self.simulator.wts = wts[i]
-                  self.fit_id = fit_ids[i]
-                  # run parameter, model setup and optimize
-                  yhat, finfo, popt = self.optimize_theta(y=yi, inits=p, is_flat=flat[i])
-                  p = deepcopy(popt)
+            # p3: STAGE 3 (Final Simplex)
+            self.simulator.ncond=self.ncond; self.simulator.wts=fp['wts']
+            yh3, finfo3, p3 = self.optimize_theta(y=self.y, inits=p2, is_flat=False)
 
-                  if self.multiopt and i<1:
-                        x = self.perform_basinhopping(p)
-                        p[self.pc_map.keys()[0]] = x
-
-            return yhat, finfo, popt
+            return yh3, finfo3, p3
 
 
-
-      def perform_basinhopping(self, p):
+      def perform_basinhopping(self, p, pkey):
             """ uses basin hopping to pre-optimize init cond parameters
             to individual conditions to prevent terminating in local minima
             """
-
             fp = self.fitparams
-            self.simulator.__update_pvc__(is_flat=False, basinhopping=True)
-            minimizer_kwargs = {"method":"Nelder-Mead", "jac":True}
-
-            def print_fun(x, f, accepted):
-                  print("at minimum %.4f accepted %d" % (f, int(accepted)))
-
-            for pkey, pc_list in self.pc_map.items():
-                  bump = np.linspace(.98, 1.0, self.ncond)
-                  if pkey in ['a', 'tr']:
-                        bump = bump[::-1]
-                  vals = p[pkey]*bump
-
-            cond_basins = []
-            # regroup y vectors into conditions
-            if self.kind=='pro':
-                  nogo = self.avg_y.flatten()[:self.ncond]
-                  cond_data = [np.append(ng, self.flat_y[1:]) for ng in nogo]
+            nc = fp['ncond']; cols=['pkey', 'popt', 'fun', 'nfev']
+            #basindf=pd.DataFrame(np.zeros((nc,4)),columns=cols)
+            self.simulator.__prep_global__(method='basinhopping', basin_key=pkey)
+            mkwargs = {"method":"Nelder-Mead", 'jac':True}
+            xbasin = []
+            vals = p[pkey]
+            for i, x in enumerate(vals):
+                  p[pkey] = x
+                  self.simulator.basin_params = p
+                  self.simulator.y = self.bdata[i]
+                  self.simulator.wts = self.bwts[i]
+                  out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=.05, minimizer_kwargs=mkwargs, niter_success=20)
+                  xbasin.append(out.x[0])
+            if self.xbasin!=[]:
+                  self.xbasin.extend(xbasin)
             else:
-                  cond_data = self.avg_y
+                  self.xbasin = xbasin
+            return xbasin
 
-            for i, v in enumerate(vals):
-                  p[pkey] = v
-                  self.simulator.minimize_simulator_params = p
-                  self.simulator.y = cond_data[i]
-                  basin = basinhopping(self.simulator.basinhopping_minimizer, [v], stepsize=.05, minimizer_kwargs=minimizer_kwargs, niter_success=1, callback=print_fun)
-                  cond_basins.append(basin.x[0])
 
-            return np.hstack(cond_basins)
+      def perform_global_min(self, inits, method='brute', basin_key=None):
+            """ Performs global optimization via basinhopping, brute, or differential evolution
+            algorithms.
+
+            basinhopping method is only used to pre-tune conditional parameters after
+            flat optimization before entering final simplex routine (optimize_theta).
+
+            brute and differential evolution methods may be applied to the full parameter set
+            (using original inits dictionary and pc_map)
+            """
+
+            self.simulator.__prep_global__(method=method, basin_key=basin_key)
+
+            if method=='basinhopping':
+                  keybasin = self.perform_basinhopping(p=inits, pkey=basin_key)
+                  return keybasin
+
+            pfit = list(set(inits.keys()).intersection(self.pnames))
+            pbounds, params = self.slice_bounds_global(inits, pfit)
+
+            self.simulator.y=self.y.flatten()
+            self.simulator.wts = self.wts
+
+            if method=='brute':
+                  self.simulator.wts = self.wts
+                  self.simulator.brute_params = pfit
+                  self.globalmin = brute(self.simulator.brute_minimizer, pbounds, args=params)
+
+            elif method=='differential_evolution':
+                  self.simulator.diffev_params = pfit
+                  self.globalmin = differential_evolution(self.simulator.diffevolution_minimizer, pbounds, args=params)
+
+            return self.globalmin
 
 
       def optimize_theta(self, y, inits, is_flat=True):
-
             """ Optimizes parameters following specified parameter
             dependencies on task conditions (i.e. depends_on={param: cond})
             """
@@ -195,7 +210,7 @@ class Optimizer(RADDCore):
                   if is_flat: break
                   pfit.remove(pkey)
                   if hasattr(ip[pkey], '__iter__'):
-                        vals=ip[pkey]*np.ones(self.ncond)
+                        vals=ip[pkey]
                   else:
                         vals=ip[pkey]*np.ones(len(pc_list))
                   mn = lim[pkey][0]; mx=lim[pkey][1]
@@ -215,25 +230,10 @@ class Optimizer(RADDCore):
             wts = self.simulator.wts
             log_arrays = {'y':self.simulator.y, 'yhat':yhat, 'wts':wts}
 
-            logger(optmod=optmod, finfo=finfo, depends_on=fp['depends_on'], log_arrays=log_arrays, kind=self.kind, fit_id=self.fit_id)
+            if is_flat:
+                  fitid = ' '.join([self.fit_id, 'FLAT'])
+            else:
+                  fitid = ' '.join([self.fit_id, 'FULL'])
+            logger(optmod=optmod, finfo=finfo, depends_on=fp['depends_on'], log_arrays=log_arrays, kind=self.kind, fit_id=fitid, xbasin=self.xbasin, dynamic=self.dynamic)
 
             return  yhat, finfo, popt
-
-
-      def set_bounds(self, a=(.001, 1.000), tr=(.1, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
-
-            """ set and return boundaries to limit search space
-            of parameter optimization in <optimize_theta>
-            """
-
-            if self.dynamic == 'exp':
-                  xb = (.01, 10)
-            elif self.dynamic == 'hyp':
-                  #xb = (.001, .1)
-                  xb = (.01, 10)
-
-            if 'irace' in self.kind:
-                  ssv=(abs(ssv[1]), abs(ssv[0]))
-
-            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
-            return bounds

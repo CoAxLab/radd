@@ -96,14 +96,14 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
 
 
-def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', split='HL'):
+def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', split='HL', xlim=(.43, .65)):
 
       sns.set_context('notebook', font_scale=1.6)
       f, (ax1, ax2) = plt.subplots(1,2,figsize=(10, 5.5))
 
       if kind in ['radd', 'irace']:
             c = list(gpal(2)) + list(bpal(2))
-            xlim = [.43, .65]
+            #xlim = [.43, .65]
             lbs=['Data Cor','Fit Cor','Data Err','Fit Err']
 
             gq = y[6:11]; eq = y[11:]
@@ -116,7 +116,7 @@ def plot_fits(y, yhat, bw=.01, save=False, kind='radd', savestr='fit_plot', spli
       elif 'pro' in kind:
             #if split=='HL':
             c = list(gpal(2)) + list(bpal(2))
-            xlim = [.43, .65]
+            #xlim = [.43, .65]
             lbs=['Data Hi', 'Fit Hi', 'Data Lo', 'Fit Lo']
             sacc = y[:6]; fit_sacc = yhat[:6]
 

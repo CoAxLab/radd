@@ -67,7 +67,10 @@ class RADDCore(object):
             self.rt_cix = None
 
             # GET TB BEFORE REMOVING OUTLIERS!!!
-            self.tb = data[data.response==1].rt.max()
+            if tb != None:
+                  self.tb=tb
+            else:
+                  self.tb = data[data.response==1].rt.max()
 
             # PARAMETER INITIALIZATION
             if inits is None:
@@ -85,7 +88,6 @@ class RADDCore(object):
                   self.indx = range(niter)
             else:
                   self.indx = list(data.idx.unique())
-
 
 
       def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
@@ -112,11 +114,11 @@ class RADDCore(object):
                   self.__make_proRT_conds__()
 
             if self.include_zero_rts:
-                  godf = data[(data.response==1)]
+                  godfx = data[(data.response==1)]
             else:
-                  godf = data[(data.response==1) & (data.pGo>0.)]
-            #godfx.loc[:, 'response'] = np.where(godfx.rt<self.tb, 1, 0)
-            #godf = godfx.query('response==1')
+                  godfx = data[(data.response==1) & (data.pGo>0.)]
+            godfx.loc[:, 'response'] = np.where(godfx.rt<self.tb, 1, 0)
+            godf = godfx.query('response==1')
 
             if split == None:
                   rts = godf[godf.rt<=self.tb].rt.values
@@ -273,6 +275,74 @@ class RADDCore(object):
             self.dframes = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
 
 
+      def __prep_basin_data__(self):
+
+            fp=self.fitparams
+            if 'pro' in self.kind:
+                  # regroup y vectors into conditions
+                  nogo = self.y.flatten()[:fp['ncond']].reshape(2, int(fp['ncond']/2))
+                  wtsp = fp['wts'].flatten()[:fp['ncond']].reshape(2, int(fp['ncond']/2))
+
+                  rts = self.y[fp['ncond']:].reshape(2,5)
+                  wtsq = fp['wts'][fp['ncond']:].reshape(2,5)
+
+                  upper =  [np.append(ng, rts[0]) for ng in nogo[0]]
+                  lower =  [np.append(ng, rts[1]) for ng in nogo[1]]
+                  upperwts = [np.append(wtp, wtsq[0]) for wtp in wtsp[0]]
+                  lowerwts = [np.append(wtp, wtsq[1]) for wtp in wtsp[1]]
+
+                  cond_data = np.vstack([upper, lower])
+                  cond_wts = np.vstack([upperwts, lowerwts])
+            else:
+                  cond_data = self.y
+                  cond_wts = self.wts
+
+            return cond_data, cond_wts
+
+
+      def __nudge_params__(self, p, pkey, lim=(.98, 1.02)):
+            """
+            nudge params so not all initialized at same val
+            """
+            bump = np.linspace(lim[0], lim[1], self.ncond)
+            if pkey in ['a', 'tr']:
+                  bump = bump[::-1]
+            p[pkey] = p[pkey]*bump
+            return p
+
+
+      def slice_bounds_global(self, inits, pfit):
+
+            b = self.set_bounds()
+            pclists=[]
+            for pkey, pcl in self.pc_map.items():
+                  pfit.remove(pkey)
+                  pfit.extend(pcl)
+                  # add bounds for all
+                  # pkey condition params
+                  for pkc in pcl:
+                        inits[pkc]=inits[pkey]
+                        b[pkc]=b[pkey]
+
+            pbounds = tuple([slice(b[pk][0], b[pk][1], .25*np.max(np.abs(b[pk]))) for pk in pfit])
+            params = tuple([inits[pk] for pk in pfit])
+
+            return pbounds, params
+
+
+      def set_bounds(self, a=(.001, 1.000), tr=(.1, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
+
+            """ set and return boundaries to limit search space
+            of parameter optimization in <optimize_theta>
+            """
+
+            if 'irace' in self.kind:
+                  ssv=(abs(ssv[1]), abs(ssv[0]))
+
+            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
+            return bounds
+
+
       def get_wts(self):
             """ wtc: weights applied to correct rt quantiles in cost f(x)
                   * P(R | No SSD)j * sdj(.5Qj, ... .95Qj)
@@ -287,8 +357,7 @@ class RADDCore(object):
                   qvar = obs_var.values[:,6:]
                   # round to precision of rt collection (~2ms)
                   # no rounding: ~.01 <--> ~35 /// with rounding: ~.3 <--> ~2.5
-                  qvar_r = np.round(qvar, 5)
-                  qvar[qva_r<=.002] = .002
+                  qvar[qvar<=.001] = .001
                   pvar = obs_var.values[:,:6]
                   go = self.data.query('ttype=="go"').response.mean()
                   st = self.data.query('ttype=="stop"').response.mean()
@@ -315,11 +384,10 @@ class RADDCore(object):
                   qvar = self.observed.std().iloc[6:].values
                   # round to precision of rt collection (~2ms)
                   # no rounding: ~.01 <--> ~35 /// with rounding: ~.3 <--> ~2.5
-                  qvar_r = np.round(qvar, 5)
-                  qvar_r[qvar_r<=.002] = .002
+                  qvar[qvar<=.001] = .001
                   #sq_ratio = (np.median(qvar_r, axis=1)/qvar_r.T).T
 
-                  sq_ratio = (np.median(qvar_r)/qvar_r).reshape(2,5)
+                  sq_ratio = (np.median(qvar)/qvar).reshape(2,5)
                   wt_hi = upper*sq_ratio[0, :]
                   wt_lo = lower*sq_ratio[1, :]
 

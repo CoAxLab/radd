@@ -33,25 +33,26 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
 
       elif 'pro' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
-                  inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919, 'z':0}
+                  inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
             elif 'tr' in depends_on.keys():
-                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813, 'z':0}
+                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
             elif 'v' in depends_on.keys():
-                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961, 'z':0}
+                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
             else:
-                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961, 'z':0}
+                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
 
       elif 'race' in kind:
             inits = {'a':0.3926740, 'ssv':1.1244, 'tr':0.33502, 'v':1.0379,  'z':0.1501}
 
       if 'x' in kind:
             if dynamic=='hyp':
-                  inits['xb']=1#.01
+                  inits['xb']=2
             elif dynamic=='exp':
-                  inits['xb']=1
+                  inits['xb']=2
+      if 'si' in depends_on.keys():
+            inits['si']=.01
 
       return inits
-
 
 
 def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit_noise=False):

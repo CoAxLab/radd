@@ -39,6 +39,9 @@ def saygo(depends_on={}, labels=[], kind='radd', fit_on='subjects', dynamic='hyp
 
       return True
 
+def basin_accept_fun(x, f, accepted):
+      print("at minimum %.4f accepted %d" % (f, int(accepted)))
+
 
 def describe_model(depends_on=None):
 
@@ -62,7 +65,7 @@ def describe_model(depends_on=None):
 
 
 
-def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=None, fit_id=None, basindf=None):
+def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=None, fit_id=None, xbasin=None):
 
       wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
 
@@ -83,22 +86,16 @@ def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=No
       yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
       y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y)+'])'
 
-      try:
+      if xbasin:
             write_basin=True
-            bpopt_str = 'basin par = array(['+ ', '.join(str(elem) for elem in basindf['popt'].values)+'])'
-            bfail_str = 'basin fails: '+ ', '.join(str(elem) for elem in  basindf['fails'].values)
-            bfnev_str = 'basin fnev: '+ ', '.join(str(elem) for elem in basindf['nfev'].values)
-      except Exception:
+            bpopt_str = 'basin = array(['+ ', '.join(str(elem) for elem in xbasin)+'])'
+      else:
             write_basin=False
-
       with open('fit_report.txt', 'a') as f:
-
             if write_basin:
-                  f.write('BASINHOPPING RESULTS\n')
                   f.write('--'*20+'\n')
+                  f.write('BASINHOPPING RESULTS\n')
                   f.write(bpopt_str+'\n')
-                  f.write(bfail_str+'\n')
-                  f.write(bfnev_str+'\n')
                   f.write('--'*20+'\n')
             f.write('=='*20+'\n')
             f.write(str(fit_id)+'\n')

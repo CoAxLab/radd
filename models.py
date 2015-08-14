@@ -62,19 +62,35 @@ class Simulator(object):
             self.__init_analyze_functions__()
 
 
-      def __update_pvc__(self, is_flat=False, basinhopping=False):
-
-            if basinhopping:
-                  self.minimize_simulator_params = {}
-                  self.minimize_simulator_name = self.pc_map.keys()[0]
-                  self.ncond = 1
-                  self.wts = self.fitparams['wts']
+      def __update_pvc__(self, is_flat=False):
 
             if self.ncond==1 or is_flat==True:
                   self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
             else:
+                  #map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
                   self.pvc = ['a', 'tr', 'v', 'xb']
-                  map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
+                  for pkey in self.pc_map.keys():
+                        try:
+                              self.pvc.remove(pkey)
+                        except Exception:
+                              pass
+
+      def __prep_global__(self, method='basinhopping', basin_key=None):
+
+            if method=='basinhopping':
+                  self.basin_key=basin_key
+                  self.basin_params = {}
+                  self.ncond = 1
+
+            elif  method=='differential_evolution':
+                  self.ncond = len(self.pc_map.values()[0])
+                  self.diffev_params=[]
+
+            elif method=='brute':
+                  self.ncond = len(self.pc_map.values()[0])
+                  self.brute_params=[]
+
+            self.__update_pvc__()
 
 
       def __init_model_functions__(self):
@@ -309,7 +325,6 @@ class Simulator(object):
             return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(self.ncond)])
 
 
-
       def analyze_pro(self, DVg, p):
 
             prob=self.prob;  ssd=self.ssd;
@@ -322,9 +337,7 @@ class Simulator(object):
             if self.ncond==1:
                   qrt = mq(rt[rt<tb], prob=prob)
             else:
-                  #hi = hs(rt[self.rt_cix:])
-                  #lo = hs(rt[:self.rt_cix])
-                  zpd = zip([hs(rt[ix:]), hs(rt[1:ix])], [tb]*2)
+                  zpd = zip([hs(rt[ix:]), hs(rt[:ix])], [tb]*2)
                   qrt = hs(self.RTQ(zpd))
             # Get response and stop accuracy information
             gac = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)
@@ -332,10 +345,27 @@ class Simulator(object):
             return hs([gac, qrt])
 
 
+      def diffevolution_minimizer(self, z, *params):
+
+            p = {pkey: params[i] for i, pkey in enumerate(self.diffev_params)}
+            yhat = self.sim_fx(p, analyze=True)
+            cost = (yhat - self.y)*self.wts
+            return cost.flatten()
+
+      def brute_minimizer(self, z, *params):
+
+            p = {pkey: params[i] for i, pkey in enumerate(self.brute_params)}
+            yhat = self.sim_fx(p, analyze=True)
+            cost = (yhat - self.y)*self.wts
+            return cost.flatten()
+
+
+
       def basinhopping_minimizer(self, x):
-            """ used specifically by fit.perform_basinhopping()
-            for Model objects with multiopt attr. parameters are
-            pre-optimized to individual conditions (ncond=1) between
+            """ used specifically by fit.perform_basinhopping() for Model
+            objects with multiopt attr.
+
+            parameters are pre-optimized to individual conditions (ncond=1) between
             flat and final conditional parameter fits.
 
             assigns parameter vector prior to entering this function.
@@ -345,25 +375,21 @@ class Simulator(object):
 
             Each optimized parameter is stored in a vector which is then
             used to initiate conditional parameters in the final
-            fitting routine.
-
-            SEE __opt_routine__ and perform_basinhopping
-            methods of Optimizer object
+            fitting routine.  (See __opt_routine__ and perform_basinhopping
+            methods of Optimizer object)
             """
 
-            p = self.minimize_simulator_params
+            p = self.basin_params
             for pkey in self.pvc:
                   p[pkey]=np.ones(self.ncond)*p[pkey]
-
-            p[self.minimize_simulator_name]=x
+            p[self.basin_key]=x
             Pg, Tg = self.__update_go_process__(p)
+            yhat = self.sim_fx(p)
+            cost = ((yhat-self.y)*self.wts)**2
+            if np.ndim(cost)>1:
+                  cost = cost[0]
+            return cost.flatten()
 
-            DVg = self.base+(self.xtb[:,None]*np.cumsum(np.where((rs((self.ncond, self.ntot, Tg.max())).T < Pg), self.dx, -self.dx).T, axis=2))
-
-            yhat =  self.analyze_pro(DVg, p)
-            cost = ((yhat-self.y)**2).astype(np.float32)
-
-            return cost
 
 
       def analyze_irace(self, DVg, DVs, p):
