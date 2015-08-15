@@ -36,6 +36,7 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
             elif 'tr' in depends_on.keys():
                   inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
+                  #inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
             elif 'v' in depends_on.keys():
                   inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
             else:

@@ -67,13 +67,9 @@ class Simulator(object):
             if self.ncond==1 or is_flat==True:
                   self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
             else:
-                  #map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
                   self.pvc = ['a', 'tr', 'v', 'xb']
-                  for pkey in self.pc_map.keys():
-                        try:
-                              self.pvc.remove(pkey)
-                        except Exception:
-                              pass
+                  map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
+
 
       def __prep_global__(self, method='basinhopping', basin_key=None):
 
@@ -226,7 +222,9 @@ class Simulator(object):
 
 
       def __update_go_process__(self, p):
-
+            """ update Pg (probability of DVg +dx) and Tg (num go process timepoints)
+            for go process and get get dynamic bias signal if 'x' model
+            """
             Pg = 0.5*(1 + p['v']*self.dx/self.si)
             Tg = np.ceil((self.tb-p['tr'])/self.dt).astype(int)
             t = np.cumsum([self.dt]*Tg.max())
@@ -235,6 +233,9 @@ class Simulator(object):
 
 
       def __update_stop_process__(self, p):
+            """ update Ps (probability of DVs +dx) and Ts (num ss process timepoints)
+            for stop process
+            """
 
             Ps = 0.5*(1 + p['ssv']*self.dx/self.si)
             if self.kind=='interactive':
@@ -245,7 +246,6 @@ class Simulator(object):
 
 
       def __cost_fx__(self, theta):
-
             """ Main cost function used for fitting all models self.sim_fx
             determines which model is simulated (determined when Simulator
             is initiated)
@@ -260,6 +260,20 @@ class Simulator(object):
 
 
       def simulate_radd(self, p, analyze=True):
+            """ Simulate the dependent process model (RADD)
+
+            ::Arguments::
+                  p (dict):
+                        parameter dictionary. values can be single floats
+                        or vectors where each element is the value of that
+                        parameter for a given condition
+                  analyze (bool <True>):
+                        if True (default) return rt and accuracy information
+                        (yhat in cost fx). If False, return Go and Stop proc.
+            ::Returns::
+                  yhat of cost vector (ndarray)
+                  or Go & Stop processes in list (list of ndarrays)
+            """
 
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
@@ -278,6 +292,9 @@ class Simulator(object):
 
 
       def simulate_pro(self, p, analyze=True):
+            """ Simulate the proactive competition model
+            (see simulate_radd() for I/O details)
+            """
 
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
@@ -291,6 +308,9 @@ class Simulator(object):
 
 
       def simulate_irace(self, p, analyze=True):
+            """ Simulate the independent race model
+            (see simulate_radd() for I/O details)
+            """
 
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
@@ -306,6 +326,9 @@ class Simulator(object):
 
 
       def analyze_radd(self, DVg, DVs, p):
+            """ get rt and accuracy of go and stop process for simulated
+            conditions generated from simulate_radd
+            """
 
             nss = self.nss; prob = self.prob
             ssd = self.ssd; tb = self.tb
@@ -326,7 +349,9 @@ class Simulator(object):
 
 
       def analyze_pro(self, DVg, p):
-
+            """ get proactive rt and accuracy of go process for simulated
+            conditions generated from simulate_pro
+            """
             prob=self.prob;  ssd=self.ssd;
             tb=self.tb;  ncond=self.ncond;
             ix=self.rt_cix;
@@ -346,6 +371,17 @@ class Simulator(object):
 
 
       def diffevolution_minimizer(self, z, *params):
+            """ find global mininum using differential evolution
+
+            ::Arguments::
+                  z (list):
+                        list of slice objects or tuples
+                        boundaries for each parameter
+                  *params:
+                        iterable of parameter point estimates
+            ::Returns::
+                  weighted cost
+            """
 
             p = {pkey: params[i] for i, pkey in enumerate(self.diffev_params)}
             yhat = self.sim_fx(p, analyze=True)
@@ -353,12 +389,14 @@ class Simulator(object):
             return cost.flatten()
 
       def brute_minimizer(self, z, *params):
+            """ find global mininum using brute force
+            (see differential_evolution for I/O details)
+            """
 
             p = {pkey: params[i] for i, pkey in enumerate(self.brute_params)}
             yhat = self.sim_fx(p, analyze=True)
             cost = (yhat - self.y)*self.wts
             return cost.flatten()
-
 
 
       def basinhopping_minimizer(self, x):
@@ -393,7 +431,9 @@ class Simulator(object):
 
 
       def analyze_irace(self, DVg, DVs, p):
-
+            """ get rt and accuracy of go and stop process for simulated
+            conditions generated from simulate_radd
+            """
             dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd;
             tb=self.tb; prob=self.prob; scale=self.scale; a=p['a']; tr=p['tr']
 

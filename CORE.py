@@ -37,7 +37,8 @@ class RADDCore(object):
                   if depends_on is None:
                         depends_on = {'v':'pGo'}
                   self.ssd=np.array([.450])
-
+                  if tb==None:
+                        tb=.55
                   self.split=split
                   if isinstance(self.split, int):
                         self.nrt_cond=2
@@ -211,11 +212,9 @@ class RADDCore(object):
             """ Generates the following dataframes and arrays:
 
             ::Arguments::
-
                   qp_cols:
                         header for observed/fits dataframes
             ::Returns::
-
                   None (All dataframes and vectors are stored in dict and assigned
                   as <dframes> attr)
 

@@ -14,11 +14,10 @@ from scipy.optimize import basinhopping, differential_evolution, brute
 
 
 class Optimizer(RADDCore):
+
       """ Optimizer class acts as interface between Model and Simulator (see fit.py) objects.
       Structures fitting routines so that Models are first optimized with the full set of
       parameters free, data collapsing across conditions.
-
-      wayward pines
 
       The fitted parameters are then used as the initial parameters for fitting conditional
       models with only a subset of parameters are left free to vary across levels of a given
@@ -107,6 +106,9 @@ class Optimizer(RADDCore):
 
 
       def __opt_routine__(self):
+            """ main function for running optimization routine through all phases
+            (flat optimization, pre-tuning with basinhopping alg., final simplex)
+            """
 
             fp = self.fitparams
 
@@ -134,6 +136,7 @@ class Optimizer(RADDCore):
             """ uses basin hopping to pre-optimize init cond parameters
             to individual conditions to prevent terminating in local minima
             """
+
             fp = self.fitparams
             nc = fp['ncond']; cols=['pkey', 'popt', 'fun', 'nfev']
             #basindf=pd.DataFrame(np.zeros((nc,4)),columns=cols)
