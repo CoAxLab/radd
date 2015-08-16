@@ -30,8 +30,12 @@ class BOLD(Simulator):
 
             if hasattr(model, 'popt'):
                   self.p = model.popt
-                  for pkey, pkc_list in model.pc_map.items():
-                        self.p[pkey] = np.array([model.popt[pkc] for pkc in pkc_list])
+                  try:
+                        for pkey, pkc_list in model.pc_map.items():
+                              self.p[pkey] = np.array([model.popt[pkc] for pkc in pkc_list])
+                        self.p=p
+                  except KeyError:
+                        pass
             elif sim_xbias:
                   self.p = get_xbias_theta(model)
             else:
@@ -43,7 +47,7 @@ class BOLD(Simulator):
                         self.p = model.inits
 
             # GENERATE MODEL SIMULATOR
-            super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind, prepare=True, is_flat=False, is_bold=True)
+            super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind)
 
             self.ncond = model.ncond
             self.depends_on = model.depends_on
@@ -136,10 +140,11 @@ class BOLD(Simulator):
             r = map((lambda x: np.cumsum((x[0] + x[1]), axis=1)), zip(go_list, ss_list))
 
 
-      def generate_pro_traces(self):
+      def generate_pro_traces(self, ntrials=500):
             """ ensures parameters are vectorized and sets
             bound and onset attr. before generating simulated traces
             """
+
 
             # ensure parameters are all vectorized
             self.p = self.vectorize_params(self.p)
@@ -147,11 +152,12 @@ class BOLD(Simulator):
             # init timebound, bound, onset-time attr
             self.bound = self.p['a']
             self.onset = self.p['tr']
+            self.ntot=ntrials#*self.ncond
             #simulate decision traces
             self.dvg = self.sim_fx(self.p, analyze=False)
 
 
-      def simulate_bold(self, hemodynamic=True, decay=False, get_dfs=False, shape='long', savestr='./',  save=False):
+      def simulate_bold(self, hemodynamic=True, ntrials=500, decay=False, get_dfs=False, shape='long', savestr='./',  save=False):
 
             """ gets RT of boundary crossing for boolean selecting
             go traces which are then filtered and stored in DF
@@ -171,7 +177,10 @@ class BOLD(Simulator):
                   get_dfs (bool <False>):
                         return list of simulated bold dataframes
             """
-
+            if decay:
+                  self.decay="wdecay"
+            else:
+                  self.decay="nodecay"
             if not hasattr(self, 'dvg') and 'pro' in self.kind:
                   # simulate decision traces
                   self.generate_pro_traces()
@@ -358,8 +367,10 @@ class BOLD(Simulator):
       def plot_means(self, save=False):
 
             redgreen = lambda nc: sns.blend_palette(["#c0392b", "#27ae60"], n_colors=nc)
-
-            f, ax = plt.subplots(1, figsize=(5,5))
+            sns.set(style='white', font_scale=1.5)
+            if not hasattr(self, 'bold_mag'):
+                  self.make_bold_dfs()
+            f, ax = plt.subplots(1, figsize=(6,5))
 
             titl=describe_model(self.depends_on)
             df = self.bold_mag.copy()
@@ -369,12 +380,13 @@ class BOLD(Simulator):
 
             mu = df.groupby(['choice','cond']).mean()['csum']
             ax.set_ylim(mu.min()*.55, mu.max()*1.15)
-            ax.set_xlabel('pGo', fontsize=22)
-            ax.set_ylabel('$\Sigma \Theta_{G}$',fontsize=26)
+            ax.set_xlabel('pGo', fontsize=18)
+            ax.set_ylabel('$\Sigma \Theta_{G}$',fontsize=20)
             ax.set_title(" ".join([titl, 'effect(s) on BOLD Simulations']))
             sns.despine()
+            plt.tight_layout()
             if save:
-                  plt.savefig(''.join([titl,'.png']), dpi=300)
+                  plt.savefig('_'.join([titl,self.decay,'means.png']), dpi=300)
 
 
       def plot_traces(self, save=False):
@@ -408,4 +420,4 @@ class BOLD(Simulator):
             sns.despine()
             plt.tight_layout()
             if save:
-                  plt.savefig(''.join([titl, '_traces.png']), dpi=300)
+                  plt.savefig('_'.join([titl, self.decay, 'traces.png']), dpi=300)

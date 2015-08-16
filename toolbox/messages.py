@@ -48,13 +48,13 @@ def describe_model(depends_on=None):
       pdeps = depends_on.keys()
       deplist = []
       if 'a' in pdeps:
-            deplist.append('Boundary Height')
+            deplist.append('boundary')
       if 'tr' in pdeps:
-            deplist.append('Onset Time')
+            deplist.append('onset')
       if 'v' in pdeps:
-            deplist.append('Drift-Rate')
+            deplist.append('drift')
       if 'xb' in pdeps:
-            deplist.append('Dynamic Drift')
+            deplist.append('dynamic_v')
 
       if len(pdeps)>1:
             pdep = ' and '.join(deplist)
@@ -63,7 +63,22 @@ def describe_model(depends_on=None):
 
       return pdep
 
+def global_logger(log_arrays):
 
+      arr_str = lambda x: ', '.join(str(elem)[:6] for elem in x)+'])'
+
+      popt_str = 'popt = array(['+arr_str(log_arrays['popt'])
+      fmin_str = 'fmin = array(['+arr_str(log_arrays['fmin'])
+      yhat_str = 'yhat = array(['+arr_str(log_arrays['yhat'])
+      cost_str = 'err = array(['+arr_str(log_arrays['cost'])
+
+      with open('global_min_report.txt', 'a') as f:
+            f.write('=='*20+'\n')
+            f.write(popt_str+'\n')
+            f.write(fmin_str+'\n')
+            f.write(cost_str+'\n')
+            f.write(yhat_str+'\n')
+            f.write('=='*20+'\n')
 
 def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=None, fit_id=None, xbasin=None):
 
@@ -107,7 +122,7 @@ def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=No
             f.write(y_str+'\n')
             f.write('--'*20+'\n')
             try:
-                  f.write(fit_report(optmod, show_correl=False)+'\n\n')
+                  f.write(fit_report(optmod)+'\n\n')
             except Exception:
                   pass
             f.write('AIC: %.8f' % optmod.aic + '\n')

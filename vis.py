@@ -9,13 +9,16 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from radd.toolbox import analyze, colors
 from scipy.stats.mstats import mquantiles as mq
+import prettyplotlib as pl
 
-sns.set(font='Helvetica')
-sns.set(style='ticks', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
+
+sns.set(font='Helvetica', style='whitegrid', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
 
 cdict = colors.get_cpals('all')
-rpal = cdict['rpal']; bpal = cdict['bpal']; gpal = cdict['gpal']; ppal = cdict['ppal']; heat = cdict['heat'];
-cool = cdict['cool']; slate = cdict['slate']
+rpal = cdict['rpal']; bpal = cdict['bpal'];
+gpal = cdict['gpal']; ppal = cdict['ppal'];
+heat = cdict['heat']; cool = cdict['cool'];
+slate = cdict['slate']
 
 
 def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None):
