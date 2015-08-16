@@ -26,19 +26,53 @@ def remove_outliers(df, sd=1.5, verbose=False):
       return clean
 
 
-def rangl_data(data, re_cut=.650, pro_cut=.54502, kind='radd', prob=([.1, .3, .5, .7, .9])):
-
-      if kind == 'radd':
+def rangl_data(data, data_style='re', kind='radd', tb=.650, prob=([.1, .3, .5, .7, .9])):
+      """ called by __make_dataframes__ to generate observed dataframes and iterables for
+      subject fits
+      """
+      if data_style=='re':
             gac = data.query('ttype=="go"').acc.mean()
             sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
             grt = data.query('ttype=="go" & acc==1').rt.values
             ert = data.query('response==1 & acc==0').rt.values
             gq = mq(grt, prob=prob)
             eq = mq(ert, prob=prob)
-            return np.hstack([gac, sacc, gq*10, eq*10])
+            return np.hstack([gac, sacc, gq, eq])
 
-      elif kind=='pro':
+      elif data_style=='pro':
+            godf = data[data.response==1]
+            godf['response']=np.where(godf.rt<tb, 1, 0)
+            data = pd.concat([godf, data[data.response==0]])
             return 1-data.response.mean()
+
+
+def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.550, nrt_cond=2, prob=np.array([.1, .3, .5, .7, .9])):
+      """ called by __make_dataframes__ for proactive models to generate observed
+      dataframes and iterables for subject fits, specifically aggregates proactive rts
+      into a smaller number of conditions to offset low trial count issues
+      """
+
+      if include_zero_rts:
+            godfx = data[(data.response==1)]
+      else:
+            godfx = data[(data.response==1) & (data.pGo>0.)]
+      godfx.loc[:, 'response'] = np.where(godfx.rt<tb, 1, 0)
+      godf = godfx.query('response==1')
+
+      if split_col == None:
+            rts = godf[godf.rt<=tb].rt.values
+            return mq(rts, prob=prob)
+
+      rtq = []
+      for i in range(1, nrt_cond+1):
+            if i not in godf[split_col].unique():
+                  rtq.append(array([np.nan]*len(prob)))
+            else:
+                  rts = godf[(godf[split_col]==i)&(godf.rt<=tb)].rt.values
+                  rtq.append(mq(rts, prob=prob))
+
+      return np.hstack(rtq)
+
 
 
 def ensure_numerical_wts(wts, fwts):
@@ -93,6 +127,30 @@ def res(arr,lower=0.0,upper=1.0):
       arr *= (upper-lower)/arr.max()
       arr += lower
       return arr
+
+
+def resample_data(data, data_style='re', n=120, kind='radd'):
+      """ generates n resampled datasets using rwr()
+      for bootstrapping model fits
+      """
+      df=data.copy(); bootlist=list()
+      if n==None: n=len(df)
+      if data_style=='re':
+            for ssd, ssdf in df.groupby('ssd'):
+                  boots = ssdf.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = ssdf.irow(resampled_ix)
+                  bootlist.append(bootdf)
+                  #concatenate and return all resampled conditions
+                  return rangl_re(pd.concat(bootlist))
+      elif data_style=='pro':
+            boots = df.reset_index(drop=True)
+            orig_ix = np.asarray(boots.index[:])
+            resampled_ix = rwr(orig_ix, get_index=True, n=n)
+            bootdf = df.irow(resampled_ix)
+            bootdf_list.append(bootdf)
+            return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
 
 
 def rwr(X, get_index=False, n=None):
@@ -159,6 +217,26 @@ def get_obs_quant_counts(df, prob=([.10, .30, .50, .70, .90])):
       observed = np.ceil((inter_prob)*len(rt)*.94).astype(int)
 
       return observed, obs_quant
+
+
+def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array([.1, .3, .5, .7, .9]), cond=None):
+
+      info = ['nfev','chi','rchi','AIC','BIC','CNVRG']
+      if data_style=='re':
+            cq = ['c'+str(int(n*100)) for n in prob]
+            eq = ['e'+str(int(n*100)) for n in prob]
+            qp_cols = [cond, 'Go'] + delays + cq + eq
+      else:
+            hi = ['hi'+str(int(n*100)) for n in prob]
+            lo = ['lo'+str(int(n*100)) for n in prob]
+            qp_cols = labels + hi + lo
+
+      if params is not None:
+            infolabels = params + info
+            return [qp_cols, infolabels]
+      else:
+            return [qp_cols]
+
 
 
 def get_exp_counts(simdf, obs_quant, n_obs, prob=([.10, .30, .50, .70, .90])):

@@ -143,10 +143,10 @@ def plot_results(model, results='both', model_id=None):
       if 'pro' not in model.kind:
             yhat = model.fits.reshape(model.ncond, int(len(model.fits)/model.ncond))
             for i, yh in enumerate(yhat):
-                  vis.plot_fits(model.avg_y[i], yh, kind='radd', save=True, savestr='_'.join([model_id, model.labels[i]]))
+                  vis.plot_fits(model.y[i], yh, kind='radd', save=True, savestr='_'.join([model_id, model.labels[i]]))
       else:
             if results in ['behavior', 'both']:
-                  vis.plot_fits(model.avg_y, model.fits, kind='pro', save=True, savestr=model_id)
+                  vis.plot_fits(model.y, model.fits, kind='pro', save=True, savestr=model_id)
             if results in ['bold', 'both']:
                   bold=neuro.BOLD(model)
                   bold.simulate_bold(save=True, savestr=model_id)

@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd import models
-from radd.toolbox.messages import logger, basin_accept_fun
+from radd.toolbox import theta
+from radd.toolbox.messages import logger
 from lmfit import Parameters, minimize
 from radd.CORE import RADDCore
 from scipy.optimize import basinhopping, differential_evolution, brute
@@ -42,7 +43,7 @@ class Optimizer(RADDCore):
             nc = self.fitparams['ncond']
 
             if fit_on=='average':
-                  self.y=dframes['avg_y']
+                  self.y=dframes['y'].flatten()
                   self.flat_y=dframes['flat_y']
 
             elif fit_on in ['subjects', 'bootstrap']:
@@ -74,11 +75,15 @@ class Optimizer(RADDCore):
 
             if self.fit_on=='average':
                   self.fit_id='AVERAGE'
-                  self.yhat, self.fitinfo, self.popt = self.__opt_routine__()
+                  self.fits, self.fitinfo, self.popt = self.__opt_routine__()
+                  # write params (Series) and fit arrays (DF)
+                  self.params_io(self.popt, io='w', iostr=savepth+'p')
+                  self.fits_io(self.fits, io='w', iostr=savepth+'fits')
+
             elif self.fit_on in ['subjects', 'bootstrap']:
                   self.__indx_optimize__(save=save, savepth=savepth)
 
-            return self.yhat, self.fitinfo, self.popt
+            return self.fits, self.fitinfo, self.popt
 
 
       def __indx_optimize__(self, save=True, savepth='./'):
@@ -105,76 +110,148 @@ class Optimizer(RADDCore):
             self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
 
 
+      def __hop_around__(self, niter=20, nsuccess=10):
+            """ initialize model with niter randomly generated parameter sets
+            and perform global minimization using basinhopping algorithm
+
+            ::Arguments::
+                  niter (int):
+                        number of randomly generated parameter sets
+                  nsuccess (int):
+                        tell basinhopping algorithm to exit after this many
+                        iterations at which a common minimum is found
+            ::Returns::
+                  parameter set with the best fit
+            """
+
+            inits = self.inits.keys()
+            bnd = theta.get_bounds(kind=self.kind, tb=self.fitparams['tb'])
+            random_inits = {pkey: theta.init_distributions(pkey, bnd[pkey], nrvs=niter) for pkey in inits}
+
+            xpopt, xfmin = [], []
+            for i in range(niter):
+                  p={pkey: random_inits[pkey][i] for pkey in inits}
+                  popt, fmin = self.perform_basinhopping(p=p, is_flat=True, nsuccess=nsuccess)
+                  xpopt.append(popt)
+                  xfmin.append(fmin)
+
+            # get the best fitting set of params
+            contender = xpopt[np.argmin(xfmin)]
+            # test against original inits and return better
+            p1 = __test_inits__(contender, nsuccess=nsuccess)
+            return p1 #return xpopt, xfmin
+
+
+      def __test_inits__(self, popt, nsuccess=10):
+            """ test that global optimization worked, evaluating
+            costfx using basinhopping optimized parameter set against
+            an initial set of parameters provided to Model
+            """
+            cost = lambda x: m.opt.simulator.__cost_fx__(x)
+
+            m.opt.simulator.ncond=1;
+            m.opt.simulator.wts=fp['flat_wts']
+            m.opt.simulator.y=self.flat_y
+
+            yh0 = [cost(popt) for i in range(nsuccess)]
+            yh1 = [cost(m.opt.inits) for i in range(nsuccess)]
+            tests = np.array([1 if c0<c1 else 0 for c0,c1 in zip(yh0, yh1)])
+
+            if np.sum(tests)>=(nsuccess/2.0):
+                  print "great success, borat"
+                  return popt
+            else:
+                  print "this tie is blacknot"
+                  return self.inits
+
+
       def __opt_routine__(self):
             """ main function for running optimization routine through all phases
             (flat optimization, pre-tuning with basinhopping alg., final simplex)
             """
 
             fp = self.fitparams
-
-            # p0X: Initials
+            # p0: Initials
             p0 = dict(deepcopy(self.inits))
-            #yh1, finfo1, p1 = self.perform_diffevolution(inits=p0)
-            # p1: STAGE 1 (Initial Simplex)
+
+            # p1: STAGE 1 (Find Global Min/BasinHopping)
+            p1 = self.__hop_around__()
+
+            # p1: STAGE 2 (Initial Simplex)
             self.simulator.ncond=1; self.simulator.wts=fp['flat_wts']
-            yh1, finfo1, p1 = self.optimize_theta(y=self.flat_y, inits=p0, is_flat=True)
+            yh2, finfo2, p2 = self.__gradient_descent__(y=self.flat_y, inits=p1, is_flat=True)
 
-            # p2: STAGE 2 (BasinHopping)
-            self.bdata, self.bwts = self.__prep_basin_data__()
-            for pkey in self.pc_map.keys():
-                  p2 = self.__nudge_params__(p1, pkey)
-                  p2[pkey] = self.perform_global_min(method='basinhopping', inits=p2, basin_key=pkey)
+            # p2: STAGE 3 (PreTune/BasinHopping)
+            p3 = self.__nudge_params__(p1)
+            p3, fmin = self.__global_opt__(method='basinhopping', inits=p3)
 
-            # p3: STAGE 3 (Final Simplex)
+            # p3: STAGE 4 (Final Simplex)
             self.simulator.ncond=self.ncond; self.simulator.wts=fp['wts']
-            yh3, finfo3, p3 = self.optimize_theta(y=self.y, inits=p2, is_flat=False)
+            yh4, finfo4, p4 = self.__gradient_descent__(y=self.y, inits=p2, is_flat=False)
 
-            return yh3, finfo3, p3
+            return yh4, finfo4, p4
 
 
-      def perform_basinhopping(self, p, pkey):
-            """ uses basin hopping to pre-optimize init cond parameters
-            to individual conditions to prevent terminating in local minima
+      def perform_basinhopping(self, p, is_flat=False, nsuccess=20, stepsize=.05):
+            """ STAGE 1/3 FITTING - GLOBAL MIN: uses basinhopping to
+            pre-tune init cond parameters to individual conditions to
+            prevent terminating in local minima
             """
-
             fp = self.fitparams
-            nc = fp['ncond']; cols=['pkey', 'popt', 'fun', 'nfev']
-            #basindf=pd.DataFrame(np.zeros((nc,4)),columns=cols)
-            self.simulator.__prep_global__(method='basinhopping', basin_key=pkey)
-            mkwargs = {"method":"Nelder-Mead", 'jac':True}
-            xbasin = []
-            vals = p[pkey]
-            for i, x in enumerate(vals):
-                  p[pkey] = x
-                  self.simulator.basin_params = p
-                  self.simulator.y = self.bdata[i]
-                  self.simulator.wts = self.bwts[i]
-                  out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=.05, minimizer_kwargs=mkwargs, niter_success=20)
-                  xbasin.append(out.x[0])
-            if self.xbasin!=[]:
-                  self.xbasin.extend(xbasin)
+            if is_flat:
+                  bdata=[self.flat_y]
+                  bwts=[fp['flat_wts']]
+                  ncond=1
+                  basin_keys=p.keys()
+                  p={k:array([v]) for k,v in p.items()}
             else:
-                  self.xbasin = xbasin
-            return xbasin
+                  basin_keys=self.pc_map.keys()
+                  # get condition wise y vectors
+                  bdata, bwts = self.__prep_basin_data__()
+                  ncond=self.ncond
+
+            mkwargs = {"method":"Nelder-Mead", 'jac':True}
+            self.simulator.__prep_global__(method='basinhopping', basin_keys=basin_keys)
+
+            xopt, funcmin = [], []
+            for i in range(ncond):
+                  params = {k: v[i] for k,v in p.items()}
+                  x=[params[pk] for pk in basin_keys]
+                  self.simulator.basin_params = params
+                  self.simulator.y = bdata[i]
+                  self.simulator.wts = bwts[i]
+                  # run basinhopping on simulator.basinhopping_minimizer func
+                  out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=stepsize, minimizer_kwargs=mkwargs, niter_success=nsuccess)
+                  xopt.append(out.x)
+                  funcmin.append(out.fun)
+
+            for i, pk in enumerate(basin_keys):
+                  p[pk]=array([xopt[c][i] for c in range(ncond)])
+            if self.xbasin!=[]:
+                  self.xbasin.extend(funcmin)
+            else:
+                  self.xbasin = funcmin
+
+            return p, funcmin
 
 
-      def perform_global_min(self, inits, method='brute', basin_key=None):
+      def __global_opt__(self, inits, method='brute', is_flat=False):
             """ Performs global optimization via basinhopping, brute, or differential evolution
             algorithms.
 
-            basinhopping method is only used to pre-tune conditional parameters after
+            basinhopping method is used for STAGE 1 fits to find global minimum of flat costfx
+            and again at STAGE 3 in order to pre-tune conditional parameters after
             flat optimization before entering final simplex routine (optimize_theta).
 
             brute and differential evolution methods may be applied to the full parameter set
             (using original inits dictionary and pc_map)
             """
 
-            self.simulator.__prep_global__(method=method, basin_key=basin_key)
-
             if method=='basinhopping':
-                  keybasin = self.perform_basinhopping(p=inits, pkey=basin_key)
+                  keybasin = self.perform_basinhopping(p=inits, is_flat=is_flat)
                   return keybasin
 
+            self.simulator.__prep_global__(method=method)
             pfit = list(set(inits.keys()).intersection(self.pnames))
             pbounds, params = self.slice_bounds_global(inits, pfit)
 
@@ -193,18 +270,19 @@ class Optimizer(RADDCore):
             return self.globalmin
 
 
-      def optimize_theta(self, y, inits, is_flat=True):
-            """ Optimizes parameters following specified parameter
-            dependencies on task conditions (i.e. depends_on={param: cond})
+      def __gradient_descent__(self, y, inits, is_flat=True):
+            """ STAGE 2/4 FITTING - Initial/Final Simplex: Optimizes parameters
+            following specified parameter dependencies on task conditions
+            (i.e. depends_on={param: cond})
             """
 
             self.simulator.y = y.flatten()
             self.simulator.__update_pvc__(is_flat=is_flat)
 
+            fp = self.fitparams
             pnames = deepcopy(self.pnames)
             pfit = list(set(inits.keys()).intersection(pnames))
-            lim = self.set_bounds()
-            fp = self.fitparams
+            lim = theta.get_bounds(kind=self.kind, tb=fp['tb'])
 
             ip = deepcopy(inits)
             lmParams=Parameters()

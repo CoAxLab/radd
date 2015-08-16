@@ -48,13 +48,13 @@ def describe_model(depends_on=None):
       pdeps = depends_on.keys()
       deplist = []
       if 'a' in pdeps:
-            deplist.append('Boundary Height')
+            deplist.append('boundary')
       if 'tr' in pdeps:
-            deplist.append('Onset Time')
+            deplist.append('onset')
       if 'v' in pdeps:
-            deplist.append('Drift-Rate')
+            deplist.append('drift')
       if 'xb' in pdeps:
-            deplist.append('Dynamic Drift')
+            deplist.append('dynamic_v')
 
       if len(pdeps)>1:
             pdep = ' and '.join(deplist)
@@ -107,7 +107,7 @@ def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=No
             f.write(y_str+'\n')
             f.write('--'*20+'\n')
             try:
-                  f.write(fit_report(optmod, show_correl=False)+'\n\n')
+                  f.write(fit_report(optmod)+'\n\n')
             except Exception:
                   pass
             f.write('AIC: %.8f' % optmod.aic + '\n')

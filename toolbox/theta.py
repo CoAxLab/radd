@@ -5,25 +5,49 @@ import numpy as np
 from scipy.io import loadmat
 import os, re
 from numpy import array
+from scipy.stats.distributions import norm, gamma
 
 
-def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array([.1, .3, .5, .7, .9])):
 
-      info = ['nfev','chi','rchi','AIC','BIC','CNVRG']
-      if data_style=='re':
-            cq = ['c'+str(int(n*100)) for n in prob]
-            eq = ['e'+str(int(n*100)) for n in prob]
-            qp_cols = ['Go'] + delays + cq + eq
-      else:
-            hi = ['hi'+str(int(n*100)) for n in prob]
-            lo = ['lo'+str(int(n*100)) for n in prob]
-            qp_cols = labels + hi + lo
+def init_distributions(pkey, bounds, nrvs=25, loc=None, scale=None):
 
-      if params is not None:
-            infolabels = params + info
-            return [qp_cols, infolabels]
-      else:
-            return [qp_cols]
+      sigma_defaults = {'a':.10, 'tr':.05, 'v':1, 'ssv':1, 'z':.2, 'xb':1}
+      mu_defaults = {'a':.35, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1}
+
+      if loc is None:
+            loc = mu_defaults[pkey]
+      if scale is None:
+            scale = sigma_defaults[pkey]
+
+      # init and freeze dist shape
+      if pkey in ['tr', 'v', 'ssv', 'z', 'xb']:
+            dist = norm(loc, scale)
+      elif pkey in ['a', 'tr']:
+            dist = gamma(1, loc, scale)
+      # generate random variates
+      rvinits = dist.rvs(nrvs)
+      while rvinits.min()<=bounds[0]:
+            # apply lower limit
+            ix = rvinits.argmin()
+            rvinits[ix] = dist.rvs()
+      while rvinits.max()>=bounds[1]:
+            # apply upper limit
+            ix = rvinits.argmax()
+            rvinits[ix] = dist.rvs()
+      return rvinits
+
+
+def get_bounds(kind='radd', tb=None, a=(.001, 1.000), tr=(.05, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
+      """ set and return boundaries to limit search space
+      of parameter optimization in <optimize_theta>
+      """
+
+      if 'irace' in kind:
+            ssv=(abs(ssv[1]), abs(ssv[0]))
+      if tb != None:
+            tr = (tr[0], tb-.01)
+      bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
+      return bounds
 
 
 def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
@@ -89,7 +113,6 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
       return inits
 
 
-
 def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
 
       if 'radd' in kind:
@@ -110,16 +133,21 @@ def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
             elif ['tr']==depends_on.keys():
-                  inits = {'a':0.3267, 'tr': array([0.36803, 0.34669, 0.32555, 0.30535, 0.28855, 0.28082]), 'v': 1.3813}
+                  if dynamic=='hyp':
+                        inits={'tr':array([0.370423,0.353704,0.336991,0.320695,0.298988,0.290798]), 'a':0.331967,'xb':1.996667,'v':1.377375}
+                  elif 'x' not in kind:
+                        inits={'a':0.3267, 'tr': array([0.36803, 0.34669, 0.32555, 0.30535, 0.28855, 0.28082]), 'v': 1.3813}
             elif ['v']==depends_on.keys():
                   if 'x' not in kind:
                         inits = {'a': 0.474838, 'tr': 0.27253, 'v': array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936]), 'z': 0}
                   elif dynamic=='hyp':
-                        inits = {'a':0.4748, 'tr':0.2725, 'v': array([ 1.39321, 1.52084, 1.65874,  1.75702, 1.89732, 1.94936]), 'z':0, 'xb': .09}# .009}
+                        inits={'v':array([1.39423800,1.53535562,1.65557698,1.75515234,1.88985329,1.92243114]), 'a':0.487581, 'xb':1.840808, 'tr':0.292237}
                   elif dynamic=='exp':
                         inits = {'a':0.4836, 'tr': 0.3375, 'v': array([ 1.08837, 1.31837, 1.54837,  1.77837, 2.00837, 2.23837]), 'xb':  1.4604, 'z': 0}
             elif ['xb']==depends_on.keys():
                   inits={'a': 0.473022, "tr":0.330223, "v":1.64306, 'xb': array([0.257877, 0.649422, 1.03762, 1.307329, 1.934637, 2.101918])}
+            elif ['a']==depends_on.keys():
+                  inits={'a':array([0.58689325, 0.54086615, 0.50483462, 0.47312626, 0.43397831, 0.42288989]), 'xb': 1.970817, 'tr': 0.284143, 'v': 1.630117}
             else:
                   # DEFAULT BASELINE PROACTIVE INITS
                   inits = {'a': 0.40, 'tr': .3, 'v': 1.5,  'z': 0}

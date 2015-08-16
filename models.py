@@ -71,10 +71,12 @@ class Simulator(object):
                   map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
 
 
-      def __prep_global__(self, method='basinhopping', basin_key=None):
+      def __prep_global__(self, method='basinhopping', basin_keys=None):
 
             if method=='basinhopping':
-                  self.basin_key=basin_key
+                  if not isinstance(basin_keys, list):
+                        basin_keys = [basin_keys]
+                  self.basin_keys=basin_keys
                   self.basin_params = {}
                   self.ncond = 1
 
@@ -418,14 +420,15 @@ class Simulator(object):
             """
 
             p = self.basin_params
-            for pkey in self.pvc:
-                  p[pkey]=np.ones(self.ncond)*p[pkey]
-            p[self.basin_key]=x
-            Pg, Tg = self.__update_go_process__(p)
+            for i, k in enumerate(self.basin_keys):
+                  p[k] = x[i]
+            #for pkey in self.pvc:
+            #      p[pkey]=np.ones(self.ncond)*p[pkey]
+
+            #Pg, Tg = self.__update_go_process__(p)
             yhat = self.sim_fx(p)
+
             cost = ((yhat-self.y)*self.wts)**2
-            if np.ndim(cost)>1:
-                  cost = cost[0]
             return cost.flatten()
 
 

@@ -5,8 +5,8 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.toolbox.theta import *
-from radd.toolbox.analyze import *
+from radd.toolbox import theta
+from radd.toolbox import analyze
 from scipy.stats.mstats import mquantiles as mq
 from radd.toolbox.messages import saygo
 
@@ -40,13 +40,10 @@ class RADDCore(object):
                   if tb==None:
                         tb=.55
                   self.split=split
-                  if isinstance(self.split, int):
-                        self.nrt_cond=2
-                  elif isinstance(self.split, list):
-                        self.nrt_cond=len(self.split)
-
+                  self.nrt_cond=2
                   self.pGo=sorted(self.data.pGo.unique())
                   self.include_zero_rts=include_zero_rts
+
             else:
                   self.data_style='re'
                   if depends_on is None:
@@ -55,6 +52,7 @@ class RADDCore(object):
                   self.pGo = len(data[data.ttype=='go'])/len(data)
                   self.delays = sorted(ssd.astype(np.int))
                   self.ssd = array(self.delays)*.001
+
 
             # CONDITIONAL PARAMETERS
             self.depends_on = depends_on
@@ -66,7 +64,6 @@ class RADDCore(object):
             # if split!=None (is set during prep in
             # analyze.__make_proRT_conds__())
             self.rt_cix = None
-
             # GET TB BEFORE REMOVING OUTLIERS!!!
             if tb != None:
                   self.tb=tb
@@ -78,7 +75,6 @@ class RADDCore(object):
                   self.__get_default_inits__()
             else:
                   self.inits = inits
-
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
 
             # DATA TREATMENT AND EXTRACTION
@@ -92,72 +88,48 @@ class RADDCore(object):
 
 
       def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
-
-            if self.data_style=='re':
-                  gac = data.query('ttype=="go"').acc.mean()
-                  sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
-                  grt = data.query('ttype=="go" & acc==1').rt.values
-                  ert = data.query('response==1 & acc==0').rt.values
-                  gq = mq(grt, prob=prob)
-                  eq = mq(ert, prob=prob)
-                  return np.hstack([gac, sacc, gq, eq])
-
-            elif self.data_style=='pro':
-                  godf = data[data.response==1]
-                  godf['response']=np.where(godf.rt<self.tb, 1, 0)
-                  data = pd.concat([godf, data[data.response==0]])
-                  return 1-data.response.mean()
+            """ wrapper for analze.rangle_data
+            """
+            rangled = analyze.rangl_data(data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
+            return rangled
 
 
-      def rt_quantiles(self, data, split='HL', prob=np.array([.1, .3, .5, .7, .9])):
-
+      def rt_quantiles(self, data, split_col='HL', prob=np.array([.1, .3, .5, .7, .9])):
+            """ wrapper for analze.rt_quantiles
+            """
             if not hasattr(self, "prort_conds_prepared"):
                   self.__make_proRT_conds__()
+            rtq = analyze.rt_quantiles(data, include_zero_rts=self.include_zero_rts, split_col=split_col, prob=prob, nrt_cond=self.nrt_cond, tb=self.tb)
+            return rtq
 
-            if self.include_zero_rts:
-                  godfx = data[(data.response==1)]
-            else:
-                  godfx = data[(data.response==1) & (data.pGo>0.)]
-            godfx.loc[:, 'response'] = np.where(godfx.rt<self.tb, 1, 0)
-            godf = godfx.query('response==1')
 
-            if split == None:
-                  rts = godf[godf.rt<=self.tb].rt.values
-                  return mq(rts, prob=prob)
+      def params_io(self, p={}, io='w', iostr='popt'):
+            """ read // write parameters dictionaries
+            """
+            if io=='w':
+                  pd.Series(p).to_csv(''.join([iostr, '.csv']))
+            elif io=='r':
+                  ps = pd.read_csv(''.join([iostr, '.csv']), header=None)
+                  p = dict(zip(ps[0], ps[1]))
+                  return p
 
-            rtq = []
-            for i in range(1, self.nrt_cond+1):
-                  if i not in godf[split].unique():
-                        rtq.append(array([np.nan]*len(prob)))
+
+      def fits_io(self, fits=[], io='w', iostr='fits'):
+            """ read // write y, wts, yhat arrays
+            """
+            if io=='w':
+                  if np.ndim(self.y)>1:
+                        y=self.y.flatten()
+                        fits=fits.flatten()
                   else:
-                        rts = godf[(godf[split]==i)&(godf.rt<=self.tb)].rt.values
-                        rtq.append(mq(rts, prob=prob))
+                        y=self.y
+                  index = np.arange(len(fits))
+                  df = pd.DataFrame({'y':y, 'wts':self.wts, 'yhat':fits}, index=index)
+                  df.to_csv(''.join([iostr, '.csv']))
 
-            return np.hstack(rtq)
-
-
-      def resample_data(self, data, n=120, kind='radd'):
-
-            df=data.copy(); bootlist=list()
-            if n==None: n=len(df)
-
-            if self.data_style=='re':
-                  for ssd, ssdf in df.groupby('ssd'):
-                        boots = ssdf.reset_index(drop=True)
-                        orig_ix = np.asarray(boots.index[:])
-                        resampled_ix = rwr(orig_ix, get_index=True, n=n)
-                        bootdf = ssdf.irow(resampled_ix)
-                        bootlist.append(bootdf)
-                        #concatenate and return all resampled conditions
-                        return rangl_re(pd.concat(bootlist))
-
-            elif self.data_style=='pro':
-                  boots = df.reset_index(drop=True)
-                  orig_ix = np.asarray(boots.index[:])
-                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
-                  bootdf = df.irow(resampled_ix)
-                  bootdf_list.append(bootdf)
-                  return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
+            elif io=='r':
+                  df = pd.read_csv(''.join([iostr, '.csv']), index_col=0)
+                  return df
 
 
       def set_fitparams(self, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
@@ -186,7 +158,6 @@ class RADDCore(object):
                         dict with only depends_on.keys() containing
                         vectorized vals
             """
-
 
             if finfo is None:
                   try:
@@ -228,7 +199,7 @@ class RADDCore(object):
                   stores all opt. parameter values and model fit statistics
             dat (ndarray):
                   contains all subject/boot. y vectors entered into costfx
-            avg_y (ndarray):
+            y (ndarray):
                   average y vector for each condition entered into costfx
             flat_y (1d array):
                   average y vector used to initialize parameters prior to fitting
@@ -249,29 +220,30 @@ class RADDCore(object):
             if self.data_style=='re':
                   datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack().unstack()
                   indxx = pd.Series(indx*ncond, name='idx')
-                  obs = pd.DataFrame(np.vstack(datdf.values), columns=qp_cols, index=indxx)
-                  obs[cond]=np.sort(labels*len(indx))
+                  obs = pd.DataFrame(np.vstack(datdf.values),columns=qp_cols[1:], index=indxx)
+                  obs.insert(0, qp_cols[0], np.sort(labels*len(indx)))
+
                   self.observed = obs.sort_index().reset_index()
-                  self.avg_y = self.observed.groupby(cond).mean().loc[:,qp_cols[0] : qp_cols[-1]].values
-                  self.flat_y = self.observed.loc[:, qp_cols[0] : qp_cols[-1]].mean().values
-                  dat = self.observed.loc[:,qp_cols[0]:qp_cols[-1]].values.reshape(len(indx),ncond,16)
+                  self.y = self.observed.groupby(cond).mean().values[:,1:]
+                  self.flat_y = self.observed.mean().values[1:]
+                  dat = self.observed.loc[:,qp_cols[1]:].values.reshape(len(indx),ncond,16)
                   fits = pd.DataFrame(np.zeros((len(indxx),len(qp_cols))), columns=qp_cols, index=indxx)
 
             elif self.data_style=='pro':
                   datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
                   rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
                   rtdat[rtdat<.1] = np.nan
-                  rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split=None).values), index=indx)
+                  rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split_col=None).values), index=indx)
                   self.observed = pd.concat([datdf, rtdat], axis=1)
                   self.observed.columns = qp_cols
-                  self.avg_y = self.observed.mean().values
+                  self.y = self.observed.mean().values
                   self.flat_y=np.append(datdf.mean().mean(), rts_flat.mean())
                   dat = self.observed.values.reshape((len(indx), len(qp_cols)))
                   fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
 
             fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
 
-            self.dframes = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
+            self.dframes = {'data':self.data, 'flat_y':self.flat_y, 'y':self.y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
 
 
       def __prep_basin_data__(self):
@@ -299,20 +271,25 @@ class RADDCore(object):
             return cond_data, cond_wts
 
 
-      def __nudge_params__(self, p, pkey, lim=(.98, 1.02)):
+      def __nudge_params__(self, p, lim=(.98, 1.02)):
             """
             nudge params so not all initialized at same val
             """
             bump = np.linspace(lim[0], lim[1], self.ncond)
-            if pkey in ['a', 'tr']:
-                  bump = bump[::-1]
-            p[pkey] = p[pkey]*bump
+            for pkey in p.keys():
+                  if pkey in self.pc_map.keys():
+                        if pkey in ['a', 'tr']:
+                              bump = bump[::-1]
+                        p[pkey] = p[pkey]*bump
+                  else:
+                        p[pkey]=p[pkey]*np.ones(self.ncond)
+
             return p
 
 
       def slice_bounds_global(self, inits, pfit):
 
-            b = self.set_bounds()
+            b = theta.get_bounds(kind=self.kind, tb=self.fitparams['tb'])
             pclists=[]
             for pkey, pcl in self.pc_map.items():
                   pfit.remove(pkey)
@@ -327,19 +304,6 @@ class RADDCore(object):
             params = tuple([inits[pk] for pk in pfit])
 
             return pbounds, params
-
-
-      def set_bounds(self, a=(.001, 1.000), tr=(.1, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
-
-            """ set and return boundaries to limit search space
-            of parameter optimization in <optimize_theta>
-            """
-
-            if 'irace' in self.kind:
-                  ssv=(abs(ssv[1]), abs(ssv[0]))
-
-            bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
-            return bounds
 
 
       def get_wts(self):
@@ -397,33 +361,33 @@ class RADDCore(object):
                   self.fwts = np.hstack([nogo, quant])
                   #pwts = np.array([1.5,  1,  1,  1,  2, 2])
                   #self.wts = np.hstack([pwts, qwts])
-            self.wts, self.fwts = ensure_numerical_wts(self.wts, self.fwts)
+            self.wts, self.fwts = analyze.ensure_numerical_wts(self.wts, self.fwts)
 
 
       def __remove_outliers__(self, sd=1.5, verbose=False):
-            self.data = remove_outliers(self.data, sd=sd, verbose=verbose)
+            self.data = analyze.remove_outliers(self.data, sd=sd, verbose=verbose)
 
-      def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9])):
+      def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9]), cond='Cond'):
             if not hasattr(self, 'delays'):
                   self.delays = self.ssd
-            qp_cols = get_header(params=params, data_style=self.data_style, labels=self.labels, prob=prob, delays=self.delays)
+            qp_cols = analyze.get_header(params=params, data_style=self.data_style, labels=self.labels, prob=prob, delays=self.delays, cond=cond)
             if params is not None:
                   self.infolabels = qp_cols[1]
             return qp_cols[0]
 
       def __get_default_inits__(self):
-            self.inits = get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+            self.inits = theta.get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
 
       def __get_optimized_params__(self, include_ss=False, fit_noise=False):
-            params = get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+            params = theta.get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
             return params
 
       def __check_inits__(self, pro_ss=False, fit_noise=False):
-            self.inits = check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
+            self.inits = theta.check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
 
       def __make_proRT_conds__(self):
-            self.data, self.rt_cix = make_proRT_conds(self.data, self.split)
+            self.data, self.rt_cix =analyze.make_proRT_conds(self.data, self.split)
             self.prort_conds_prepared = True
 
       def __rename_bad_cols__(self):
-            self.data = rename_bad_cols(self.data)
+            self.data = analyze.rename_bad_cols(self.data)

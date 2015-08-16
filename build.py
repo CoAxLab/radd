@@ -49,7 +49,7 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split=50, verbose=True, include_zero_rts=False, multiopt=True, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split=50, verbose=False, include_zero_rts=False, multiopt=True, *args, **kws):
 
             self.data=data
             self.weighted=weighted
@@ -164,7 +164,7 @@ class Model(RADDCore):
                   self.pc_map[d] = ['_'.join([d, l]) for l in self.labels]
                   params.extend(self.pc_map[d])
 
-            qp_cols = self.__get_header__(params)
+            qp_cols = self.__get_header__(params, cond=self.cond)
             # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
             self.__make_dataframes__(qp_cols)
             # CALCULATE WEIGHTS FOR COST FX
@@ -173,7 +173,7 @@ class Model(RADDCore):
             else:
                   # MAKE PSEUDO WEIGHTS
                   self.fwts=np.ones_like(self.flat_y.flatten())
-                  self.wts=np.ones_like(self.avg_y.flatten())
+                  self.wts=np.ones_like(self.y.flatten())
             if self.verbose:
                   self.is_prepared=saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
             else:
