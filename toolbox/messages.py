@@ -63,7 +63,22 @@ def describe_model(depends_on=None):
 
       return pdep
 
+def global_logger(log_arrays):
 
+      arr_str = lambda x: ', '.join(str(elem)[:6] for elem in x)+'])'
+
+      popt_str = 'popt = array(['+arr_str(log_arrays['popt'])
+      fmin_str = 'fmin = array(['+arr_str(log_arrays['fmin'])
+      yhat_str = 'yhat = array(['+arr_str(log_arrays['yhat'])
+      cost_str = 'err = array(['+arr_str(log_arrays['cost'])
+
+      with open('global_min_report.txt', 'a') as f:
+            f.write('=='*20+'\n')
+            f.write(popt_str+'\n')
+            f.write(fmin_str+'\n')
+            f.write(cost_str+'\n')
+            f.write(yhat_str+'\n')
+            f.write('=='*20+'\n')
 
 def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=None, fit_id=None, xbasin=None):
 

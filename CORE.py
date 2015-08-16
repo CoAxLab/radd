@@ -132,7 +132,7 @@ class RADDCore(object):
                   return df
 
 
-      def set_fitparams(self, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
+      def set_fitparams(self, ntrials=10000, tol=1.e-10, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
 
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}

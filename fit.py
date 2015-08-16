@@ -8,7 +8,7 @@ import pandas as pd
 from numpy import array
 from radd import models
 from radd.toolbox import theta
-from radd.toolbox.messages import logger
+from radd.toolbox.messages import logger, global_logger
 from lmfit import Parameters, minimize
 from radd.CORE import RADDCore
 from scipy.optimize import basinhopping, differential_evolution, brute
@@ -110,7 +110,7 @@ class Optimizer(RADDCore):
             self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
 
 
-      def __hop_around__(self, niter=20, nsuccess=10):
+      def __hop_around__(self, niter=40, nsuccess=20):
             """ initialize model with niter randomly generated parameter sets
             and perform global minimization using basinhopping algorithm
 
@@ -132,17 +132,21 @@ class Optimizer(RADDCore):
             for i in range(niter):
                   p={pkey: random_inits[pkey][i] for pkey in inits}
                   popt, fmin = self.perform_basinhopping(p=p, is_flat=True, nsuccess=nsuccess)
+                  yhat = self.simulator.sim_fx(popt)
+                  cost = self.simulator.__cost_fx__(popt)
+                  log_arrays={'popt':popt, 'fmin':fmin, 'cost':cost, 'yhat':yhat}
+                  global_logger(log_arrays)
                   xpopt.append(popt)
                   xfmin.append(fmin)
 
             # get the best fitting set of params
             contender = xpopt[np.argmin(xfmin)]
             # test against original inits and return better
-            p1 = __test_inits__(contender, nsuccess=nsuccess)
+            p1 = self.__test_global__(contender, nsuccess=nsuccess)
             return p1 #return xpopt, xfmin
 
 
-      def __test_inits__(self, popt, nsuccess=10):
+      def __test_global__(self, popt, nsuccess=10):
             """ test that global optimization worked, evaluating
             costfx using basinhopping optimized parameter set against
             an initial set of parameters provided to Model
@@ -154,11 +158,12 @@ class Optimizer(RADDCore):
             m.opt.simulator.y=self.flat_y
 
             yh0 = [cost(popt) for i in range(nsuccess)]
-            yh1 = [cost(m.opt.inits) for i in range(nsuccess)]
+            yh1 = [cost(self.inits) for i in range(nsuccess)]
             tests = np.array([1 if c0<c1 else 0 for c0,c1 in zip(yh0, yh1)])
 
             if np.sum(tests)>=(nsuccess/2.0):
                   print "great success, borat"
+                  print tests[np.argmin(tests)]
                   return popt
             else:
                   print "this tie is blacknot"
@@ -167,7 +172,9 @@ class Optimizer(RADDCore):
 
       def __opt_routine__(self):
             """ main function for running optimization routine through all phases
-            (flat optimization, pre-tuning with basinhopping alg., final simplex)
+            (global minimum using stochastic search, gradient descent on flat cost fx,
+            pre-tuning conditional parameters with basinhopping alg., and polish with
+            final gradient descent)
             """
 
             fp = self.fitparams
@@ -177,7 +184,7 @@ class Optimizer(RADDCore):
             # p1: STAGE 1 (Find Global Min/BasinHopping)
             p1 = self.__hop_around__()
 
-            # p1: STAGE 2 (Initial Simplex)
+            # p1: STAGE 2 (Flat Simplex)
             self.simulator.ncond=1; self.simulator.wts=fp['flat_wts']
             yh2, finfo2, p2 = self.__gradient_descent__(y=self.flat_y, inits=p1, is_flat=True)
 
@@ -195,7 +202,7 @@ class Optimizer(RADDCore):
       def perform_basinhopping(self, p, is_flat=False, nsuccess=20, stepsize=.05):
             """ STAGE 1/3 FITTING - GLOBAL MIN: uses basinhopping to
             pre-tune init cond parameters to individual conditions to
-            prevent terminating in local minima
+            prevent terminating in local minimum
             """
             fp = self.fitparams
             if is_flat:
@@ -271,7 +278,7 @@ class Optimizer(RADDCore):
 
 
       def __gradient_descent__(self, y, inits, is_flat=True):
-            """ STAGE 2/4 FITTING - Initial/Final Simplex: Optimizes parameters
+            """ STAGE 2/4 FITTING - Flat/Final Simplex: Optimizes parameters
             following specified parameter dependencies on task conditions
             (i.e. depends_on={param: cond})
             """
