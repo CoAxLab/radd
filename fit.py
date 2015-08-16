@@ -182,12 +182,12 @@ class Optimizer(RADDCore):
             yh2, finfo2, p2 = self.__gradient_descent__(y=self.flat_y, inits=p1, is_flat=True)
 
             # p2: STAGE 3 (PreTune/BasinHopping)
-            p3 = self.__nudge_params__(p1)
+            p3 = self.__nudge_params__(p2)
             p3, fmin = self.__global_opt__(method='basinhopping', inits=p3)
 
             # p3: STAGE 4 (Final Simplex)
             self.simulator.ncond=self.ncond; self.simulator.wts=fp['wts']
-            yh4, finfo4, p4 = self.__gradient_descent__(y=self.y, inits=p2, is_flat=False)
+            yh4, finfo4, p4 = self.__gradient_descent__(y=self.y, inits=p3, is_flat=False)
 
             return yh4, finfo4, p4
 
