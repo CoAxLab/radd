@@ -11,8 +11,8 @@ from scipy.stats.distributions import norm, gamma
 
 def init_distributions(pkey, bounds, nrvs=25, loc=None, scale=None):
 
-      sigma_defaults = {'a':.10, 'tr':.05, 'v':1, 'ssv':1, 'z':.2, 'xb':1}
-      mu_defaults = {'a':.35, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1}
+      sigma_defaults = {'a':.10, 'tr':.05, 'v':1, 'ssv':1, 'z':.2, 'xb':1, 'sso':.01}
+      mu_defaults = {'a':.35, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1, 'sso':.1}
 
       if loc is None:
             loc = mu_defaults[pkey]
@@ -37,7 +37,7 @@ def init_distributions(pkey, bounds, nrvs=25, loc=None, scale=None):
       return rvinits
 
 
-def get_bounds(kind='radd', tb=None, a=(.001, 1.000), tr=(.05, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
+def get_bounds(kind='radd', tb=None, a=(.001, 1.000), tr=(.05, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2), sso=(.05,.25)):
       """ set and return boundaries to limit search space
       of parameter optimization in <optimize_theta>
       """
@@ -46,7 +46,7 @@ def get_bounds(kind='radd', tb=None, a=(.001, 1.000), tr=(.05, .55), v=(.0001, 4
             ssv=(abs(ssv[1]), abs(ssv[0]))
       if tb != None:
             tr = (tr[0], tb-.01)
-      bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
+      bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si, 'sso':sso}
       return bounds
 
 
@@ -67,8 +67,9 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
                   inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
 
       elif 'race' in kind:
-            inits = {'a':0.3926740, 'ssv':1.1244, 'tr':0.33502, 'v':1.0379,  'z':0.1501}
-
+            inits = {'a':0.24266, 'ssv':1.1244, 'tr':0.335, 'v':1.0379}
+      elif 'interact' in kind:
+            inits = {'a':0.44266, 'ssv':3, 'tr':0.21, 'v':1.3, 'sso':.2}
       if 'x' in kind:
             if dynamic=='hyp':
                   inits['xb']=2
@@ -94,6 +95,8 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
             inits['ssv']=abs(inits['ssv'])
       elif 'radd' in kind:
             inits['ssv']=-abs(inits['ssv'])
+      elif 'interact' in kind:
+            inits['ssv']=abs(inits['ssv'])
 
       if 'pro' in kind:
             if pro_ss and 'ssv' not in inits.keys():
@@ -102,11 +105,7 @@ def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit
                   ssv=inits.pop('ssv')
 
       if 'x' in kind and 'xb' not in inits.keys():
-            if dynamic == 'exp':
-                  inits['xb'] = 2
-            elif dynamic == 'hyp':
-                  inits['xb'] = 2
-
+            inits['xb'] = 1.5
       if fit_noise and 'si' not in inits.keys():
             inits['si'] = .01
 

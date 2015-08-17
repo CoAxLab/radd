@@ -173,3 +173,200 @@ def mat2py(indir, outdir=None, droplist=None):
       #      if outdir:
       #            master.to_csv(outdir+"ProImg_All.csv", index=False)
       #      return master
+
+
+def RADD(model, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=10000, tb=0.650, dt=.0005, si=.01, return_traces=False):
+      pass
+
+      #      """
+      #
+      #      Main code for simulating Reactive RADD model
+      #
+      #      Simulates all Conditions, SSD, trials, timepoints simultaneously.
+      #      Vectorized operations are set up so that any of the parameters can be
+      #      a single float or a vector of floats (i.e., when simulating/fitting multiple
+      #      conditions differentiated by the value of one or more model parameters)
+      #
+      #      args:
+      #            p (dict):                           model parameters [a, tr, v, ssv, z]
+      #            ssd  (array):                       full set of stop signal delays
+      #            nss  (int):                         number of stop trials
+      #            ntot (int):                         number of total trials
+      #            tb (float):                         time boundary
+      #            ncond (int):                        number of conditions to simulate
+      #
+      #      returns:
+      #
+      #            DVg (Go Process):             3d array for all conditions, trials, timepoints
+      #                                          (i.e. DVg = [nCOND [NTrials [NTime]]] )
+      #                                          All conditions are simulated simultaneously (i.e., BSL &    PNL)
+      #
+      #            DVs (Stop Process):           4d array for all conditions, SSD, SS trials, timepoints.
+      #                                          i.e. ( DVs = [COND [SSD [nSSTrials [NTime]]]] )
+      #                                          All ss decision traces are initiated from       DVg[Cond](t=SSD# | SSD<tr)
+      #      """
+      #      model.make_simulator()
+      #      sim = model.simulator
+      #
+      #      nss = sim.nss; ntot=sim.ntot;
+      #
+      #      dx=np.sqrt(si*dt)
+      #
+      #      p = sim.vectorize_params(model.inits)
+      #      #Pg, Tg = sim.__update_go_process__(p)
+      #      #Ps, Ts = sim.__update_stop_process__(p)
+      #
+      #      a, tr, v, ssv, z = p['a'], p['tr'], p['v'], p['ssv'], p['z']
+      #
+      #      #Pg = 0.5*(1 + v*dx/si)
+      #      #Ps = 0.5*(1 + ssv*dx/si)
+      #      #Tg = np.ceil((tb-tr)/dt).astype(int)
+      #      #Ts = np.ceil((tb-ssd)/dt).astype(int)
+      #      Pg, Ps, Tg, Ts = sim.__update_params__(p)
+      #
+      #      # a/tr/v Bias: ALL CONDITIONS, ALL SSD
+      #      DVg = z + np.cumsum(np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+      #      init_ss = array([[DVc[:nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in  enumerate(DVg)])
+      #      DVs = init_ss[:,:,:,na] + np.cumsum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
+      #
+      #      grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:,   :].T>=a).T,axis=2)*dt, np.nan).T)).T
+      #      ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss,  :].T>=a).T,axis=2)*dt, np.nan).T)).T
+      #      ssrt = np.where(np.any(DVs<=0, axis=3), ssd[:,na]+np.argmax(DVs<=0, axis=3)*dt,np.nan)
+      #      ert = ertx[:,na]*np.ones_like(ssrt)
+      #
+      #      #collapse across SSD and get average ssrt vector for each condition
+      #      # compute RT quantiles for correct and error resp.
+      #      gq = np.vstack([mq(rtc[rtc<tb], prob=prob) for rtc in grt])
+      #      eq = [mq(ert[i][ert[i]<ssrt[i]], prob=prob) for i in range(sim.ncond)]
+      #      # Get response and stop accuracy information
+      #      gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
+      #      sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
+      #      #return gq, eq, gac, sacc
+      #      if return_traces:
+      #            return DVg, DVs
+      #
+      #      return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
+
+
+
+def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=([.1, .3, .5, .7, .9]), ssd=.45, ntot=2000, tb=0.545, dt=.0005, si=.01, return_traces=False, style='DDM'):
+            pass
+      #"""
+      #
+      #      main code for simulating Proactive RADD model
+      #
+      #      args:
+      #            p (dict):                           model parameters [a, tr, v, ssv, z]
+      #            ssd  (array):                       full set of stop signal delays
+      #            ntot (int):                         number of total trials
+      #            tb (float):                         time boundary
+      #            ncond (int):                        number of conditions to simulate
+      #
+      #      returns:
+      #
+      #            DVg (Go Process):             3d array for all conditions, trials, timepoints
+      #                                          (i.e. DVg = [nCOND [NTrials [NTime]]] )
+      #                                          All conditions are simulated simultaneously (i.e., BSL &    PNL)
+      #
+      #            DVs (Stop Process):           4d array for all conditions, SSD, SS trials, timepoints.
+      #                                          i.e. ( DVs = [COND [SSD [nSSTrials [NTime]]]] )
+      #                                          All ss decision traces are initiated from       DVg[Cond](t=SSD# | SSD<tr)
+      #      """
+      #
+      #      dx=np.sqrt(si*dt)
+      #
+      #      a, tr, v, ssv, z = p['a'], p['tr'], p['v'], p['ssv'], p['z']
+      #
+      #      if np.ndim(tr)==0:
+      #            tr=np.ones(ncond)*tr
+      #      if np.ndim(a)==0:
+      #            a=np.ones(ncond)*a
+      #      if np.ndim(v)==0:
+      #            v=np.ones(ncond)*v
+      #      if np.ndim(ssd)==0:
+      #            ssd = np.ones(ncond)*ssd
+      #
+      #      nssd = len(ssd); nss = int(.5*ntot)
+      #
+      #      Pg = 0.5*(1 + v*dx/si)
+      #      Ps = 0.5*(1 + ssv*dx/si)
+      #      Tg = np.ceil((tb-tr)/dt).astype(int)
+      #      Ts = np.ceil((tb-ssd)/dt).astype(int)
+      #
+      #      # a/tr/v Bias: ALL CONDITIONS
+      #      DVg = z + np.cumsum(np.where((rs((ncond, int(ntot/ncond), Tg.max())).T < Pg), dx, -dx).T,       axis=2)
+      #      grt = (tr+(np.where((DVg.max(axis=2).T>=a).T, np.argmax((DVg.T>=a).T,axis=2)*dt,np.nan).T)).T
+      #
+      #      hi = np.nanmean(grt[:ncond/2], axis=0)
+      #      lo = np.nanmean(grt[ncond/2:], axis=0)
+      #
+      #      hilo = [hi[~np.isnan(hi)], lo[~np.isnan(lo)]]
+      #
+      #      # compute RT quantiles for correct and error resp.
+      #      gq = hs([mq(rtc[rtc<tb], prob=prob)*10 for rtc in hilo])
+      #      # Get response and stop accuracy information
+      #      gac = 1-np.mean(np.where(grt<tb, 1, 0), axis=1)
+      #      #return gq, eq, gac, sacc
+      #      if return_traces:
+      #            return DVg, DVs
+      #      return hs([gac, gq])
+
+
+def simulate_radd(self, p, analyze=True):
+      pass
+      #      """ Simulate the dependent process model (RADD)
+      #
+      #      ::Arguments::
+      #            p (dict):
+      #                  parameter dictionary. values can be single floats
+      #                  or vectors where each element is the value of that
+      #                  parameter for a given condition
+      #            analyze (bool <True>):
+      #                  if True (default) return rt and accuracy information
+      #                  (yhat in cost fx). If False, return Go and Stop proc.
+      #      ::Returns::
+      #            yhat of cost vector (ndarray)
+      #            or Go & Stop processes in list (list of ndarrays)
+      #      """
+      #
+      #      p = self.vectorize_params(p)
+      #      Pg, Tg = self.__update_go_process__(p)
+      #      Ps, Ts = self.__update_stop_process__(p)
+      #
+      #      DVg = self.base+(self.xtb[:,na]*np.cumsum(np.where((rs((self.ncond, self.ntot,      Tg.max())).T<Pg), self.dx,-self.dx).T, axis=2))
+      #      # INITIALIZE DVs FROM DVg(t=SSD)
+      #      init_ss = array([[DVc[i, :self.nss, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc   in enumerate(DVg.reshape(self.ncond, self.nssd, self.nss, Tg.max()))])
+      #      DVs = init_ss[:,:,:,na]+np.cumsum(np.where(rs((self.ncond, self.nssd, self.nss,     Ts.max()))<Ps,# self.dx, -self.dx), axis=3)
+      #      print DVs.shape
+      #      if analyze:
+      #            return self.analyze_reactive(DVg, DVs, p)
+      #
+def analyze_reactive(self, DVg, DVs, p):
+      pass
+      #      """ get rt and accuracy of go and stop process for simulated
+      #      conditions generated from simulate_radd
+      #      """
+      #      nss = self.nss; prob = self.prob
+      #      ssd = self.ssd; tb = self.tb
+      #      ncond = self.ncond; nssd=self.nssd
+      #
+      #      gdec = self.resp_up(DVg, p['a'])
+      #      gort = self.RT(p['tr'], gdec)
+      #      if 'radd' in self.kind:
+      #            sdec = self.resp_lo(DVs)
+      #            ssrt = self.RT(ssd, sdec)
+      #            ert = gort[:, :nss][:,na] * np.ones_like(ssrt)
+      #            #sdec = self.resp_lo(DVs)
+      #            #ssrt = self.RT(ssd, sdec)
+      #            #ert = gort.reshape(ncond, nssd, nss)
+      #      elif 'irace' in self.kind:
+      #            sdec = self.resp_iss(DVs, p['a'])
+      #            ssrt = self.RT(ssd, sdec.reshape(ncond, nssd, nss))
+      #            ert = gort.reshape(ncond, nssd, nss)
+      #
+      #      eq = self.RTQ(zip(ert, ssrt))
+      #      gq = self.RTQ(zip(gort,[tb]*ncond))
+      #      gac = np.nanmean(np.where(gort<tb, 1, 0), axis=1)
+      #      sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
+      #
+      #      return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(self.ncond)])

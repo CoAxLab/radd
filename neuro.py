@@ -4,8 +4,9 @@ from copy import deepcopy
 from collections import OrderedDict
 import numpy as np
 from numpy import array
-import pandas as pd
+from numpy import newaxis as na
 from numpy import concatenate as concat
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
@@ -13,7 +14,6 @@ from radd.toolbox.colors import get_cpals
 from radd.toolbox.theta import get_xbias_theta
 from radd.toolbox.messages import describe_model
 from radd.models import Simulator
-
 
 class BOLD(Simulator):
       """ Simulated BOLD response // neural activity
@@ -114,11 +114,11 @@ class BOLD(Simulator):
             base=self.base; self.nss_all=self.nss; nssd=self.nssd;
             ssd=self.ssd; nss = self.nss_all/self.nssd; xtb=self.xtb;
 
-            get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss/nssd, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,None]
+            get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss/nssd, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,na]
 
-            self.gomoments = xtb[:,None]*np.where((rs((ncond, ntot, Tg.max())).T<Pg), dx,-dx).T
+            self.gomoments = xtb[:,na]*np.where((rs((ncond, ntot, Tg.max())).T<Pg), dx,-dx).T
             self.ssmoments = np.where(rs((ncond, nssd, nss, Ts.max()))<Ps, dx, -dx)
-            DVg = base[:, None]+xtb[:,None]* np.cumsum(self.gomoments, axis=2)
+            DVg = base[:,na]+xtb[:,na]* np.cumsum(self.gomoments, axis=2)
             self.dvg = DVg[:,:nss_all,:]
             self.dvs = self.get_ssbase(Ts,Tg,DVg) + np.cumsum(self.ssmoments, axis=3)
 
@@ -189,7 +189,7 @@ class BOLD(Simulator):
                   self.generate_radd_traces()
 
             # zip dvg[ncond, ntrials, ntime], bound[a_c..a_ncond], onset[tr_c..tr_ncond]
-            zipped_input_rt = zip(self.dvg, self.bound[:, None], self.onset[:,None])
+            zipped_input_rt = zip(self.dvg, self.bound[:,na], self.onset[:,na])
             # get rt for all conditions separately where boundary crossed [DVg >= a]
             rt = np.asarray(map(self.get_rt, zipped_input_rt))
 

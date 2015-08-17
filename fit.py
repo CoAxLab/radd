@@ -30,11 +30,10 @@ class Optimizer(RADDCore):
       Handles fitting routines for models of average, individual subject, and bootstrapped data
       """
 
-      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', *args, **kws):
+      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='subjects', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, global_method='basinhopping', *args, **kws):
 
             self.data=dframes['data']
             self.fitparams=fitparams
-            self.multiopt=multiopt
             self.global_method=global_method
             self.kind=kind
             self.xbasin=[]
@@ -200,9 +199,9 @@ class Optimizer(RADDCore):
 
 
       def perform_basinhopping(self, p, is_flat=False, nsuccess=20, stepsize=.05):
-            """ STAGE 1/3 FITTING - GLOBAL MIN: uses basinhopping to
-            pre-tune init cond parameters to individual conditions to
-            prevent terminating in local minimum
+            """ STAGE 1/3 FITTING - GLOBAL MIN: STAGE 1 fits to find global minimum of
+            flat costfx and again at STAGE 3 in order to pre-tune conditional parameters after
+            flat optimization before entering final simplex routine (optimize_theta).
             """
             fp = self.fitparams
             if is_flat:
@@ -246,17 +245,13 @@ class Optimizer(RADDCore):
             """ Performs global optimization via basinhopping, brute, or differential evolution
             algorithms.
 
-            basinhopping method is used for STAGE 1 fits to find global minimum of flat costfx
-            and again at STAGE 3 in order to pre-tune conditional parameters after
-            flat optimization before entering final simplex routine (optimize_theta).
-
             brute and differential evolution methods may be applied to the full parameter set
             (using original inits dictionary and pc_map)
             """
 
             if method=='basinhopping':
-                  keybasin = self.perform_basinhopping(p=inits, is_flat=is_flat)
-                  return keybasin
+                  p, funcmin = self.perform_basinhopping(p=inits, is_flat=is_flat)
+                  return p, funcmin
 
             self.simulator.__prep_global__(method=method)
             pfit = list(set(inits.keys()).intersection(self.pnames))
@@ -264,16 +259,11 @@ class Optimizer(RADDCore):
 
             self.simulator.y=self.y.flatten()
             self.simulator.wts = self.wts
-
+            self.simulator.global_params = pfit
             if method=='brute':
-                  self.simulator.wts = self.wts
-                  self.simulator.brute_params = pfit
-                  self.globalmin = brute(self.simulator.brute_minimizer, pbounds, args=params)
-
+                  self.globalmin = brute(self.simulator.global_minimizer, pbounds, args=params)
             elif method=='differential_evolution':
-                  self.simulator.diffev_params = pfit
-                  self.globalmin = differential_evolution(self.simulator.diffevolution_minimizer, pbounds, args=params)
-
+                  self.globalmin = differential_evolution(self.simulator.global_minimizer, pbounds, args=params)
             return self.globalmin
 
 
@@ -303,7 +293,6 @@ class Optimizer(RADDCore):
                         vals=ip[pkey]*np.ones(len(pc_list))
                   mn = lim[pkey][0]; mx=lim[pkey][1]
                   d0 = [lmParams.add(pc, value=vals[i], vary=1, min=mn, max=mx) for i, pc in enumerate(pc_list)]
-
             p0 = [lmParams.add(k, value=ip[k], vary=is_flat) for k in pfit]
             opt_kws = {'disp':fp['disp'], 'xtol':fp['tol'], 'ftol':fp['tol'], 'maxfev':fp['maxfev']}
 
@@ -317,7 +306,6 @@ class Optimizer(RADDCore):
             yhat = self.simulator.y + self.residual
             wts = self.simulator.wts
             log_arrays = {'y':self.simulator.y, 'yhat':yhat, 'wts':wts}
-
             if is_flat:
                   fitid = ' '.join([self.fit_id, 'FLAT'])
             else:

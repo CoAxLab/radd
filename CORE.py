@@ -14,11 +14,15 @@ from radd.toolbox.messages import saygo
 class RADDCore(object):
 
       """ Parent class for constructing shared attributes and methods
-      of Model & Optimizer objects. Not meant to be used directly.
+      of Model & Optimizer objects. Not meant to be accessed directly, user should
+      primarily use the Model class for building and fitting models.
 
       Contains methods for building dataframes, generating observed data vectors
       that are entered into cost function during fitting, calculating summary measures
       and weight matrix for weighting residuals during optimization.
+
+      Many of the naming conventions as well as the logic behind constructing parameter
+      dependencies on task condition are taken from HDDM (http://ski.clps.brown.edu/hddm_docs/)
 
       TODO: COMPLETE DOCSTRINGS
       """
@@ -384,6 +388,27 @@ class RADDCore(object):
 
       def __check_inits__(self, pro_ss=False, fit_noise=False):
             self.inits = theta.check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, dynamic=self.dynamic, pro_ss=pro_ss, fit_noise=fit_noise)
+
+
+      def mean_pgo_rts(self, p={}, return_vals=True):
+            """ Simulate proactive model and calculate mean RTs
+            for all conditions rather than collapse across high and low
+            """
+
+            if not hasattr(self, 'simulator'):
+                  self.make_simulator()
+            DVg = self.simulator.simulate_pro(p, analyze=False)
+            gdec = self.simulator.resp_up(DVg, p['a'])
+            rt = self.simulator.RT(p['tr'], gdec)
+
+            mu = np.nanmean(rt, axis=1)
+            ci = pd.DataFrame(rt.T).sem()*1.96
+            std = pd.DataFrame(rt.T).std()
+
+            self.pgo_rts = {'mu': mu, 'ci': ci, 'std':std}
+            if return_vals:
+                  return self.pgo_rts
+
 
       def __make_proRT_conds__(self):
             self.data, self.rt_cix =analyze.make_proRT_conds(self.data, self.split)

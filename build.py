@@ -14,6 +14,9 @@ class Model(RADDCore):
       """ Main class for instantiating, fitting, and simulating models.
       Inherits from RADDCore parent class (see CORE module).
 
+      Many of the naming conventions as well as the logic behind constructing parameter
+      dependencies on task condition are taken from HDDM (http://ski.clps.brown.edu/hddm_docs/)
+
       ::Arguments::
 
             data (pandas DF):
@@ -49,12 +52,11 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split=50, verbose=False, include_zero_rts=False, multiopt=True, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', split=50, verbose=False, include_zero_rts=False, *args, **kws):
 
             self.data=data
             self.weighted=weighted
             self.verbose=verbose
-            self.multiopt=multiopt
 
             super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
 
@@ -71,7 +73,7 @@ class Model(RADDCore):
             self.__check_inits__()
             inits = dict(deepcopy(self.inits))
 
-            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map, multiopt=self.multiopt)
+            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.wts, pc_map=self.pc_map)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
             # get residuals
@@ -81,21 +83,21 @@ class Model(RADDCore):
             self.simulator = self.opt.simulator
 
 
-      def make_simulator(self, theta=None):
+      def make_simulator(self, p=None):
             """ initializes Simulator object as Model attr
             using popt or inits if model is not optimized
             """
 
-            if not theta:
+            if p is None:
                   if hasattr(self, 'popt'):
-                        theta=self.popt
+                        p=self.popt
                   else:
-                        theta=self.inits
+                        p=self.inits
 
-            self.simulator=models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=theta, pc_map=self.pc_map)
+            self.simulator=models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
 
 
-      def simulate(self, theta=None, analyze=True):
+      def simulate(self, p=None, analyze=True):
             """ simulate yhat vector using popt or inits
             if model is not optimized
 
@@ -112,14 +114,14 @@ class Model(RADDCore):
             if not hasattr(self, 'simulator'):
                   self.make_simulator()
 
-            if not theta:
+            if p is None:
                   if hasattr(self, 'popt'):
-                        theta=self.popt
+                        p=self.popt
                   else:
-                        theta=self.inits
+                        p=self.inits
 
-            theta = self.simulator.vectorize_params(theta)
-            out = self.simulator.sim_fx(theta, analyze=analyze)
+            p = self.simulator.vectorize_params(p)
+            out = self.simulator.sim_fx(p, analyze=analyze)
 
             return out
 

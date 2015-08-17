@@ -310,15 +310,15 @@ def pro_animate(i, x, protraces, prolines):
       return prolines,
 
 
-def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05)):
+def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind='radd'):
+
       ncond = DVg.shape[0]
       nssd = DVs.shape[1]
       f, axes = plt.subplots(nssd, ncond, figsize=(12,14))
-
       for i in range(ncond):
             params = {k:v[i] if hasattr(v, '__iter__') else v for k,v in theta.items()}
             for ii in range(nssd):
-                  plot_traces(DVg=DVg[i], DVs=DVs[i, ii], ssd=ssd[ii], sim_theta=params, ax=axes[ii,i])
+                  plot_traces(DVg=DVg[i], DVs=DVs[i, ii], ssd=ssd[ii], sim_theta=params, ax=axes[ii,i], kind=kind)
       return f
 
 
@@ -331,7 +331,7 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='radd', ssd=.450, ax=None, ta
             xx = [np.arange(tr, tr+(len(igo[:ind-1])*tau), tau), np.arange(tr, tb, tau)]
             x = xx[0 if len(xx[0])<len(xx[1]) else 1]
             plt.plot(x, igo[:len(x)], color=cg, alpha=.1, linewidth=.5)
-            if kind in ['irace', 'radd'] and i<len(DVs):
+            if kind in ['irace', 'radd', 'interact'] and i<len(DVs):
                   if np.any(DVs<=0):
                         ind=np.argmax(DVs[i]<=0)
                   else:
