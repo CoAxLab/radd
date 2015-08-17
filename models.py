@@ -324,7 +324,7 @@ class Simulator(object):
             # fill gomoments[:time to go onset] with zeros
             null = [[gomoments[ci, :nss, :(nt-Tg[ci])].fill(0)] for ci in range(ncond)]
 
-            # accumulate gomoments/ssmoments and take difference
+            # accumulate gomoments/ssmoments
             DVg = (base+self.xtb[:,na]*np.cumsum(gomoments, axis=2))
             DVs = base+np.cumsum(ssmoments, axis=3)
 
@@ -335,7 +335,7 @@ class Simulator(object):
             # DVg is now only No ss Go Trials
             DVg = DVg[:,nss:,:]
 
-            # in contrast w/ RADD/IRM, where full DVg can be
+            # NOTE  in contrast w/ RADD/IRM, where full DVg can be
             # used to estimate go RT and Accuracy (i.e. rt<tb)
             # DVg is directly influenced by DVs on ss trials.
             # Here, DVg are all the NoSS Go trials and ssDVg is
