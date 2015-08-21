@@ -6,6 +6,82 @@ from scipy.io import loadmat
 import os, re
 
 
+def __indx_optimize__(self, save=True, savepth='./'):
+
+      """
+      INDIVIDUAL SUBJECT AND BOOTSTRAP OPTIMIZATION HANDLER
+      GOES IN FIT.py AS METHOD OF Optimizer CLASS
+
+      """
+
+      pass
+      # ri=0; nc=self.ncond; nquant=len(self.fitparams['prob'])
+      # pcols=self.fitinfo.columns
+
+      # for i, y in enumerate(self.dat):
+            # self.y = y
+            # self.fit_id = getid(i)
+            # self.flat_y = self.get_flaty(y)
+            ##optimize params iterating over subjects/bootstraps
+            # yhat, finfo, popt = self.__opt_routine__()
+
+            # self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
+            # if self.data_style=='re':
+                  # self.fits.iloc[ri:ri+nc, :] = yhat.reshape(nc, len(self.fits.columns))
+                  # ri+=nc
+            # elif self.data_style=='pro':
+                  # self.fits.iloc[i] = yhat
+            # if save:
+                  # self.fits.to_csv(savepth+"fits.csv")
+                  # self.fitinfo.to_csv(savepth+"fitinfo.csv")
+      # self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
+
+
+
+
+#
+#
+# def perform_basinhoppingXXXXXX(self, p, is_flat=False, nsuccess=None, stepsize=.5):
+#       """ STAGE 0/2 FITTING - GLOBAL MIN: STAGE 0 fits to find global minimum of
+#       flat costfx and again at STAGE 2 in order to pre-tune conditional parameters after
+#       flat optimization before entering final simplex routine (optimize_theta).
+#       """
+#       fp = self.fitparams
+#       if is_flat:
+#             basin_keys=p.keys()
+#             ncond=1
+#       else:
+#             basin_keys=self.pc_map.keys()
+#             ncond = len(self.pc_map.values()[0])
+#
+#       xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, ncond=ncond)
+#       x = np.hstack(np.hstack([p[pk] for pk in basin_keys])).tolist()
+#       bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
+#       # set up custom step handler to keep basin hopping in bounds (class at the very bottom)
+#       #take_step = RandomDisplacementBounds(xmin, xmax, stepsize=stepsize)
+#       # set up local minimizer for polishing
+#       #mkwargs = {"method": "L-BFGS-B", "bounds":bounds, 'options':{'tol':1.e-2}}
+#       mkwargs = {"method": "Nelder-Mead",  'jac':True}
+#       # weight error of simulations for global optimzaiton
+#       self.simulator.__prep_global__(method='basinhopping', basin_params=p, basin_keys=basin_keys, is_flat=is_flat)
+#       #minimizer_kwargs=mkwargs,
+#       # run basinhopping on simulator.basinhopping_minimizer func
+#       out = basinhopping(self.simulator.basinhopping_minimizer, x, niter_success=20, stepsize=stepsize, minimizer_kwargs=mkwargs, disp=True)#, interval=5,
+#       pvals = out.x
+#       funcmin = out.fun
+#       for i, k in enumerate(basin_keys):
+#             if ncond>1:
+#                   p[k] = array(pvals[i:ncond])
+#                   i+=ncond
+#             else:
+#                   p[k]=pvals[i]
+#       if self.xbasin!=[]:
+#             self.xbasin.extend(funcmin)
+#       else:
+#             self.xbasin = funcmin
+#       return p, funcmin
+
+
 def old_proactive_weighting_code(x):
 
       pass
@@ -67,8 +143,8 @@ def __init_analyze_functions__(x):
       ##elif self.fitparams['split']=='HL':
       ##      self.ziprt=lambda rt: zip([hs(rt[3:]),hs(rt[:3])],[tb]*2)
       #
-      #self.resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.0005
-      #self.resp_lo = lambda trace: np.argmax((trace.T<=0).T, axis=3)*.0005
+      #self.resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*.001
+      #self.resp_lo = lambda trace: np.argmax((trace.T<=0).T, axis=3)*.001
       #self.RT = lambda ontime, rbool: ontime[:, None]+(rbool*np.where(rbool==0, np.nan, 1))
       #self.fRTQ = lambda zpd: map((lambda x:mq(x[0][x[0]<x[1]], prob)), zpd)
 
@@ -175,7 +251,7 @@ def mat2py(indir, outdir=None, droplist=None):
       #      return master
 
 
-def RADD(model, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=10000, tb=0.650, dt=.0005, si=.01, return_traces=False):
+def RADD(model, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05), ntot=10000, tb=0.650, dt=.001, si=.01, return_traces=False):
       pass
 
       #      """
@@ -249,7 +325,7 @@ def RADD(model, ncond=2, prob=([.1, .3, .5, .7, .9]), ssd=np.arange(.2, .45, .05
 
 
 
-def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=([.1, .3, .5, .7, .9]), ssd=.45, ntot=2000, tb=0.545, dt=.0005, si=.01, return_traces=False, style='DDM'):
+def proRADD(p, ncond=6, pGo=np.arange(.2,1.2,.2), prob=([.1, .3, .5, .7, .9]), ssd=.45, ntot=2000, tb=0.545, dt=.001, si=.01, return_traces=False, style='DDM'):
             pass
       #"""
       #
