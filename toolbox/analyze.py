@@ -148,14 +148,6 @@ def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), tb=.560,
             QSEM = mjci(rtvectors)
             wts = median(QSEM)/QSEM
       """
-      #xdf=df.copy()
-      ## insert timeboundary
-      ##df['response']=np.where(xdf.rt<tb, 1, 0)
-      #mjcix = lambda x: mjci(x.rt, prob=prob)
-      #godf = xdf[xdf.response==1].copy()
-      #q_sem_obj = godf.groupby(['idx', 'HL']).apply(mjcix).values
-      #qwts = np.median(np.vstack(q_sem_obj.reshape(2,61).mean(axis=1)), axis=1)[:, None]/np.vstack(q_sem_obj.reshape(2,61).mean(axis=1))
-
       nquant = len(prob)
       godf = df[df.response==1].copy()
       ncond = len(godf[split].unique())
@@ -174,14 +166,6 @@ def reactive_mj_quanterr(df, avg_ssd=True, cond='Cond', prob=array([.1,.3,.5,.7,
             QSEM = mjci(rtvectors)
             wts = median(QSEM)/QSEM
       """
-      #mjcix = lambda x: mjci(x.rt, prob=prob)
-      #c = np.vstack(df.query('response==1&acc==1').groupby('idx').apply(mjcix).values)
-      #e = np.vstack(df.query('response==1&acc==0').groupby('idx').apply(mjcix).values)
-      #qcwts = np.median(c.mean(axis=0))/c.mean(axis=0)
-      #qewts = np.median(e.mean(axis=0))/e.mean(axis=0)
-      #nquant = len(prob)
-      #return np.hstack([qcwts, qewts]).reshape(2,nquant)
-
       ncond = len(df[cond].unique())
       nquant = len(prob)
 

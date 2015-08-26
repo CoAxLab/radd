@@ -41,7 +41,7 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, wt_prob=True, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, *args, **kws):
 
             self.data=data; self.weighted=weighted; self.verbose=verbose
 

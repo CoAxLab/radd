@@ -24,14 +24,13 @@ class RADDCore(object):
       """
 
 
-      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, wt_prob=True, *args, **kws):
+      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
 
             self.data = data
             self.kind = kind
             self.fit_on = fit_on
             self.dynamic = dynamic
             self.fit_whole_model=fit_whole_model
-            self.wt_prob=wt_prob
 
             # BASIC MODEL STRUCTURE (kind)
             if 'pro' in self.kind:
@@ -327,27 +326,15 @@ class RADDCore(object):
 
             nc = self.ncond; cond=self.cond;
             if self.data_style=='re':
-                  ###########################################################
-                  # COR & ERR Quantile WTS are calculated collapsing across #
-                  # subjects & condition (see Bogacz et al., 2006)          #
-                  ###########################################################
-                  #go = self.data.query('ttype=="go"').response.mean()
-                  #st = self.data.query('ttype=="stop"').response.mean()
-                  #wtqwts = np.hstack(array([[go], [st]])*qwts)
-                  #pwts = array([1.5,1.5,1,1,1,1])
-                  #self.flat_wts = np.hstack([pwts, wtd_qwts])
-                  #self.avg_wts = np.tile(self.flat_wts, nc)
 
                   rprob = self.data.groupby(['ttype', 'Cond']).mean()['response']
                   qwts = analyze.reactive_mj_quanterr(df=self.data, cond=cond)
                   # multiply by prob. of response on cor. and err. trials
                   wtd_qwts = np.vstack(rprob.unstack().unstack().values)*qwts.reshape(nc*2,5)
                   wtd_qwts = wtd_qwts.reshape(nc, 10)
-                  if self.wt_prob:
-                        perr = self.observed.groupby(cond).std().iloc[:,1:7].values
-                        pwts = np.median(perr, axis=1)[:,None]/perr
-                  else:
-                        pwts = [np.ones(len(self.ssd)+1)]*nc
+
+                  perr = self.observed.groupby(cond).std().iloc[:,1:7].values
+                  pwts = np.median(perr, axis=1)[:,None]/perr
                   self.avg_wts = np.array([np.append(pw, qw) for pw, qw in zip(pwts, wtd_qwts)]).flatten()
                   self.flat_wts = self.avg_wts.reshape(nc,16).mean(axis=0)
 
@@ -356,17 +343,12 @@ class RADDCore(object):
                   lower = self.data[self.data['HL']==2].mean()['response']
                   qwts = analyze.proactive_mj_quanterr(df=self.data, split='HL', tb=self.tb)
                   wtqwts = np.hstack(np.array([upper, lower])[:,None]*qwts)
-                  if self.wt_prob:
-                        perr=self.observed.std()[:nc]
-                        pwts=np.median(perr)/perr
-                  else:
-                        pwts=np.ones(nc)
+                  perr=self.observed.std()[:nc]
+                  pwts=np.median(perr)/perr
                   self.avg_wts = np.hstack([pwts, wtqwts])
-                  # calculate flat weights (collapsing across conditions)
                   nogo = self.avg_wts[:nc].mean(); quant=self.avg_wts[nc:].reshape(2, 5).mean(axis=0)
                   self.flat_wts = np.hstack([nogo, quant])
             self.avg_wts, self.flat_wts = analyze.ensure_numerical_wts(self.avg_wts, self.flat_wts)
-            #self.avg_wts=np.ones_like(self.avg_wts); self.flat_wts=np.ones_like(self.flat_wts)
 
 
       def __remove_outliers__(self, sd=1.5, verbose=False):
