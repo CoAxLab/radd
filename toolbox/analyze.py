@@ -11,10 +11,9 @@ from scipy import optimize
 import functools
 
 
-
-
 def assess_fit(finfo):
-
+      """ calculate fit statistics
+      """
       finfo = pd.Series(finfo)
       chisqr = finfo.chi
       finfo['df'] = finfo.ndata - finfo.nvary
