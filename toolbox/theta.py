@@ -10,7 +10,10 @@ from lmfit import Parameters
 
 
 
-def loadParameters(inits=None, is_flat=True, kind=None, pc_map={}):
+
+
+
+def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
       """ Generates and returns an lmfit Parameters object with
       bounded parameters initialized for flat or non flat model fit
       """
@@ -28,8 +31,12 @@ def loadParameters(inits=None, is_flat=True, kind=None, pc_map={}):
                   vals=inits[pkey]*np.ones(len(pclist))
             mn = bounds[pkey][0]; mx=bounds[pkey][1]
             for k, v in zip(pclist, vals):
+                  if isinstance(v, np.ndarray):
+                        v=np.asscalar(v)
                   ParamsObj.add(k, value=v, vary=True, min=mn, max=mx)
+
       for pk in pfit:
+            inits = all_params_to_scalar(inits, pfit)
             if is_flat:
                   mn = bounds[pk][0]; mx=bounds[pk][1]
                   ParamsObj.add(pk, value=inits[pk], vary=True, min=mn, max=mx)
@@ -38,7 +45,19 @@ def loadParameters(inits=None, is_flat=True, kind=None, pc_map={}):
       return ParamsObj
 
 
+def all_params_to_scalar(params, params_list=None, exclude=[]):
 
+      if params_list is None:
+            params_list=params.keys()
+      for pk in params_list:
+            if pk in exclude:
+                  continue
+            if hasattr(params[pk], '__iter__'):
+                  try:
+                        params[pk] = np.asscalar(params[pk])
+                  except ValueError:
+                        params[pk] = np.mean(params[pk])
+      return params
 
 def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
       """ sample random parameter sets to explore global minima (called by
@@ -73,7 +92,7 @@ def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, sca
       return rvinits
 
 
-def get_bounds(kind='radd', tb=None, a=(.001, 1.0), tr=(.05, .5), v=(.01, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2), sso=(.01,.25)):
+def get_bounds(kind='radd', tb=None, a=(.001, 1.0), tr=(.05, .54), v=(.01, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2), sso=(.01,.25)):
       """ set and return boundaries to limit search space
       of parameter optimization in <optimize_theta>
       """
@@ -151,6 +170,8 @@ def check_inits(inits={}, kind='radd', pdep=[], pro_ss=False, fit_noise=False):
             inits['si'] = .01
       if 'radd' not in kind and 'z' in inits.keys():
             discard = inits.pop('z')
+      if 'x' not in kind and 'xb' in inits:
+            inits.pop('xb')
       return inits
 
 

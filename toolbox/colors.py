@@ -11,7 +11,7 @@ def get_cpals(name='all'):
       rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
       bpal = lambda nc: sns.blend_palette(['#81aedb', '#3A539B'], n_colors=nc)
       gpal = lambda nc: sns.blend_palette(['#65b88f', '#27ae60'], n_colors=nc)
-      ppal = lambda nc: sns.blend_palette(['#848bb6', '#663399'], n_colors=nc)
+      ppal = lambda nc: sns.blend_palette(['#848bb6', "#9B59B6"], n_colors=nc)
       heat = lambda nc: sns.blend_palette(['#f39c12', '#c0392b'], n_colors=nc)
       cool = lambda nc: sns.blend_palette(["#4168B7", "#27ae60"], n_colors=nc)
       slate = lambda nc: sns.blend_palette(['#95A5A6', "#6C7A89"], n_colors=nc)

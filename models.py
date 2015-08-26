@@ -23,6 +23,7 @@ class Simulator(object):
             self.dt=dt
             self.si=si
             self.dx=np.sqrt(self.si*self.dt)
+
             if model:
                   self.fitparams = model.fitparams
                   self.inits = model.inits
@@ -50,6 +51,7 @@ class Simulator(object):
             self.rt_cix=fp['rt_cix']
             self.is_flat=False
             self.base=0
+
             if not hasattr(self, 'pvc'):
                   self.__update__()
 
@@ -73,22 +75,13 @@ class Simulator(object):
                         y=fp['avg_y']
                         wts=fp['avg_wts']
                   self.ncond=fp['ncond']
-
             self.y=y.flatten()
             self.wts=wts.flatten()
 
-      def __prep_global__(self, method='basinhopping', basin_params={}, basin_keys=[], is_flat=False):
+      def __prep_global__(self,  basin_params={}, basin_keys=[], is_flat=False):
 
-            if method=='basinhopping':
-                  self.basin_keys=basin_keys
-                  self.basin_params=basin_params
-            elif  method=='differential_evolution':
-                  self.ncond = len(self.pc_map.values()[0])
-                  self.diffev_params=[]
-            elif method=='brute':
-                  self.ncond = len(self.pc_map.values()[0])
-                  self.brute_params=[]
-
+            self.basin_keys=basin_keys
+            self.basin_params=basin_params
             self.__update__(is_flat=is_flat)
 
       def basinhopping_minimizer(self, x):
@@ -96,14 +89,21 @@ class Simulator(object):
             objects with multiopt attr (See __opt_routine__ and perform_basinhopping
             methods of Optimizer object)
             """
-            p = self.basin_params
+            p = dict(deepcopy(self.basin_params))
 
             # segment 'x' into equal len arrays (one array,
             # ncond vals long per free parameter) in basin_keys
             px = [array(x[i::1]) for i in range(1)]
 
+            if self.ncond==1:
+                  px=px[0]
+
             for i, pk in enumerate(self.basin_keys):
                   p[pk]=px[i]
+
+            if np.any(p['tr']>=self.tb):
+                  return 1.e5
+
             yhat = self.sim_fx(p)
             cost = np.sum((self.wts*(yhat-self.y)**2))
             if hasattr(cost, '__iter__'):
@@ -179,7 +179,7 @@ class Simulator(object):
                   if self.ncond==1:
                         break
                   elif pkc[0] not in p.keys():
-                        p[pkey] = p[pkey]*np.ones(len(pkc))
+                        p[pkey] = p[pkey]*np.ones(len(pkc)).astype(np.float32)
                   else:
                         p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
             return p
@@ -227,8 +227,7 @@ class Simulator(object):
             else:
                   p = theta.valuesdict()
             yhat = self.sim_fx(p, analyze=True)
-            return np.sum(self.wts*(self.y-yhat)**2)
-            #return (yhat - self.y)*self.wts[:len(self.y)].astype(np.float32)
+            return np.sum(self.wts*(self.y-yhat)**2).astype(np.float32)
 
 
       def simulate_radd(self, p, analyze=True):
@@ -371,7 +370,7 @@ class Simulator(object):
             if self.ncond==1:
                   qrt = mq(rt[rt<tb], prob=prob)
             else:
-                  zpd = zip([hs(rt[ix:]), hs(rt[:ix])], [tb]*2)
+                  zpd = zip([hs(rt[ix:]), hs(rt[1:ix])], [tb]*2)
                   qrt = hs(self.RTQ(zpd))
             # Get response and stop accuracy information
             gacc = 1-np.mean(np.where(rt<tb, 1, 0), axis=1)

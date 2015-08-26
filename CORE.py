@@ -23,22 +23,25 @@ class RADDCore(object):
       TODO: COMPLETE DOCSTRINGS
       """
 
-      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
+
+      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, wt_prob=True, *args, **kws):
 
             self.data = data
             self.kind = kind
             self.fit_on = fit_on
             self.dynamic = dynamic
             self.fit_whole_model=fit_whole_model
+            self.wt_prob=wt_prob
 
             # BASIC MODEL STRUCTURE (kind)
             if 'pro' in self.kind:
+                  self.nudge_dir='up'
                   self.data_style='pro'
                   if depends_on is None:
                         depends_on = {'v':'pGo'}
                   self.ssd=np.array([.450])
                   if tb==None:
-                        tb=.55
+                        tb=.555
                   self.split=split
                   if isinstance(self.split, int):
                         self.nrt_cond=2
@@ -48,7 +51,10 @@ class RADDCore(object):
                   self.pGo=sorted(self.data.pGo.unique())
                   self.include_zero_rts=include_zero_rts
             else:
+                  self.nudge_dir='down'
                   self.data_style='re'
+                  if tb==None:
+                        tb=.65
                   if depends_on is None:
                         depends_on = {'v':'Cond'}
                   ssd = data[data.ttype=="stop"].ssd.unique()
@@ -78,7 +84,7 @@ class RADDCore(object):
                   self.inits = inits
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
             # DATA TREATMENT AND EXTRACTION
-            self.__remove_outliers__(sd=2.5, verbose=False)
+            #self.__remove_outliers__(sd=2.5, verbose=False)
 
             # DEFINE ITERABLES
             if self.fit_on=='bootstrap':
@@ -92,11 +98,10 @@ class RADDCore(object):
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'avg_wts':self.avg_wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.flat_wts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model, 'rt_cix': self.rt_cix, 'data_style':self.data_style}
+            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'avg_wts':self.avg_wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.flat_wts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model, 'rt_cix': self.rt_cix, 'data_style':self.data_style, 'nudge_dir':self.nudge_dir}
 
             if get_params:
                   return self.fitparams
-
 
       def __extract_popt_fitinfo__(self, finfo=None):
             """ takes optimized dict or DF of vectorized parameters and
@@ -136,6 +141,11 @@ class RADDCore(object):
             rangled = analyze.rangl_data(data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
             return rangled
 
+      def resample_data(self, data):
+            """ wrapper for analze.resample_data
+            """
+            resampled = analyze.resample_data(data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
+            return resampled
 
       def rt_quantiles(self, data, split_col='HL', prob=np.array([.1, .3, .5, .7, .9])):
             """ wrapper for analze.rt_quantiles
@@ -145,6 +155,12 @@ class RADDCore(object):
             rtq = analyze.rt_quantiles(data, include_zero_rts=self.include_zero_rts, split_col=split_col, prob=prob, nrt_cond=self.nrt_cond, tb=self.tb)
             return rtq
 
+
+      def assess_fit(self, finfo=None):
+            """ wrapper for analyze.assess_fit calculates and stores
+            rchi, AIC, BIC and other fit statistics
+            """
+            return analyze.assess_fit(finfo)
 
       def params_io(self, p={}, io='w', iostr='popt'):
             """ read // write parameters dictionaries
@@ -179,10 +195,14 @@ class RADDCore(object):
             """
             nudge params so not all initialized at same val
             """
-            bump = np.linspace(lim[0], lim[1], self.ncond)
-            if self.fitparams['data_style']=='re':
-                  bump = bump[::-1]
+
+            if self.fitparams['nudge_dir']=='up':
+                  lim = [np.min(lim), np.max(lim)]
+            else:
+                  lim = [np.max(lim), np.min(lim)]
+
             for pkey in p.keys():
+                  bump = np.linspace(lim[0], lim[1], self.ncond)
                   if pkey in self.pc_map.keys():
                         if pkey in ['a', 'tr']:
                               bump = bump[::-1]
@@ -279,11 +299,11 @@ class RADDCore(object):
             fp=self.fitparams
             if 'pro' in self.kind:
                   # regroup y vectors into conditions
+                  wtsp = fp['avg_wts'].flatten()[:fp['ncond']].reshape(2, int(fp['ncond']/2))
                   nogo = self.avg_y.flatten()[:fp['ncond']].reshape(2, int(fp['ncond']/2))
-                  wtsp = fp['wts'].flatten()[:fp['ncond']].reshape(2, int(fp['ncond']/2))
 
                   rts = self.avg_y[fp['ncond']:].reshape(2,5)
-                  wtsq = fp['wts'][fp['ncond']:].reshape(2,5)
+                  wtsq = fp['avg_wts'][fp['ncond']:].reshape(2,5)
 
                   upper =  [np.append(ng, rts[0]) for ng in nogo[0]]
                   lower =  [np.append(ng, rts[1]) for ng in nogo[1]]
@@ -296,7 +316,6 @@ class RADDCore(object):
                   cond_data = self.avg_y
                   cond_wts = self.avg_wts
             return cond_data, cond_wts
-
 
 
       def get_wts(self):
@@ -312,21 +331,37 @@ class RADDCore(object):
                   # COR & ERR Quantile WTS are calculated collapsing across #
                   # subjects & condition (see Bogacz et al., 2006)          #
                   ###########################################################
-                  go = self.data.query('ttype=="go"').response.mean()
-                  st = self.data.query('ttype=="stop"').response.mean()
-                  qwts = analyze.reactive_mj_quanterr(df=self.data)
-                  qwts = np.hstack(array([[go], [st]])*qwts)
-                  pwts = array([1.5,1.5,1,1,1,1])
-                  self.flat_wts = np.hstack([pwts, qwts])
-                  self.avg_wts = np.tile(self.flat_wts, nc)
+                  #go = self.data.query('ttype=="go"').response.mean()
+                  #st = self.data.query('ttype=="stop"').response.mean()
+                  #wtqwts = np.hstack(array([[go], [st]])*qwts)
+                  #pwts = array([1.5,1.5,1,1,1,1])
+                  #self.flat_wts = np.hstack([pwts, wtd_qwts])
+                  #self.avg_wts = np.tile(self.flat_wts, nc)
+
+                  rprob = self.data.groupby(['ttype', 'Cond']).mean()['response']
+                  qwts = analyze.reactive_mj_quanterr(df=self.data, cond=cond)
+                  # multiply by prob. of response on cor. and err. trials
+                  wtd_qwts = np.vstack(rprob.unstack().unstack().values)*qwts.reshape(nc*2,5)
+                  wtd_qwts = wtd_qwts.reshape(nc, 10)
+                  if self.wt_prob:
+                        perr = self.observed.groupby(cond).std().iloc[:,1:7].values
+                        pwts = np.median(perr, axis=1)[:,None]/perr
+                  else:
+                        pwts = [np.ones(len(self.ssd)+1)]*nc
+                  self.avg_wts = np.array([np.append(pw, qw) for pw, qw in zip(pwts, wtd_qwts)]).flatten()
+                  self.flat_wts = self.avg_wts.reshape(nc,16).mean(axis=0)
+
             elif self.data_style=='pro':
                   upper = self.data[self.data['HL']==1].mean()['response']
                   lower = self.data[self.data['HL']==2].mean()['response']
                   qwts = analyze.proactive_mj_quanterr(df=self.data, split='HL', tb=self.tb)
-                  qwts = np.hstack(np.array([upper, lower])[:,None]*qwts)
-                  #pwts = np.array([1.5,1,1,1,1,1.5])
-                  pwts = np.array([1.5,1.25,1,1,1.25,1.5])
-                  self.avg_wts = np.hstack([pwts, qwts])
+                  wtqwts = np.hstack(np.array([upper, lower])[:,None]*qwts)
+                  if self.wt_prob:
+                        perr=self.observed.std()[:nc]
+                        pwts=np.median(perr)/perr
+                  else:
+                        pwts=np.ones(nc)
+                  self.avg_wts = np.hstack([pwts, wtqwts])
                   # calculate flat weights (collapsing across conditions)
                   nogo = self.avg_wts[:nc].mean(); quant=self.avg_wts[nc:].reshape(2, 5).mean(axis=0)
                   self.flat_wts = np.hstack([nogo, quant])

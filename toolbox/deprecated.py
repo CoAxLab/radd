@@ -6,15 +6,447 @@ from scipy.io import loadmat
 import os, re
 
 
-def __indx_optimize__(self, save=True, savepth='./'):
 
+
+
+# class Optimizer(RADDCore):
+#
+#       """ Optimizer class acts as interface between Model and Simulator (see fit.py) objects.
+#       Structures fitting routines so that Models are first optimized with the full set of
+#       parameters free, data collapsing across conditions.
+#
+#       The fitted parameters are then used as the initial parameters for fitting conditional
+#       models with only a subset of parameters are left free to vary across levels of a given
+#       experimental conditionself.
+#
+#       Parameter dependencies are specified when initializing Model object via
+#       <depends_on> arg (i.e.{parameter: condition})
+#
+#       Handles fitting routines for models of average, individual subject, and bootstrapped data
+#       """
+#
+#       def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=False, global_method='basinhopping', data_style='re', *args, **kws):
+#
+#             self.multiopt=multiopt
+#             self.fit_on = fit_on
+#             self.data=dframes['data']
+#             self.fitparams=fitparams
+#             self.global_method=global_method
+#             self.kind=kind
+#             self.xbasin=[]
+#             self.dynamic=self.fitparams['dynamic']
+#             nq = len(self.fitparams['prob'])
+#             nc = self.fitparams['ncond']
+#
+#             if fit_on in ['subjects', 'bootstrap']:
+#                   self.indx_list = dframes['observed'].index
+#                   self.fits = dframes['fits']
+#                   self.fitinfo = dframes['fitinfo']
+#
+#                   if fit_on=='subjects':
+#                         self.dat=dframes['dat']
+#                   elif fit_on=='bootstrap':
+#                         self.dat=dframes['boot']
+#
+#                   if data_style=='re':
+#                         self.get_flaty = lambda x: x.mean(axis=0)
+#                   elif data_style=='pro':
+#                         self.get_flaty = lambda x:np.hstack([x[:nc].mean(),x[nc:].reshape(2,nq).mean(axis=0)])
+#
+#             self.method=method
+#             self.avg_y=self.fitparams['avg_y'].flatten()
+#             self.avg_wts=self.fitparams['avg_wts']
+#
+#             self.flat_y=self.fitparams['flat_y']
+#             self.flat_wts=self.fitparams['flat_wts']
+#
+#             self.pc_map=pc_map
+#             self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
+#             self.pvc=deepcopy(['a', 'tr', 'v', 'xb'])
+#
+#             super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
+#
+
+
+      #
+      #
+      # def set_fitparams(self, ntrials=10000, tol=1.e-10, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
+      #
+      #       if not hasattr(self, 'fitparams'):
+      #             self.fitparams={}
+      #       self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'avg_wts':self.avg_wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.flat_wts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model, 'rt_cix': self.rt_cix, 'data_style':self.data_style,  'nudge_dir':self.nudge_dir}
+      #
+      #       if get_params:
+      #             return self.fitparams
+      #
+
+
+      #
+      # def __make_dataframes__(self, qp_cols):
+      #       """ Generates the following dataframes and arrays:
+      #       ::Arguments::
+      #             qp_cols:
+      #                   header for observed/fits dataframes
+      #       ::Returns::
+      #             None (All dataframes and vectors are stored in dict and assigned
+      #             as <dframes> attr)
+      #       observed (DF):
+      #             Contains Prob and RT quant. for each subject
+      #             used to calc. cost fx weights
+      #       fits (DF):
+      #             empty DF shaped like observed DF, used to store simulated
+      #             predictions of the optimized model
+      #       fitinfo (DF):
+      #             stores all opt. parameter values and model fit statistics
+      #       dat (ndarray):
+      #             contains all subject/boot. y vectors entered into costfx
+      #       avg_y (ndarray):
+      #             average y vector for each condition entered into costfx
+      #       flat_y (1d array):
+      #             average y vector used to initialize parameters prior to fitting
+      #             conditional model. calculated collapsing across conditions
+      #       """
+      #
+      #       cond = self.cond; ncond = self.ncond
+      #       data = self.data; indx = self.indx
+      #       labels = self.labels
+      #
+      #       ic_grp = data.groupby(['idx', cond])
+      #       c_grp = data.groupby([cond])
+      #       i_grp = data.groupby(['idx'])
+      #
+      #       if self.data_style=='re':
+      #             datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack().unstack()
+      #             indxx = pd.Series(indx*ncond, name='idx')
+      #             obs = pd.DataFrame(np.vstack(datdf.values),columns=qp_cols[1:], index=indxx)
+      #             obs.insert(0, qp_cols[0], np.sort(labels*len(indx)))
+      #
+      #             self.observed = obs.sort_index().reset_index()
+      #             self.avg_y = self.observed.groupby(cond).mean().values[:,1:]
+      #             self.flat_y = self.observed.mean().values[1:]
+      #             dat = self.observed.loc[:,qp_cols[1]:].values.reshape(len(indx),ncond,16)
+      #             fits = pd.DataFrame(np.zeros((len(indxx),len(qp_cols))), columns=qp_cols, index=indxx)
+      #
+      #
+      #       elif self.data_style=='pro':
+      #             datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
+      #             rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
+      #             rtdat[rtdat<.1] = np.nan
+      #             rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split_col=None).values), index=indx)
+      #             self.observed = pd.concat([datdf, rtdat], axis=1)
+      #             self.observed.columns = qp_cols
+      #             self.avg_y = self.observed.mean().values
+      #             self.flat_y=np.append(datdf.mean().mean(), rts_flat.mean())
+      #             dat = self.observed.values.reshape((len(indx), len(qp_cols)))
+      #             fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
+      #
+      #       fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
+      #
+      #       self.dframes = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
+      #
+
+      #
+#
+#
+def get_wts(m, weight_by='mj'):
+      """ wtc: weights applied to correct rt quantiles in cost f(x)
+             * P(R | No SSD)j * sdj(.5Qj, ... .95Qj)
+       wte: weight applied to error rt quantiles in cost f(x)
+             * P(R | SSD) * sd(.5eQ, ... .95eQ)
       """
-      INDIVIDUAL SUBJECT AND BOOTSTRAP OPTIMIZATION HANDLER
-      GOES IN FIT.py AS METHOD OF Optimizer CLASS
 
-      """
+      nc = m.ncond; cond=m.cond;
+      if m.data_style=='re':
+            go = m.data.query('ttype=="go"').response.mean()
+            st = m.data.query('ttype=="stop"').response.mean()
+            if weight_by=='mj':
+                  qwts = analyze.reactive_mj_quanterr(df=m.data)
+            else:
+                  obsrts = m.observed.loc[:, 'c10':]
+                  qwts = np.median(obsrts.std(axis=0))/obsrts.std(axis=0)
+                  qwts = np.vstack(qwts.values.reshape(nc,5))
+            qwts = np.hstack(array([[go], [st]])*qwts)
+            pwts = array([1,1,1,1,1,1])
+            m.flat_wts = np.hstack([pwts, qwts])
+            m.avg_wts = np.tile(m.flat_wts, nc)
+      elif m.data_style=='pro':
+            upper = m.data[m.data['HL']==1].mean()['response']
+            lower = m.data[m.data['HL']==2].mean()['response']
 
-      pass
+            if weight_by=='mj':
+                  qwts = analyze.proactive_mj_quanterr(df=m.data, split='HL', tb=m.tb)
+                  qwts = np.hstack(np.array([upper, lower])[:,None]*qwts)
+            else:
+                  qvar = m.observed.std().iloc[6:].values
+                  hi = qvar[:5]; lo = qvar[5:]
+                  qwts = np.hstack([upper*(hi[2]/hi), lower*(lo[2]/lo)])
+
+            pwts = array([1,1,1,1,1,1])#np.median(pvar)/pvar
+            m.avg_wts = np.hstack([pwts, qwts])
+
+            nogo = m.avg_wts[:nc].mean(); quant=m.avg_wts[nc:].reshape(2, 5).mean(axis=0)
+            m.flat_wts = np.hstack([nogo, quant])
+
+            qwts = analyze.proactive_mj_quanterr(df=m.data, split='HL', tb=m.tb)
+            qwts = np.hstack(np.array([upper, lower])[:,None]*qwts)
+            pwts = np.array([1.5,1,1,1,1,1.5])
+            pwts = np.array([1.5,1.25,1,1,1.25,1.5])
+            pwts = np.median(m.observed.std()[:6])/m.observed.std()[:6]
+            m.avg_wts = np.hstack([pwts, qwts])
+            # calculate flat weights (collapsing across conditions)
+            nogo = m.avg_wts[:nc].mean(); quant=m.avg_wts[nc:].reshape(2, 5).mean(axis=0)
+            m.flat_wts = np.hstack([nogo, quant])
+
+            ovar = m.observed.var().values
+            qvar = array(array([[upper], [lower]])*(1/ovar[nc:].reshape(2,5))).flatten()
+            m.qvar=qvar
+            m.uwts = np.concatenate([1/ovar[:nc], qvar], axis=1).flatten()
+            m.flat_uwts=np.append(m.uwts[:nc].mean(), m.uwts[nc:].reshape(2,5).mean(axis=0))
+
+      m.avg_wts, m.flat_wts = analyze.ensure_numerical_wts(m.avg_wts, m.flat_wts)
+      #m.avg_wts=np.ones_like(m.avg_wts); m.flat_wts=np.ones_like(m.flat_wts)
+
+
+
+#
+#
+# class Theta(dict):
+#
+#       """ a class that inherits from a custom dictionary emulator
+#       for storing and passing information cleanly between Optimizer and
+#       Simulator objects (i.e., init dict, if flat, number of conditions,
+#       which methods to use etc.).
+#
+#       This is motivated by the fact that
+#       fitting a single model often involves multiple stages at which this
+#       information is relevant but non constant.
+#       """
+#       def __init__(self, is_flat=False, ncond=1, pc_map=None):
+#
+#             self.pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
+#             self.flat_pvc=deepcopy(['a', 'tr', 'v', 'xb'])
+#             self.full_pvc=list(set(self.flat_pvc).intersection(pc_map.keys()))
+#             self.pc_map=pc_map
+#             self.is_flat=is_flat
+#             self.ncond=ncond
+#             #self.__dict__ = self
+#
+#       def __getattr__(self, name):
+#             """ get items using either of the following
+#             syntaxes: v=self[k]; v=self.x
+#             """
+#             if name in self:
+#                   return self[name]
+#             else:
+#                   raise AttributeError("No such attribute: " + name)
+#
+#       def __setattr__(self, name, value):
+#             """ set items using either of the following
+#             syntaxes: self[k]=v; self.x=v
+#             """
+#             self[name] = value
+#
+#       def set_params(self, inits):
+#             """ store a safe copy of the init params
+#             and fill ThisFit attr. dict with params
+#             """
+#             self.orig_inits = dict(deepcopy(inits))
+#             for k,v in inits.items():
+#                   self.__setattr__(k, v)
+#
+#       def restore_inits(self):
+#             self.__clear__()
+#             for k,v in self.orig_inits.items():
+#                   self.__setattr__(k, v)
+#
+#       def flat_vectorize_params(self, dt=.001):
+#             if 'si' in self.keys():
+#                   self.dx=np.sqrt(self['si']*dt)
+#             if 'xb' not in p.keys():
+#                   self['xb']=np.ones(1)
+#             for pkey in self.pvc_flat:
+#                   self[pkey]=np.ones(1)*self[pkey]
+#
+#       def full_vectorize_params(self, dt=.001):
+#             full_pvc=list(set(self.flat_pvc).intersection(pc_map.keys()))
+#             if 'si' in self.keys():
+#                   self.dx=np.sqrt(self['si']*dt)
+#             if 'xb' not in p.keys():
+#                   self['xb']=np.ones(self.ncond)
+#             for pkey in self.pvc:
+#                   self[pkey]=np.ones(self.ncond)*self[pkey]
+#             for pkey, pkc in self.pc_map.items():
+#                   if pkc[0] not in p.keys():
+#                         self[pkey] = self[pkey]*np.ones(len(pkc))
+#                   else:
+#                         self[pkey] = array([self[pc] for pc in pkc]).astype(np.float32)
+#             return p
+
+      #
+      # def mean_pgo_rts(self, p, return_vals=True):
+      #       """ Simulate proactive model and calculate mean RTs
+      #       for all conditions rather than collapse across high and low
+      #       """
+      #       import pandas as pd
+      #       tb = self.tb; ncond = self.ncond
+      #
+      #       DVg = self.simulate_pro(p, analyze=False)
+      #       gdec = self.resp_up(DVg, p['a'])
+      #
+      #       rt = self.RT(p['tr'], gdec)
+      #       mu = np.nanmean(rt, axis=1)
+      #       ci = pd.DataFrame(rt.T).sem()*1.96
+      #       std = pd.DataFrame(rt.T).std()
+      #
+      #       self.pgo_rts = {'mu': mu, 'ci': ci, 'std':std}
+      #       if return_vals:
+      #             return self.pgo_rts
+      #
+      #
+
+
+      #
+      #
+      #
+      #
+      # def analyze_irace(self, DVg, DVs, p):
+      #       """ get rt and accuracy of go and stop process for simulated
+      #       conditions generated from simulate_radd
+      #       """
+      #       dt=self.dt; nss=self.nss; ncond=self.ncond; ssd=self.ssd;
+      #       tb=self.tb; prob=self.prob; scale=self.scale; a=p['a']; tr=p['tr']
+      #
+      #       grt = (tr+(np.where((DVg[:, nss:, :].max(axis=2).T>=a).T, np.argmax((DVg[:, nss:, :].T>=a).T,axis=2)*dt, np.nan).T)).T
+      #       ertx = (tr+(np.where((DVg[:, :nss, :].max(axis=2).T>=a).T, np.argmax((DVg[:, :nss, :].T>=a).T,axis=2)*dt, np.nan).T)).T
+      #       ssrt = ((np.where((DVs.max(axis=3).T>=a).T,ssd[:, None]+np.argmax((DVs.T>=a).T,axis=3)*dt,np.nan).T)).T
+      #
+      #       # compute RT quantiles for correct and error resp.
+      #       ert = array([ertx[i] * np.ones_like(ssrt[i]) for i in range(ncond)])
+      #       gq = np.vstack([mq(rtc[rtc<tb], prob=prob)*scale for rtc in grt])
+      #       eq = [mq(ert[i][ert[i]<ssrt[i]], prob=prob)*scale for i in range(ncond)]
+      #       # Get response and stop accuracy information
+      #       gac = np.nanmean(np.where(grt<tb, 1, 0), axis=1)
+      #       sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
+      #       return hs([hs([i[ii] for i in [gac, sacc, gq, eq]]) for ii in range(ncond)])
+      #
+
+
+
+      #
+      # def diffevolution_minimizer(self, z, *params):
+      #       """ find global mininum using differential evolution
+      #
+      #       ::Arguments::
+      #             z (list):
+      #                   list of slice objects or tuples
+      #                   boundaries for each parameter
+      #             *params:
+      #                   iterable of parameter point estimates
+      #       ::Returns::
+      #             weighted cost
+      #       """
+      #
+      #       p = {pkey: params[i] for i, pkey in enumerate(self.diffev_params)}
+      #       yhat = self.sim_fx(p, analyze=True)
+      #       cost = (yhat - self.y)*self.wts
+      #       return cost.flatten()
+      #
+      #
+      # def brute_minimizer(self, z, *params):
+      #       """ find global mininum using brute force
+      #       (see differential_evolution for I/O details)
+      #       """
+      #
+      #       p = {pkey: params[i] for i, pkey in enumerate(self.brute_params)}
+      #       yhat = self.sim_fx(p, analyze=True)
+      #       cost = (yhat - self.y)*self.wts
+      #       return cost.flatten()
+      #
+
+
+      #
+      # def get_rts(self, DV, p):
+      #
+      #       nss = self.nss; prob = self.prob
+      #       ssd = self.ssd; tb = self.tb
+      #       nc = self.ncond; nssd=self.nssd
+      #
+      #       DVg, DVs = DV
+      #
+      #       gdec = self.resp_up(DVg, p['a'])
+      #       gort = self.RT(p['tr'], gdec)
+      #       sdec = self.resp_lo(DVs)
+      #       ssrt = self.RT(ssd, sdec)
+            #ert = gort[:,:nss][:, None]*np.ones_like(ssrt)
+            #go_acc = np.where(gort<tb, 1, 0)
+            #sacc = np.where(ert<ssrt, 0, 1)
+            #ert=ert[sacc]
+            #gort = gort[go_acc]
+
+            #return [gort, ssrt]#, ssrt]
+
+            #if 'pro' in self.kind:
+            #      ix=self.rt_cix;
+            #      hi = gort[:ix]
+            #      lo = gort[ix:]
+            #      hi_rt = hi[np.where(hi<tb, 1, 0)]
+            #      low_rt = lo[np.where(lo<tb, 1, 0)]
+            #      return [hi_rt, low_rt]
+            #
+            #elif self.kind=='iact':
+            #      ssDVg=DV[1]
+            #      nss_di = int(nss/nssd)
+            #      sscancel = ssd + p['sso']
+            #      # Go process (No SS Trials)
+            #      gort = self.RT(p['tr'], gdec)
+            #      # Go process SS Trials
+            #      ssgdec = self.ss_resp_up(ssDVg, p['a'])
+            #      ssgdec = ssgdec.reshape(nc, nssd*nss_di)
+            #      ss_gort = self.RT(p['tr'], ssgdec).reshape(nc,nssd,nss_di)
+            #
+            #      sacc = np.where(ss_gort<sscancel[:,na], 0, 1)
+            #      gort=gort[np.where(gort<tb, 1, 0)]
+            #      ert=ss_gort[abs(1-sacc)]
+            #      return [gort, ert, sscancel]
+
+
+
+
+
+      #
+      #
+      # def __indx_optimize__(self, save=True, savepth='./'):
+      #
+      #       ri=0; nc=self.ncond; nquant=len(self.fitparams['prob'])
+      #       pcols=self.fitinfo.columns
+      #       fit_on = self.fit_on
+      #       for i, y in enumerate(self.dat):
+      #             self.avg_y = y
+      #             self.fit_on = '_'.join([fit_on, str(self.indx_list[i])])
+      #             self.flat_y = self.get_flaty(self.avg_y)
+      #             # optimize params iterating over subjects/bootstraps
+      #             yhat, finfo, popt = self.__opt_routine__()
+      #
+      #             self.fitinfo.iloc[i]=pd.Series({pc: finfo[pc] for pc in pcols})
+      #             if self.data_style=='re':
+      #                   self.fits.iloc[ri:ri+nc, :] = yhat.reshape(nc, len(self.fits.columns-1))
+      #                   ri+=nc
+      #             elif self.data_style=='pro':
+      #                   self.fits.iloc[i] = yhat
+      #             if save:
+      #                   self.fits.to_csv(savepth+"fits.csv")
+      #                   self.fitinfo.to_csv(savepth+"fitinfo.csv")
+      #       self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
+
+# def __indx_optimize__(self, save=True, savepth='./'):
+#
+#       """
+#       INDIVIDUAL SUBJECT AND BOOTSTRAP OPTIMIZATION HANDLER
+#       GOES IN FIT.py AS METHOD OF Optimizer CLASS
+#
+#       """
+#
+#       pass
       # ri=0; nc=self.ncond; nquant=len(self.fitparams['prob'])
       # pcols=self.fitinfo.columns
 
@@ -36,7 +468,159 @@ def __indx_optimize__(self, save=True, savepth='./'):
                   # self.fitinfo.to_csv(savepth+"fitinfo.csv")
       # self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())
 
+      #
+      # def basinhopping_multivar(self, p, nsuccess=20, stepsize=.07, interval=10):
+      #       """ uses L-BFGS-B in combination with basinhopping to perform bounded global
+      #        minimization of multivariate model
+      #       """
+      #       fp = self.fitparams
+      #       basin_keys = self.pc_map.keys()
+      #       ncond = len(self.pc_map.values()[0])
+      #       p = self.__nudge_params__(p)
+      #
+      #       self.simulator.__prep_global__(basin_params=p, basin_keys=basin_keys, is_flat=False)
+      #       xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, ncond=ncond)
+      #       x = np.hstack(np.hstack([p[pk] for pk in basin_keys])).tolist()
+      #       bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
+      #       mkwargs = {"method": "L-BFGS-B", "bounds":bounds, 'tol':1.e-3}
+      #       # run basinhopping on simulator.basinhopping_minimizer func
+      #       out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=stepsize, niter_success=nsuccess, minimizer_kwargs=mkwargs, interval=interval, disp=True)
+      #       xopt = out.x
+      #       funcmin = out.fun
+      #       xarr = array([xopt]).reshape(len(basin_keys), self.ncond)
+      #       for i, k in enumerate(basin_keys):
+      #             p[k]=xarr[i]
+      #       return p, funcmin
+      #
 
+      #
+      # def basinhopping_univar(self, p):
+      #       """ uses basinhopping to pre-optimize init cond parameters
+      #       to individual conditions to prevent terminating in local minima
+      #       """
+      #       fp = self.fitparams
+      #       nc = fp['ncond']; cols=['pkey', 'popt', 'fun', 'nfev']
+      #       self.simulator.__prep_global__(method='basinhopping', basin_params=p, basin_keys=p.keys(), is_flat=True)
+      #       mkwargs = {"method":"Nelder-Mead", 'jac':True}
+      #       xbasin = []
+      #       vals = p[pkey]
+      #       for i, x in enumerate(vals):
+      #             p[pkey] = x
+      #             self.simulator.basin_params = p
+      #             self.simulator.y = self.bdata[i]
+      #             self.simulator.wts = self.bwts[i]
+      #
+      #             out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=.05, minimizer_kwargs=mkwargs, niter_success=20)
+      #             xbasin.append(out.x[0])
+      #       if self.xbasin!=[]:
+      #             self.xbasin.extend(xbasin)
+      #       else:
+      #             self.xbasin = xbasin
+      #       return xbasin
+      #
+
+      #
+      # def basinhopping_multivar(self, p, nsuccess=20, stepsize=.07, interval=10, is_flat=False, disp=False):
+      #       """ uses L-BFGS-B in combination with basinhopping to perform bounded global
+      #        minimization of multivariate model
+      #       """
+      #       fp = self.fitparams
+      #       if is_flat:
+      #             basin_keys=p.keys()
+      #             bp=dict(deepcopy(p))
+      #             basin_params = theta.all_params_to_scalar(bp)
+      #             ncond=1
+      #       else:
+      #             basin_keys = self.pc_map.keys()
+      #             ncond = len(self.pc_map.values()[0])
+      #             basin_params = self.__nudge_params__(p)
+      #
+      #       self.simulator.__prep_global__(method='basinhopping', basin_params=basin_params, basin_keys=basin_keys, is_flat=is_flat)
+      #       xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, ncond=ncond)
+      #       x = np.hstack(np.hstack([p[pk] for pk in basin_keys])).tolist()
+      #
+      #       bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
+      #       mkwargs = {"method": "L-BFGS-B", "bounds":bounds, 'tol':1.e-3}
+      #
+      #       # run basinhopping on simulator.basinhopping_minimizer func
+      #       out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=stepsize, niter_success=nsuccess, minimizer_kwargs=mkwargs, interval=interval, disp=disp)
+      #       xopt = out.x
+      #       funcmin = out.fun
+      #       if ncond>1:
+      #             xopt = array([xopt]).reshape(len(basin_keys), ncond)
+      #       for i, k in enumerate(basin_keys):
+      #             p[k]=xopt[i]
+      #       return p, funcmin
+      #
+      #
+      #
+      #
+      # def __hop_around__(self, p, niter=10, nsuccess=20):
+      #       """ initialize model with niter randomly generated parameter sets
+      #       and perform global minimization using basinhopping algorithm
+      #       ::Arguments::
+      #             niter (int):
+      #                   number of randomly generated parameter sets
+      #             nsuccess (int):
+      #                   tell basinhopping algorithm to exit after this many
+      #                   iterations at which a common minimum is found
+      #       ::Returns::
+      #             parameter set with the best fit
+      #       """
+      #       inits = deepcopy(self.inits.keys())
+      #       bnd = theta.get_bounds(kind=self.kind, tb=self.fitparams['tb'])
+      #       random_inits = {pkey: theta.init_distributions(pkey, bnd[pkey], nrvs=niter, kind=self.kind) for pkey in inits}
+      #       xpopt, xfmin = [], []
+      #       for i in range(niter):
+      #             if i==0:
+      #                   p=dict(deepcopy(p))
+      #             else:
+      #                   p={pkey: random_inits[pkey][i] for pkey in inits}
+      #             popt, fmin = self.basinhopping_multivar(p=p, is_flat=True, nsuccess=nsuccess)
+      #             xpopt.append(popt)
+      #             xfmin.append(fmin)
+      #
+      #       ix_min = np.argmin(xfmin)
+      #       new_inits = xpopt[ix_min]
+      #       fmin = xfmin[ix_min]
+      #       if ix_min==0:
+      #             self.basin_decision = "using default inits:\nfmin=%.9f"%xfmin[0]
+      #       else:
+      #             self.basin_decision = "found global miniumum \nnew: fmin=%.9f\norig=%9f)"%(fmin, xfmin[0])
+      #             self.global_inits=dict(deepcopy(new_inits))
+      #       return new_inits
+      #
+
+
+      # def global_min(self, inits, method='brute', basin_key=None):
+      #       """ Performs global optimization via basinhopping, brute, or differential evolution
+      #       algorithms.
+      #
+      #       basinhopping method is only used to pre-tune conditional parameters after
+      #       flat optimization before entering final simplex routine (optimize_theta).
+      #
+      #       brute and differential evolution methods may be applied to the full parameter set
+      #       (using original inits dictionary and pc_map)
+      #       """
+      #
+      #       self.simulator.__prep_global__(method=method, basin_key=basin_key)
+      #       if method=='basinhopping':
+      #             keybasin = self.perform_basinhopping(p=inits, pkey=basin_key)
+      #             return keybasin
+      #
+      #       pfit = list(set(inits.keys()).intersection(self.pnames))
+      #       pbounds, params = self.slice_bounds_global(inits, pfit)
+      #       self.simulator.y=self.y.flatten()
+      #       self.simulator.wts = self.avg_wts
+      #       if method=='brute':
+      #             self.simulator.wts = self.avg_wts
+      #             self.simulator.brute_params = pfit
+      #             self.globalmin = brute(self.simulator.brute_minimizer, pbounds, args=params)
+      #       elif method=='differential_evolution':
+      #             self.simulator.diffev_params = pfit
+      #             self.globalmin = differential_evolution(self.simulator.diffevolution_minimizer, pbounds, args=params)
+      #
+      #       return self.globalmin
 
 
 #

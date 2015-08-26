@@ -11,6 +11,22 @@ from scipy import optimize
 import functools
 
 
+
+
+def assess_fit(finfo):
+
+      finfo = pd.Series(finfo)
+      chisqr = finfo.chi
+      finfo['df'] = finfo.ndata - finfo.nvary
+      finfo['rchi'] = chisqr / finfo.df
+
+      finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
+      finfo['AIC'] = finfo.logp + 2 * finfo.nvary
+      finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
+
+      return finfo
+
+
 def remove_outliers(df, sd=1.5, verbose=False):
 
       ssdf=df[df.response==0]
@@ -47,7 +63,7 @@ def rangl_data(data, data_style='re', kind='radd', tb=.650, prob=([.1, .3, .5, .
             return 1-data.response.mean()
 
 
-def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.560, nrt_cond=2, prob=np.array([.1, .3, .5, .7, .9])):
+def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.550, nrt_cond=2, prob=np.array([.1, .3, .5, .7, .9])):
       """ called by __make_dataframes__ for proactive models to generate observed
       dataframes and iterables for subject fits, specifically aggregates proactive rts
       into a smaller number of conditions to offset low trial count issues
@@ -59,7 +75,6 @@ def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.560, nrt_cond
             godfx = data[(data.response==1) & (data.pGo>0.)]
       godfx.loc[:, 'response'] = np.where(godfx.rt<tb, 1, 0)
       godf = godfx.query('response==1')
-
       if split_col == None:
             rts = godf[godf.rt<=tb].rt.values
             return mq(rts, prob=prob)
@@ -75,7 +90,56 @@ def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.560, nrt_cond
       return np.hstack(rtq)
 
 
-def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), tb=.550):
+def resample_data(data, data_style='re', n=120, kind='radd', tb=.550):
+      """ generates n resampled datasets using rwr()
+      for bootstrapping model fits
+      """
+      df=data.copy(); bootlist=list()
+      if n==None: n=len(df)
+      if data_style=='re':
+            for ssd, ssdf in df.groupby('ssd'):
+                  boots = ssdf.reset_index(drop=True)
+                  orig_ix = np.asarray(boots.index[:])
+                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
+                  bootdf = ssdf.irow(resampled_ix)
+                  bootlist.append(bootdf)
+                  #concatenate and return all resampled conditions
+            return rangl_data(pd.concat(bootlist))
+      elif data_style=='pro':
+            pvec=list(); rtvec=list(); df=df.copy()
+            for pg, pgdf in df.groupby('pGo'):
+                  boots = pgdf.reset_index(drop=True)
+                  orig_ix=np.asarray(boots.index[:])
+                  resampled_ix=rwr(orig_ix, get_index=True, n=n)
+                  bootdf=pgdf.irow(resampled_ix)
+                  pnogo = rangl_data(bootdf, data_style='pro')
+                  bootlist.append(bootdf)
+                  pvec.append(pnogo)
+            rts = rt_quantiles(pd.concat(bootlist))
+            return np.hstack([pnogo, rts])
+
+
+def rwr(X, get_index=False, n=None):
+      """
+      Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
+      """
+
+      if isinstance(X, pd.Series):
+            X = X.copy()
+            X.index = range(len(X.index))
+      if n == None:
+            n = len(X)
+
+      resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
+      X_resample = (X[resample_i])
+
+      if get_index:
+            return resample_i
+      else:
+            return X_resample
+
+
+def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), tb=.560, as_ratio=True):
       """ calculates weight vectors for proactive RT quantiles by estimating
       first estimating the SEM of RT quantiles across levels of <split>
       (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
@@ -84,21 +148,24 @@ def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), tb=.550)
             QSEM = mjci(rtvectors)
             wts = median(QSEM)/QSEM
       """
+      #xdf=df.copy()
+      ## insert timeboundary
+      ##df['response']=np.where(xdf.rt<tb, 1, 0)
+      #mjcix = lambda x: mjci(x.rt, prob=prob)
+      #godf = xdf[xdf.response==1].copy()
+      #q_sem_obj = godf.groupby(['idx', 'HL']).apply(mjcix).values
+      #qwts = np.median(np.vstack(q_sem_obj.reshape(2,61).mean(axis=1)), axis=1)[:, None]/np.vstack(q_sem_obj.reshape(2,61).mean(axis=1))
 
       nquant = len(prob)
-      ncond = len(df[split].unique())
-      xdf=df.copy()
-      # insert timeboundary
-      xdf['response']=np.where(xdf.rt<tb, 1, 0)
-      godf = xdf[xdf.response==1].copy()
-      q_sem_obj = godf.groupby(split).rt.apply(mjci, prob).values
-      # hstack then reshape to automatically ensure float dtype (not object dtype)
-      q_sem = np.hstack(q_sem_obj).reshape(ncond, nquant)
-      qwts = np.median(q_sem, axis=1)[:,None]/q_sem
+      godf = df[df.response==1].copy()
+      ncond = len(godf[split].unique())
+
+      mjcix = lambda x: mjci(x.rt, prob=prob)
+      q_sem_obj = godf.groupby(['idx', 'HL']).apply(mjcix).values
+      qwts = np.nanmean(np.vstack(q_sem_obj.reshape(2,61).mean(axis=1)), axis=1)[:, None]/np.vstack(q_sem_obj.reshape(2,61).mean(axis=1))
       return qwts
 
-
-def reactive_mj_quanterr(df, avg_ssd=True, prob=array([.1,.3,.5,.7,.9])):
+def reactive_mj_quanterr(df, avg_ssd=True, cond='Cond', prob=array([.1,.3,.5,.7,.9]), as_ratio=True):
       """ calculates weight vectors forreactive RT quantiles by estimating
       first estimating the SEM of RT quantiles for corr. and err. responses.
       (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
@@ -107,20 +174,30 @@ def reactive_mj_quanterr(df, avg_ssd=True, prob=array([.1,.3,.5,.7,.9])):
             QSEM = mjci(rtvectors)
             wts = median(QSEM)/QSEM
       """
-      cor = df.query('response==1&acc==1')
-      err = df.query('response==1&acc==0')
-      nssd = len(err.ssd.unique())
+      #mjcix = lambda x: mjci(x.rt, prob=prob)
+      #c = np.vstack(df.query('response==1&acc==1').groupby('idx').apply(mjcix).values)
+      #e = np.vstack(df.query('response==1&acc==0').groupby('idx').apply(mjcix).values)
+      #qcwts = np.median(c.mean(axis=0))/c.mean(axis=0)
+      #qewts = np.median(e.mean(axis=0))/e.mean(axis=0)
+      #nquant = len(prob)
+      #return np.hstack([qcwts, qewts]).reshape(2,nquant)
+
+      ncond = len(df[cond].unique())
       nquant = len(prob)
-      qe_var = np.hstack(err.groupby('ssd').rt.apply(mjci, prob)).reshape(nssd, nquant)
-      qc_var = mjci(cor.rt.values, prob)
-      # correct trial wts
-      qcwts = np.median(qc_var)/qc_var
-      # ss trial wts
-      if avg_ssd:
-            qewts = np.median(qe_var)/qe_var.mean(axis=1)
-      else:
-            qewts = np.median(qe_var,axis=1)[:,None]/qe_var
-      return np.hstack([qcwts, qewts]).reshape(2,nquant)
+
+      godf = df.query('response==1')
+      # Martinz & Jarrett
+      mjcix = lambda x: mjci(x.rt, prob=prob)
+      ica_err = np.vstack(godf.groupby(['idx', cond, 'acc']).apply(mjcix).values)
+
+      nidx = int(len(ica_err)/ncond/2)
+      # divide by 2 again because grouped by accuracy
+      qx = ica_err.reshape(ncond, nidx, nquant, ncond)
+      c_a_q = np.nanmean(qx, axis=1).reshape(ncond, 2, nquant)
+      # axes: cond, acc, quants
+      # get mean err across first two axes and divide by vals
+      qwts = np.nanmean(c_a_q, axis=2)[:,:,None]/c_a_q
+      return qwts
 
 
 def ensure_numerical_wts(wts, flat_wts):
@@ -144,18 +221,6 @@ def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       samples = kdefit.sample(n_samples=nsamples).flatten()
       return samples
 
-
-def aic(model):
-      k = len(model.get_stochasticts())
-      logp = sum([x.logp for x in model.get_observeds()['node']])
-      return 2 * k - 2 * logp
-
-
-def bic(model):
-      k = len(model.get_stochastics())
-      n = len(model.data)
-      logp = sum([x.logp for x in model.get_observeds()['node']])
-      return -2 * logp + k * np.log(n)
 
 
 def sigmoid(p,x):
@@ -195,60 +260,15 @@ def get_expected_vector(simrt, obsinfo):
       """ calculates the expected frequencies of responses for a
       set of simulated RTs, given. obsinfo is output of
       get_observed_vector() -->  [ocounts, rtquant, n_obs]
+      simrt = pd.Series(simrt)
       """
       counts, q, n_obs = obsinfo[0], obsinfo[1], obsinfo[2]
-      simrt = pd.Series(simrt)
       first = array([len(simrt[simrt.between(simrt.min(), q[0])])/len(simrt)])*n_obs
       middle = array([len(simrt[simrt.between(q[i-1], q[i])])/len(simrt) for i in range(1,len(q))])*n_obs
       last = array([len(simrt[simrt.between(q[-1], simrt.max())])/len(simrt)])*n_obs
 
       expected = np.ceil(np.hstack([first, middle, last]))
       return expected
-
-
-
-def resample_data(data, data_style='re', n=120, kind='radd'):
-      """ generates n resampled datasets using rwr()
-      for bootstrapping model fits
-      """
-      df=data.copy(); bootlist=list()
-      if n==None: n=len(df)
-      if data_style=='re':
-            for ssd, ssdf in df.groupby('ssd'):
-                  boots = ssdf.reset_index(drop=True)
-                  orig_ix = np.asarray(boots.index[:])
-                  resampled_ix = rwr(orig_ix, get_index=True, n=n)
-                  bootdf = ssdf.irow(resampled_ix)
-                  bootlist.append(bootdf)
-                  #concatenate and return all resampled conditions
-                  return rangl_re(pd.concat(bootlist))
-      elif data_style=='pro':
-            boots = df.reset_index(drop=True)
-            orig_ix = np.asarray(boots.index[:])
-            resampled_ix = rwr(orig_ix, get_index=True, n=n)
-            bootdf = df.irow(resampled_ix)
-            bootdf_list.append(bootdf)
-            return rangl_pro(pd.concat(bootdf_list), rt_cutoff=rt_cutoff)
-
-
-def rwr(X, get_index=False, n=None):
-      """
-      Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
-      """
-
-      if isinstance(X, pd.Series):
-            X = X.copy()
-            X.index = range(len(X.index))
-      if n == None:
-            n = len(X)
-
-      resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
-      X_resample = (X[resample_i])
-
-      if get_index:
-            return resample_i
-      else:
-            return X_resample
 
 
 def ssrt_calc(df, avgrt=.3):
@@ -299,7 +319,7 @@ def get_obs_quant_counts(df, prob=([.10, .30, .50, .70, .90])):
 
 def get_header(params=None, data_style='re', labels=[], delays=[], prob=np.array([.1, .3, .5, .7, .9]), cond=None):
 
-      info = ['nfev','chi','rchi','AIC','BIC','CNVRG']
+      info = ['nfev','nvary','df','chi','rchi','logp','AIC','BIC','cnvrg']
       if data_style=='re':
             cq = ['c'+str(int(n*100)) for n in prob]
             eq = ['e'+str(int(n*100)) for n in prob]

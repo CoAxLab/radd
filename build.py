@@ -13,10 +13,8 @@ class Model(RADDCore):
 
       """ Main class for instantiating, fitting, and simulating models.
       Inherits from RADDCore parent class (see CORE module).
-
       Many of the naming conventions as well as the logic behind constructing parameter
       dependencies on task condition are taken from HDDM (http://ski.clps.brown.edu/hddm_docs/)
-
       ::Arguments::
             data (pandas DF):
                   data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
@@ -43,16 +41,16 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, wt_prob=True, *args, **kws):
 
             self.data=data; self.weighted=weighted; self.verbose=verbose
 
-            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
+            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic, wt_prob=wt_prob)
 
             self.prepare_fit()
 
 
-      def make_optimizer(self, ntrials=10000, tol=1.e-10, maxfev=3000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=False):
+      def make_optimizer(self, ntrials=10000, tol=1.e-10, maxfev=3000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True):
             """ init Optimizer class as Model attr
             """
             fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, prob=prob, get_params=True)
@@ -61,7 +59,7 @@ class Model(RADDCore):
             self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.avg_wts, pc_map=self.pc_map,  multiopt=multiopt)
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=False):
+      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
@@ -69,8 +67,6 @@ class Model(RADDCore):
                   self.make_optimizer(ntrials=ntrials, tol=tol, maxfev=maxfev, niter=niter, disp=disp, prob=prob)
 
             self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
-            # get residuals
-            self.residual = self.opt.residual
             # get Simulator object used by
             # Optimizer to fit the model
             self.simulator = self.opt.simulator
@@ -116,15 +112,12 @@ class Model(RADDCore):
       def prepare_fit(self):
             """ performs model setup and initiates dataframes.
             Automatically run when Model object is initialized
-
             pc_map is a dict containing parameter names as keys with values
             corresponding to the names given to that parameter in Parameters object
             (see optmize.Optimizer). i.e.
-
             * Parameters (p[pkey]=pval) that are constant across conditions
             are broadcast as [pval]*n. Conditional parameters are treated as arrays with
             distinct values [V1, V2...Vn], one for each condition.
-
             pc_map (dict):    keys: conditional parameter names (i.e. 'v')
                               values: keys + condition names ('v_bsl, v_pnl')
             |<--- PARAMETERS OBJECT [LMFIT] <-------- [IN]
@@ -134,8 +127,6 @@ class Model(RADDCore):
             |<--- pc_map = {'v': 'v_bsl', 'v_pnl'} <---|
             |
             |---> p['v'] = array([V1, V2]) --------> [OUT]
-
-
             """
 
             if not isinstance(self.labels[0], str):
