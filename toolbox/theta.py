@@ -6,24 +6,79 @@ from scipy.io import loadmat
 import os, re
 from numpy import array
 from scipy.stats.distributions import norm, gamma
+from lmfit import Parameters
 
 
 
-def init_distributions(pkey, bounds, nrvs=25, loc=None, scale=None):
 
-      sigma_defaults = {'a':.10, 'tr':.05, 'v':1, 'ssv':1, 'z':.2, 'xb':1}
-      mu_defaults = {'a':.35, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1}
 
+
+def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
+      """ Generates and returns an lmfit Parameters object with
+      bounded parameters initialized for flat or non flat model fit
+      """
+
+      ParamsObj=Parameters()
+      pnames=['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
+      pfit = list(set(inits.keys()).intersection(pnames))
+      bounds = get_bounds(kind=kind)
+      for pkey, pclist in pc_map.items():
+            if is_flat: break # exit
+            pfit.remove(pkey)
+            if hasattr(inits[pkey], '__iter__'):
+                  vals=inits[pkey]
+            else:
+                  vals=inits[pkey]*np.ones(len(pclist))
+            mn = bounds[pkey][0]; mx=bounds[pkey][1]
+            for k, v in zip(pclist, vals):
+                  if isinstance(v, np.ndarray):
+                        v=np.asscalar(v)
+                  ParamsObj.add(k, value=v, vary=True, min=mn, max=mx)
+
+      for pk in pfit:
+            inits = all_params_to_scalar(inits, pfit)
+            if is_flat:
+                  mn = bounds[pk][0]; mx=bounds[pk][1]
+                  ParamsObj.add(pk, value=inits[pk], vary=True, min=mn, max=mx)
+            else:
+                  ParamsObj.add(pk, value=inits[pk], vary=False)
+      return ParamsObj
+
+
+def all_params_to_scalar(params, params_list=None, exclude=[]):
+
+      if params_list is None:
+            params_list=params.keys()
+      for pk in params_list:
+            if pk in exclude:
+                  continue
+            if hasattr(params[pk], '__iter__'):
+                  try:
+                        params[pk] = np.asscalar(params[pk])
+                  except ValueError:
+                        params[pk] = np.mean(params[pk])
+      return params
+
+def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
+      """ sample random parameter sets to explore global minima (called by
+      Optimizer method __hop_around__())
+      """
+      sigma_defaults = {'a':.25, 'tr':.1, 'v':.25, 'ssv':.15, 'z':.05, 'xb':.25, 'sso':.01}
+      mu_defaults = {'a':.35, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1, 'sso':.15}
+
+      if 'race' in kind or 'iact' in kind:
+            mu_defaults['ssv']=abs(mu_defaults['ssv'])
       if loc is None:
             loc = mu_defaults[pkey]
       if scale is None:
             scale = sigma_defaults[pkey]
 
       # init and freeze dist shape
-      if pkey in ['tr', 'v', 'ssv', 'z', 'xb']:
+      if pkey in ['tr', 'v', 'ssv', 'z', 'xb', 'sso']:
             dist = norm(loc, scale)
       elif pkey in ['a', 'tr']:
             dist = gamma(1, loc, scale)
+
       # generate random variates
       rvinits = dist.rvs(nrvs)
       while rvinits.min()<=bounds[0]:
@@ -37,79 +92,86 @@ def init_distributions(pkey, bounds, nrvs=25, loc=None, scale=None):
       return rvinits
 
 
-def get_bounds(kind='radd', tb=None, a=(.001, 1.000), tr=(.05, .55), v=(.0001, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2)):
+def get_bounds(kind='radd', tb=None, a=(.001, 1.0), tr=(.05, .54), v=(.01, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2), sso=(.01,.25)):
       """ set and return boundaries to limit search space
       of parameter optimization in <optimize_theta>
       """
 
-      if 'irace' in kind:
+      if 'irace' in kind or 'iact' in kind:
             ssv=(abs(ssv[1]), abs(ssv[0]))
-      if tb != None:
-            tr = (tr[0], tb-.01)
-      bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si}
+      bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'z': z, 'xb':xb, 'si':si, 'sso':sso}
       return bounds
 
 
+def format_basinhopping_bounds(basin_keys, ncond, kind='radd'):
+
+      allbounds = get_bounds(kind=kind)
+      xmin, xmax = [], []
+      for pk in basin_keys:
+            xmin.append([allbounds[pk][0]]*ncond)
+            xmax.append([allbounds[pk][1]]*ncond)
+      xmin=np.hstack(xmin).tolist()
+      xmax=np.hstack(xmax).tolist()
+      return xmin, xmax
+
+
 def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
+      """ if user does not provide inits dict when initializing Model instance,
+      grab default dictionary of init params reasonably suited for Model kind
+      """
 
       if 'radd' in kind:
-            inits = {'a':0.4441, 'ssv':-0.9473, 'tr':0.3049, 'v':1.0919, 'z':0.1542}
-
+            # opt bsl v: 1.11356271; opt pnl v: 1.02797132
+            inits = {'a':0.44470913, 'ssv':-0.94151350, 'tr':0.30481227, 'v':1.07049551, 'z':0.15049553}
+            #if 'x' in kind:
+            #      inits['xb']=.09996123
+      elif 'sab' in kind:
+            inits = {'a':0.32, 'ssv':-1.2, 'tr':0.29, 'v':1.2, 'sso':0.1, 'xb':1.7}
       elif 'pro' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
             elif 'tr' in depends_on.keys():
                   inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
-                  #inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
             elif 'v' in depends_on.keys():
-                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
+                  inits = {'a':0.48758096, 'tr':0.29223792,'v':1.69870371}
+                  #if 'x' in kind:
+                  #      inits['xb'] = 1.84080798
             else:
                   inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
 
       elif 'race' in kind:
-            inits = {'a':0.3926740, 'ssv':1.1244, 'tr':0.33502, 'v':1.0379,  'z':0.1501}
+            inits = {'a':0.24266, 'ssv':1.1244, 'tr':0.335, 'v':1.0379}
+      elif 'iact' in kind:
+            #'v_bsl':1.31582535, 'v_pnl':1.26935591,
+            # array([1.31582535,1.26935591])
+            inits = {'a':0.4433013, 'sso': 0.1999348, 'ssv': 3.018744, 'tr': 0.2171978 , 'v': 1.290}
+            #inits = {'a':0.44266, 'ssv':3, 'tr':0.21, 'v':1.3, 'sso':.2}
 
-      if 'x' in kind:
-            if dynamic=='hyp':
-                  inits['xb']=2
-            elif dynamic=='exp':
-                  inits['xb']=2
-      if 'si' in depends_on.keys():
-            inits['si']=.01
-
+      if 'x' in kind and 'xb' not in inits.keys():
+            inits['xb']=1.5
       return inits
 
 
-def check_inits(inits={}, kind='radd', pdep=[], dynamic='hyp', pro_ss=False, fit_noise=False):
-
-      if 'ssd' in inits.keys():
-            del inits['ssd']
-      if 'pGo' in inits.keys():
-            del inits['pGo']
-
-      if pro_ss and 'ssv' not in inits.keys():
-            inits['ssv'] = -0.9976
-
-      if 'race' in kind:
+def check_inits(inits={}, kind='radd', pdep=[], pro_ss=False, fit_noise=False):
+      """ ensure inits dict is appropriate for Model kind
+      """
+      if 'race' in kind or 'iact' in kind:
             inits['ssv']=abs(inits['ssv'])
-      elif 'radd' in kind:
+      elif 'radd' in kind or 'sab' in kind:
             inits['ssv']=-abs(inits['ssv'])
-
       if 'pro' in kind:
             if pro_ss and 'ssv' not in inits.keys():
                   inits['ssv'] = -0.9976
             elif not pro_ss and 'ssv' in inits.keys():
                   ssv=inits.pop('ssv')
-
       if 'x' in kind and 'xb' not in inits.keys():
-            if dynamic == 'exp':
-                  inits['xb'] = 2
-            elif dynamic == 'hyp':
-                  inits['xb'] = 2
-
-      if fit_noise and 'si' not in inits.keys():
+            inits['xb'] = 1.5
+      if fit_noise or 'si' in pdep and 'si' not in inits.keys():
             inits['si'] = .01
-
+      if 'radd' not in kind and 'z' in inits.keys():
+            discard = inits.pop('z')
+      if 'x' not in kind and 'xb' in inits:
+            inits.pop('xb')
       return inits
 
 
@@ -119,7 +181,9 @@ def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.45, 'ssv':-0.9473, 'tr': 0.2939, 'v': 1.0919, 'z':0.1542}
             elif ['v'] == depends_on.keys():
-                  inits = {'a':0.4441, 'v':array([1.1078, 1.0651]), 'ssv':-0.9473, 'tr':0.3049, 'z':0.1542}
+                  inits = {'a':0.44470913, 'ssv':-0.94151350, 'tr':0.30481227, 'v':array([ 1.11356271, 1.02797132]), 'z':0.15049553}
+                  if 'x' in kind:
+                        inits['xb']=.09996123
             elif ['tr'] == depends_on.keys():
                   inits = {'a': 0.4670722, 'ssv': -1.01042, 'tr': array([ 0.30429,  0.29477]), 'v':1.164409, 'z': 0.15476}
             elif ['a'] == depends_on.keys():
@@ -127,8 +191,6 @@ def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
             else:
                   # DEFAULT BASELINE PROACTIVE INITS
                   inits = {'a': .45, 'tr':.3, 'v': 1.05, 'ssv': -1, 'z':.15}
-
-
       elif 'pro' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
@@ -151,8 +213,6 @@ def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
             else:
                   # DEFAULT BASELINE PROACTIVE INITS
                   inits = {'a': 0.40, 'tr': .3, 'v': 1.5,  'z': 0}
-
-
       elif 'race' in kind:
             if ['v']==depends_on.keys():
                   inits = {'v': array([1.0687, 1.0057]),'a': 0.3926741, 'tr': 0.3379, 'ssv': 1.1243, 'z': 0.1500}
@@ -165,21 +225,21 @@ def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
       return inits
 
 
-
 def get_xbias_theta(model=None):
       """ hyperbolic and expon. simulation parameters
       """
       if model.dynamic=='hyp':
             return {'a': 0.47548, 'tr': 0.27264, 'v': array([1.38303, .53767, 1.6675, 1.7762, 1.967, 2.0506]), 'xb': 0.009}
-      elif model.dynamic=='exp':
-            if 'v' in model.depends_on.keys():
-                  return {'a': 0.4836, 'tr': 0.3375, 'v': array([ 1.08837,  1.31837,  1.54837,  1.77837,  2.00837,  2.23837]), 'xb': 1.4604, 'z': 0}
-            elif 'tr' in model.depends_on.keys():
-                  return {'a': 0.39142, 'tr': array([ 0.36599,  0.34991,  0.33453,  0.3239 ,  0.29896,  0.30856]), 'v': 1.66214, 'xb': 0.09997, 'z': 0}
+      if 'v' in model.depends_on.keys() and model.dynamic=='exp':
+            return {'a': 0.4836, 'tr': 0.3375, 'v': array([ 1.08837,  1.31837,  1.54837,  1.77837,  2.00837,  2.23837]), 'xb': 1.4604, 'z': 0}
+      elif 'tr' in model.depends_on.keys() and model.dynamic=='exp':
+            return {'a': 0.39142, 'tr': array([ 0.36599,  0.34991,  0.33453,  0.3239 ,  0.29896,  0.30856]), 'v': 1.66214, 'xb': 0.09997, 'z': 0}
 
 
 def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):
-
+      """ takes pd.Series or dict of params
+      and formats for entry to sim
+      """
       if not type(theta)==dict:
             theta=theta.to_dict()['mean']
       keep=['a', 'z', 'v', 'tr', 'ssv', 'ssd']
@@ -194,30 +254,17 @@ def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):
 def update_params(theta):
 
       if 't_hi' in theta.keys():
-            theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
-      else:
-            theta['tr']=theta['tr']
-
+            theta['tr']=theta['t_lo']+np.random.uniform()*(theta['t_hi']-theta['t_lo'])
       if 'z_hi' in theta.keys():
-            theta['z'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
-      else:
-            theta['z']=theta['z']
-
+            theta['z']=theta['z_lo']+np.random.uniform()*(theta['z_hi']-theta['z_lo'])
       if 'sv' in theta.keys():
-            theta['v'] = theta['sv'] * np.random.randn() + theta['v']
-      else:
-            theta['v']=theta['v']
+            theta['v']=theta['sv']*np.random.randn() + theta['v']
 
       return theta
 
 
-
 def get_intervar_ranges(theta):
-      """
-      ::Arguments::
-            theta (dict):
-                  dictionary of theta (Go/NoGo Signal Parameters)
-                  and sp (Stop Signal Parameters)
+      """ theta (dict): parameters dictionary
       """
       if 'st' in theta.keys():
             theta['t_lo'] = theta['tr'] - theta['st']/2

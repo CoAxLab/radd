@@ -4,8 +4,9 @@ from copy import deepcopy
 from collections import OrderedDict
 import numpy as np
 from numpy import array
-import pandas as pd
+from numpy import newaxis as na
 from numpy import concatenate as concat
+import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
@@ -13,7 +14,6 @@ from radd.toolbox.colors import get_cpals
 from radd.toolbox.theta import get_xbias_theta
 from radd.toolbox.messages import describe_model
 from radd.models import Simulator
-
 
 class BOLD(Simulator):
       """ Simulated BOLD response // neural activity
@@ -33,7 +33,6 @@ class BOLD(Simulator):
                   try:
                         for pkey, pkc_list in model.pc_map.items():
                               self.p[pkey] = np.array([model.popt[pkc] for pkc in pkc_list])
-                        self.p=p
                   except KeyError:
                         pass
             elif sim_xbias:
@@ -47,13 +46,12 @@ class BOLD(Simulator):
                         self.p = model.inits
 
             # GENERATE MODEL SIMULATOR
-            super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind)
+            super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind, dt=.0001)
 
             self.ncond = model.ncond
             self.depends_on = model.depends_on
             self.simulate = self.sim_fx
             self.labels = model.labels
-
             self.__init_process_functions__()
 
 
@@ -114,11 +112,11 @@ class BOLD(Simulator):
             base=self.base; self.nss_all=self.nss; nssd=self.nssd;
             ssd=self.ssd; nss = self.nss_all/self.nssd; xtb=self.xtb;
 
-            get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss/nssd, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,None]
+            get_ssbase = lambda Ts,Tg,DVg: array([[DVc[:nss/nssd, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i, DVc in enumerate(DVg)])[:,:,:,na]
 
-            self.gomoments = xtb[:,None]*np.where((rs((ncond, ntot, Tg.max())).T<Pg), dx,-dx).T
+            self.gomoments = xtb[:,na]*np.where((rs((ncond, ntot, Tg.max())).T<Pg), dx,-dx).T
             self.ssmoments = np.where(rs((ncond, nssd, nss, Ts.max()))<Ps, dx, -dx)
-            DVg = base[:, None]+xtb[:,None]* np.cumsum(self.gomoments, axis=2)
+            DVg = base[:,na]+xtb[:,na]* np.cumsum(self.gomoments, axis=2)
             self.dvg = DVg[:,:nss_all,:]
             self.dvs = self.get_ssbase(Ts,Tg,DVg) + np.cumsum(self.ssmoments, axis=3)
 
@@ -181,15 +179,15 @@ class BOLD(Simulator):
                   self.decay="wdecay"
             else:
                   self.decay="nodecay"
-            if not hasattr(self, 'dvg') and 'pro' in self.kind:
+            if 'pro' in self.kind:
                   # simulate decision traces
-                  self.generate_pro_traces()
-            elif not hasattr(self, 'dvg') and 'radd' in self.kind:
+                  self.generate_pro_traces(ntrials=ntrials)
+            else:
                   # simulate decision traces
                   self.generate_radd_traces()
 
             # zip dvg[ncond, ntrials, ntime], bound[a_c..a_ncond], onset[tr_c..tr_ncond]
-            zipped_input_rt = zip(self.dvg, self.bound[:, None], self.onset[:,None])
+            zipped_input_rt = zip(self.dvg, self.bound[:,na], self.onset[:,na])
             # get rt for all conditions separately where boundary crossed [DVg >= a]
             rt = np.asarray(map(self.get_rt, zipped_input_rt))
 
@@ -364,13 +362,14 @@ class BOLD(Simulator):
             return out
 
 
-      def plot_means(self, save=False):
+      def plot_means(self, save=False, ax=None, label_x=True):
 
             redgreen = lambda nc: sns.blend_palette(["#c0392b", "#27ae60"], n_colors=nc)
             sns.set(style='white', font_scale=1.5)
             if not hasattr(self, 'bold_mag'):
                   self.make_bold_dfs()
-            f, ax = plt.subplots(1, figsize=(6,5))
+            if ax is None:
+                  f, ax = plt.subplots(1, figsize=(5,5))
 
             titl=describe_model(self.depends_on)
             df = self.bold_mag.copy()
@@ -380,44 +379,80 @@ class BOLD(Simulator):
 
             mu = df.groupby(['choice','cond']).mean()['csum']
             ax.set_ylim(mu.min()*.55, mu.max()*1.15)
-            ax.set_xlabel('pGo', fontsize=18)
-            ax.set_ylabel('$\Sigma \Theta_{G}$',fontsize=20)
-            ax.set_title(" ".join([titl, 'effect(s) on BOLD Simulations']))
+            ax.set_xticklabels([])
+            ax.set_xlabel('')
+            if label_x:
+                  ax.set_xlabel('pGo', fontsize=24)
+                  ax.set_xticklabels(np.sort(df.cond.unique()), fontsize=22)
+            ax.set_ylabel('$\Sigma \\theta_{G}$', fontsize=30)
+            ax.set_yticklabels([])
             sns.despine()
             plt.tight_layout()
             if save:
                   plt.savefig('_'.join([titl,self.decay,'means.png']), dpi=300)
+                  plt.savefig('_'.join([titl,self.decay,'means.svg']), format='svg', rasterized=True)
+            return ax
 
 
-      def plot_traces(self, save=False):
+      def plot_traces(self, style='HL', ax=None, label_x=True, save=False):
 
-            f, ax = plt.subplots(1, figsize=(6,4))
+
             cpals = get_cpals(); sns.set(style='white', font_scale=1.5)
-
+            if ax is None:
+                  f, ax = plt.subplots(1, figsize=(5,6))
+            #rts = self.mean_pgo_rts(self.p)['mu']
+            #rt = [int(r*1000) for r in [np.nanmean(rts[:3]), rts[-2], rts[-1]]]
+            tr = self.onset*1000
             titl=describe_model(self.depends_on)
-            gmu = [ggt.mean(axis=1) for ggt in self.go_traces]
-            nmu = [ngt.mean(axis=1) for ngt in self.ng_traces]
+            if style not in ['HL', 'HML']:
+                  gtr, ntr = [tr]*2
+                  gmu = [ggt.mean(axis=1) for ggt in self.go_traces]
+                  nmu = [ngt.mean(axis=1) for ngt in self.ng_traces]
+            else:
+                  gtr = [np.mean(tr[1:3]), tr[-2], tr[-1]]
+                  ntr = [tr[0], tr[1], np.mean(tr[-3:])]
+                  glow = pd.concat(self.go_traces[1:3], axis=1).iloc[:,0]#.mean(axis=1)#[:rt[0]]
+                  gmed = self.go_traces[-2].iloc[:,0]#mean(axis=1)#.iloc[:rt[-2]]
+                  ghi = self.go_traces[-1].iloc[:,0]#.mean(axis=1)#.iloc[:rt[-1]]
+                  nghi = pd.concat(self.ng_traces[-3:], axis=1).iloc[:,0]#.mean(axis=1)
+                  nglow = self.ng_traces[0].iloc[:,0]#.mean(axis=1)
+                  ngmed = self.ng_traces[1].iloc[:,0]#.mean(axis=1)
+
+                  if style=='HML':
+                        gmu = [glow, gmed, ghi]
+                        nmu = [nglow, ngmed, nghi]
+                        tr = [tr[-1], tr[-3], tr[0]]
+                  elif style=='HL':
+                        gmu = [glow, ghi]
+                        nmu = [nglow, nghi]
+                        tr = [tr[-1], tr[0]]
+                        gc = ["#7CCD7C", '#34925E']
 
             gc = cpals['gpal'](len(gmu))
             nc = cpals['rpal'](len(nmu))
-            tr = self.onset*1000
 
-            gx = [tr[i] + np.arange(len(gmu[i])) for i in range(self.ncond)]
-            nx = [tr[i] + np.arange(len(nmu[i])) for i in range(self.ncond)]
+            gx = [gtr[i] + np.arange(len(gmu[i])) for i in range(len(gmu))]
+            nx = [ntr[i] + np.arange(len(nmu[i])) for i in range(len(nmu))]
 
             for i in range(len(gmu)):
                   ax.plot(gx[i], gmu[i], color=gc[i])
+                  ax.fill_between(gx[i], gmu[i], y2=0, color=gc[i], alpha=.15)
             for i in range(len(nmu)):
                   ax.plot(nx[i], nmu[i], color = nc[i])
+                  ax.fill_between(nx[i], nmu[i], y2=0, color=nc[i], alpha=.15)
 
-            ax.set_ylim(0, gmu[0].max()*1.2)
-            ax.set_xlim(gx[0].min()*.9, nx[0].max())
-
-            ax.set_xlabel('Time', fontsize=18); ax.set_xticklabels([])
-            ax.set_ylabel('$\Theta_{G}$', fontsize=23)
-            ax.set_title(" ".join(['Rising Acitivty of', titl, 'Accumulator']))
+            ax.set_ylim(0, self.p['a'].max()*1.01)#gmu[0].max()*1.2)
+            ax.set_xlim(gx[0].min()*.8, nx[0].max()*1.05)
+            if label_x:
+                  ax.set_xlabel('Time', fontsize=26);
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            ax.set_ylabel('$\\theta_{G}$', fontsize=30)
+            #ax.set_title(" ".join(['Rising Acitivty of', titl, 'Accumulator']))
 
             sns.despine()
             plt.tight_layout()
             if save:
                   plt.savefig('_'.join([titl, self.decay, 'traces.png']), dpi=300)
+                  plt.savefig('_'.join([titl, self.decay, 'traces.svg']), format='svg', rasterized=True)
+            return ax

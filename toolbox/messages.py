@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 from numpy.random import randint
-from lmfit import fit_report
+from lmfit import report_fit, fit_report
+from copy import deepcopy
+import os
 
 def get_one():
 
@@ -54,7 +56,7 @@ def describe_model(depends_on=None):
       if 'v' in pdeps:
             deplist.append('drift')
       if 'xb' in pdeps:
-            deplist.append('dynamic_v')
+            deplist.append('xbias')
 
       if len(pdeps)>1:
             pdep = ' and '.join(deplist)
@@ -63,36 +65,40 @@ def describe_model(depends_on=None):
 
       return pdep
 
-def global_logger(log_arrays):
+def global_logger(logs):
 
-      arr_str = lambda x: ', '.join(str(elem)[:6] for elem in x)+'])'
 
-      popt_str = 'popt = array(['+arr_str(log_arrays['popt'])
-      fmin_str = 'fmin = array(['+arr_str(log_arrays['fmin'])
-      yhat_str = 'yhat = array(['+arr_str(log_arrays['yhat'])
-      cost_str = 'err = array(['+arr_str(log_arrays['cost'])
+      arr_str = lambda x: ', '.join(str(elem)[:6] for elem in x)
+      str_str = lambda x: ', '.join(str(elem) for elem in x)
+      single_str = lambda x: ', '.join(str(elem) for elem in x)
+      # create a dictionary string that can be copied and pasted into cell
+      #pdict=[':'.join(["'"+str(k)+"'",str(v)]) for k,v in logs['popt'].items()]
+      popt = ''.join(['popt =', repr(logs['popt'])])
+      fmin_str = 'fmin = %s' % str(logs['fmin'])[:6]
+      yhat_str = 'yhat = array(['+arr_str(logs['yhat'])+'])'
+      y_str = 'y = array(['+arr_str(logs['y'])+'])'
+      cost_str = 'cost = %s' % str(logs['cost'])[:6]
 
       with open('global_min_report.txt', 'a') as f:
             f.write('=='*20+'\n')
-            f.write(popt_str+'\n')
+            f.write(popt+'\n')
             f.write(fmin_str+'\n')
             f.write(cost_str+'\n')
             f.write(yhat_str+'\n')
+            f.write(y_str+'\n')
             f.write('=='*20+'\n')
 
-def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=None, fit_id=None, xbasin=None):
+
+def logger(optmod, finfo={}, depends_on={}, pdict={}, is_flat=True, log_arrays={}, kind=None, dynamic=None, fit_on=None, xbasin=None, pc_map=None):
 
       wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
-
-      finfo['chi'] = optmod.chisqr
-      finfo['rchi'] = optmod.redchi
-      finfo['CNVRG'] = optmod.pop('success')
-      finfo['nfev'] = optmod.pop('nfev')
-      finfo['AIC']=optmod.aic
-      finfo['BIC']=optmod.bic
-
+      if is_flat:
+            fit_on = ' '.join([fit_on, 'FLAT'])
+      else:
+            fit_on = ' '.join([fit_on, 'FULL'])
       pkeys = depends_on.keys()
       pvals = depends_on.values()
+      fname = '_'.join(['./'+kind, '_'.join(pkeys)+'.txt'])
       model_id = "MODEL: %s" % kind
       if 'x' in kind:
             model_id = ' ('.join([model_id, dynamic])+')'
@@ -100,34 +106,24 @@ def logger(optmod, finfo={}, depends_on={}, log_arrays={}, kind=None, dynamic=No
       wts_str = 'wts = array(['+ ', '.join(str(elem)[:6] for elem in wts)+'])'
       yhat_str = 'yhat = array(['+ ', '.join(str(elem)[:6] for elem in yhat)+'])'
       y_str = 'y = array(['+ ', '.join(str(elem)[:6] for elem in y)+'])'
-
-      if xbasin:
-            write_basin=True
-            bpopt_str = 'basin = array(['+ ', '.join(str(elem) for elem in xbasin)+'])'
-      else:
-            write_basin=False
-      with open('fit_report.txt', 'a') as f:
-            if write_basin:
-                  f.write('--'*20+'\n')
-                  f.write('BASINHOPPING RESULTS\n')
-                  f.write(bpopt_str+'\n')
-                  f.write('--'*20+'\n')
-            f.write('=='*20+'\n')
-            f.write(str(fit_id)+'\n')
+      with open(fname, 'a') as f:
+            f.write('=='*30+'\n')
+            f.write(str(fit_on)+'\n')
             f.write(str(model_id)+'\n')
             f.write(str(dep_id)+'\n')
-            f.write('--'*20+'\n')
             f.write(wts_str+'\n')
             f.write(yhat_str+'\n')
             f.write(y_str+'\n')
-            f.write('--'*20+'\n')
-            try:
-                  f.write(fit_report(optmod)+'\n\n')
-            except Exception:
-                  pass
-            f.write('AIC: %.8f' % optmod.aic + '\n')
-            f.write('BIC: %.8f' % optmod.bic + '\n')
-            f.write('chi: %.8f' % optmod.chisqr + '\n')
-            f.write('rchi: %.8f' % optmod.redchi + '\n')
-            f.write('Converged: %s' % finfo['CNVRG'] + '\n')
-            f.write('=='*20+'\n\n')
+            f.write('--'*30+'\n')
+            f.write("FIT REPORT")
+            f.write('\n'+'--'*30+'\n')
+            f.write(fit_report(optmod))
+            f.write('\n'+'--'*30+'\n')
+            f.write('='.join(['popt', repr(pdict)]) + '\n')
+            f.write('AIC: %.8f' % finfo['AIC'] + '\n')
+            f.write('BIC: %.8f' % finfo['BIC'] + '\n')
+            f.write('chi: %.8f' % finfo['chi'] + '\n')
+            f.write('rchi: %.8f' % finfo['rchi'] + '\n')
+            f.write('converged: %s' % finfo['cnvrg'] + '\n')
+            f.write('=='*30+'\n\n\n')
+      return finfo
