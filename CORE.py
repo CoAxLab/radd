@@ -71,7 +71,7 @@ class RADDCore(object):
             # if split!=None (is set during prep in
             # analyze.__make_proRT_conds__())
             self.rt_cix = None
-            # GET TB BEFORE REMOVING OUTLIERS!!!
+            # Get timebound
             if tb != None:
                   self.tb=tb
             else:
@@ -82,8 +82,6 @@ class RADDCore(object):
             else:
                   self.inits = inits
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
-            # DATA TREATMENT AND EXTRACTION
-            #self.__remove_outliers__(sd=2.5, verbose=False)
 
             # DEFINE ITERABLES
             if self.fit_on=='bootstrap':
@@ -97,10 +95,28 @@ class RADDCore(object):
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'avg_wts':self.avg_wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.flat_wts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model, 'rt_cix': self.rt_cix, 'data_style':self.data_style, 'nudge_dir':self.nudge_dir}
+            self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev,
+                  'disp': disp, 'tol': tol, 'niter': niter, 'nudge_dir':self.nudge_dir,
+                  'prob': prob, 'tb': self.tb, 'ssd': self.ssd, 'flat_y': self.flat_y,
+                  'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond':self.ncond,
+                  'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
+                  'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
+                  'rt_cix': self.rt_cix, 'data_style': self.data_style}
 
             if get_params:
                   return self.fitparams
+
+      def set_basinparams(self, ninits=2, interval=10, niter=40, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20, get_params=False, disp=False):
+
+            if not hasattr(self, 'basinparams'):
+                  self.basinparams={}
+
+            self.basinparams={'ninits':ninits, 'interval': interval, 'niter': niter, 'stepsize':stepsize, 'nsuccess':nsuccess, 'method':'TNC', 'tol': btol, 'maxiter':maxiter, 'disp': disp}
+
+            if get_params:
+                  return self.basinparams
+
+
 
       def __extract_popt_fitinfo__(self, finfo=None):
             """ takes optimized dict or DF of vectorized parameters and

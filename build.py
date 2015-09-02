@@ -45,28 +45,42 @@ class Model(RADDCore):
 
             self.data=data; self.weighted=weighted; self.verbose=verbose
 
-            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic, wt_prob=wt_prob)
+            super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
 
             self.prepare_fit()
 
 
-      def make_optimizer(self, ntrials=10000, tol=1.e-10, maxfev=3000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True):
+      def make_optimizer(self, ntrials=10000, tol=1.e-10, maxfev=3000, niter=40, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, ninits=2, interval=10, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20):
             """ init Optimizer class as Model attr
             """
             fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, prob=prob, get_params=True)
+            bp = self.set_basinparams(btol=btol, interval=interval, niter=niter, maxiter=maxiter, method=method, nsuccess=nsuccess, stepsize=stepsize, ninits=ninits, get_params=True, disp=disp)
+
             self.__check_inits__()
             inits = dict(deepcopy(self.inits))
-            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.avg_wts, pc_map=self.pc_map,  multiopt=multiopt)
+            self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, basinparams=bp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.avg_wts, pc_map=self.pc_map,  multiopt=multiopt)
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True):
+      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, stage='full', inits=None, y=None):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
-            if not hasattr(self, 'opt'):
-                  self.make_optimizer(ntrials=ntrials, tol=tol, maxfev=maxfev, niter=niter, disp=disp, prob=prob)
+            #if not hasattr(self, 'opt'):
+            self.make_optimizer(ntrials=ntrials, tol=tol, maxfev=maxfev, niter=niter, disp=disp, prob=prob)
 
-            self.fits, self.fitinfo, self.popt = self.opt.optimize_model(save=save, savepth=savepth)
+            if stage=='flat':
+                  y, fi, p = self.opt.optimize_flat(p0=inits, y=y, random_init=multiopt)
+                  self.flat_fits, self.flat_fitinfo, self.flat_popt = y, fi, p
+            elif stage=='conditional':
+                  if inits is None and hasattr(self, 'flat_popt'):
+                        inits=self.flat_popt
+                  y, fi, p = self.opt.optimize_conditional(p=inits, y=y, precond=multiopt)
+                  self.fits, self.fitinfo, self.popt = y, fi, p
+            else:
+                  y, fi, p = self.opt.optimize_model(save=save, savepth=savepth)
+                  self.fits, self.fitinfo, self.popt = y, fi, p
+
+
             # get Simulator object used by
             # Optimizer to fit the model
             self.simulator = self.opt.simulator

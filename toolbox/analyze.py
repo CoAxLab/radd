@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import os, re
 from numpy import array
-from sklearn.neighbors.kde import KernelDensity
+from sklearn.neighbors import KernelDensity
 from scipy.stats.mstats import mquantiles as mq
 from scipy.stats.mstats_extras import mjci
 from scipy import optimize
@@ -24,6 +24,26 @@ def assess_fit(finfo):
       finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
 
       return finfo
+
+
+def finfo_to_params(finfo='./finfo.csv', pc_map=None):
+
+      pnames=set(['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso'])
+      if isinstance(finfo, str):
+            finfo = pd.read_csv(finfo, header=None, names=['id', 'vals'], index_col=0)
+            finfo = pd.Series(finfo.to_dict()['vals'])
+      elif isinstance(finfo, dict):
+            finfo=pd.Series(finfo)
+      elif isinstance(finfo, pd.Series):
+            pass
+
+      plist = list(pnames.intersection(finfo.index))
+      params = {k: finfo[k] for k in plist}
+
+      if pc_map!=None:
+            for pkey, pclist in pc_map.items():
+                  params[pkey] = array([params[pkc] for pkc in pclist])
+      return params
 
 
 def remove_outliers(df, sd=1.5, verbose=False):
@@ -122,16 +142,13 @@ def rwr(X, get_index=False, n=None):
       """
       Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
       """
-
       if isinstance(X, pd.Series):
             X = X.copy()
             X.index = range(len(X.index))
       if n == None:
             n = len(X)
-
       resample_i = np.floor(np.random.rand(n)*len(X)).astype(int)
       X_resample = (X[resample_i])
-
       if get_index:
             return resample_i
       else:
@@ -152,7 +169,7 @@ def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), tb=.560,
       ncond = len(godf[split].unique())
 
       mjcix = lambda x: mjci(x.rt, prob=prob)
-      q_sem_obj = godf.groupby(['idx', 'HL']).apply(mjcix).values
+      q_sem_obj = godf.groupby(['idx', split]).apply(mjcix).values
       qwts = np.nanmean(np.vstack(q_sem_obj.reshape(2,61).mean(axis=1)), axis=1)[:, None]/np.vstack(q_sem_obj.reshape(2,61).mean(axis=1))
       return qwts
 
@@ -203,7 +220,6 @@ def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
       kdefit = KernelDensity(kernel='gaussian', bandwidth=bw).fit(rtquants)
       samples = kdefit.sample(n_samples=nsamples).flatten()
       return samples
-
 
 
 def sigmoid(p,x):

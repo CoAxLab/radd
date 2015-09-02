@@ -8,9 +8,24 @@ from numpy import array
 from scipy.stats.distributions import norm, gamma
 from lmfit import Parameters
 
+def random_inits(pkeys, ninits=1, kind='radd'):
+      """ random parameter values for initiating model across range of
+      parameter values.
+      ::Arguments::
+            pkeys (list/dict):
+                  list of parameter names to sample, makes list of dict keys
+                  if pkeys is dictionary type
+      ::Returns::
+            params (dict):
+                  dictionary with pkeys as keys with values as 1d arrays ninits long
+                  of randomly sampled parameter values
+      """
 
-
-
+      if isinstance(pkeys, dict):
+            pkeys = pkeys.keys()
+      bnd = get_bounds(kind=kind)
+      params = {pk: init_distributions(pk, bnd[pk], nrvs=ninits, kind=kind) for pk in pkeys}
+      return params
 
 
 def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
@@ -59,12 +74,16 @@ def all_params_to_scalar(params, params_list=None, exclude=[]):
                         params[pk] = np.mean(params[pk])
       return params
 
+
 def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
       """ sample random parameter sets to explore global minima (called by
       Optimizer method __hop_around__())
       """
       sigma_defaults = {'a':.25, 'tr':.1, 'v':.25, 'ssv':.15, 'z':.05, 'xb':.25, 'sso':.01}
-      mu_defaults = {'a':.35, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1, 'sso':.15}
+      mu_defaults = {'a':.25, 'tr':.29, 'v':1, 'ssv':-1, 'z':.1, 'xb':1, 'sso':.15}
+
+      if pkey=='si':
+            return .01
 
       if 'race' in kind or 'iact' in kind:
             mu_defaults['ssv']=abs(mu_defaults['ssv'])
@@ -91,8 +110,44 @@ def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, sca
             rvinits[ix] = dist.rvs()
       return rvinits
 
+def init_distributions_XXXX(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
+      """ sample random parameter sets to explore global minima (called by
+      Optimizer method __hop_around__())
+      """
+      mu_defaults = {'a':.15, 'tr':.29, 'v':.9, 'ssv':-.9, 'z':.1, 'xb':2.5, 'sso':.15}
+      sigma_defaults = {'a':.35, 'tr':.1, 'v':.35, 'ssv':.35, 'z':.05, 'xb':1, 'sso':.01}
 
-def get_bounds(kind='radd', tb=None, a=(.001, 1.0), tr=(.05, .54), v=(.01, 4.0000), z=(.001, .900), ssv=(-4.000, -.0001), xb=(.01,10), si=(.001, .2), sso=(.01,.25)):
+      if pkey=='si':
+            return .01
+
+      if 'race' in kind or 'iact' in kind:
+            mu_defaults['ssv']=abs(mu_defaults['ssv'])
+      if loc is None:
+            loc = mu_defaults[pkey]
+      if scale is None:
+            scale = sigma_defaults[pkey]
+
+      # init and freeze dist shape
+      if pkey in ['z', 'xb', 'sso']:
+            dist = norm(loc, scale)
+      elif pkey in ['a', 'tr', 'v', 'ssv']:
+            dist = gamma(1, loc, scale)
+
+      # generate random variates
+      rvinits = dist.rvs(nrvs)
+      while rvinits.min()<=bounds[0]:
+            # apply lower limit
+            ix = rvinits.argmin()
+            rvinits[ix] = dist.rvs()
+      while rvinits.max()>=bounds[1]:
+            # apply upper limit
+            ix = rvinits.argmax()
+            rvinits[ix] = dist.rvs()
+
+      return rvinits
+
+
+def get_bounds(kind='radd', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1,5), si=(.001, .2), sso=(.01,.3)):
       """ set and return boundaries to limit search space
       of parameter optimization in <optimize_theta>
       """
@@ -126,7 +181,7 @@ def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
             #if 'x' in kind:
             #      inits['xb']=.09996123
       elif 'sab' in kind:
-            inits = {'a':0.32, 'ssv':-1.2, 'tr':0.29, 'v':1.2, 'sso':0.1, 'xb':1.7}
+            inits = {'a': array([ 0.53698]), 'xb': array([ 0.8329]), 'ssv': -0.99965152494217069, 'tr': array([ 0.17717]), 'v': array([ 1.26342])}
       elif 'pro' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
@@ -177,7 +232,11 @@ def check_inits(inits={}, kind='radd', pdep=[], pro_ss=False, fit_noise=False):
 
 def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
 
-      if 'radd' in kind:
+      if 'sab' in kind:
+            if ['v'] == depends_on.keys():
+                  inits={'a': array([ 0.53625,  0.53625]), 'v_pnl': 1.2435812523041054, 'v': array([ 1.2887 ,  1.24358], dtype=float32), 'xb': array([ 0.87761,  0.87761]), 'ssv': -0.9839646215235698, 'tr': array([ 0.17801,  0.17801]), 'v_bsl': 1.2886965219271527}
+
+      elif 'radd' in kind:
             if set(['v', 'tr']).issubset(depends_on.keys()):
                   inits = {'a':.45, 'ssv':-0.9473, 'tr': 0.2939, 'v': 1.0919, 'z':0.1542}
             elif ['v'] == depends_on.keys():

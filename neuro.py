@@ -5,6 +5,7 @@ from collections import OrderedDict
 import numpy as np
 from numpy import array
 from numpy import newaxis as na
+from numpy.random import randint
 from numpy import concatenate as concat
 import pandas as pd
 import seaborn as sns
@@ -70,15 +71,16 @@ class BOLD(Simulator):
             # x[0] = DVg (go accumulator: all trials in single condition)
             # x[1] = RT  (all trials in single condition)
             # x[1] = timeboundary (simulator.tb)
-            self.get_go_traces = lambda x: x[0][np.where(x[1]<=x[2], True, False)]
+            self.get_go_traces = lambda x: x[0][np.where(x[1]<x[2], True, False)]
             self.get_ng_traces = lambda x: x[0][np.where(x[1]>=x[2], True, False)]
 
             ###################################################################################
             # LAMBDA FUNC: CAP_ROLL_TRACES cap traces at bound and roll nans to back (opt. decay)
             # x[0] = DVg (go accumulator: all trials in single condition)
             # x[1] = a (boundary, single condition)
-            # x[2] = BOOL (decay if True, <default False>)
-            self.cap_roll_traces = lambda x: self.drop_n_roll(self.cap_n_bound(x[0],x[1],x[2]))
+            # x[2] = Tg (ntime points, single condition)
+            # x[3] = BOOL (decay if True, <default False>)
+            self.cap_roll_traces = lambda x: self.drop_n_roll(self.cap_n_bound(x[0],x[1],x[2],x[3]))
 
             ###################################################################################
             # LAMBDA FUNC: GET_HEMO get last occurence of numeric vals along cumsum axis=1
@@ -142,8 +144,6 @@ class BOLD(Simulator):
             """ ensures parameters are vectorized and sets
             bound and onset attr. before generating simulated traces
             """
-
-
             # ensure parameters are all vectorized
             self.p = self.vectorize_params(self.p)
 
@@ -182,6 +182,7 @@ class BOLD(Simulator):
             if 'pro' in self.kind:
                   # simulate decision traces
                   self.generate_pro_traces(ntrials=ntrials)
+                  self.Tg = np.ceil((self.tb-self.onset)/self.dt).astype(int)
             else:
                   # simulate decision traces
                   self.generate_radd_traces()
@@ -207,8 +208,8 @@ class BOLD(Simulator):
                   ng_trial_arrays = map(self.get_ng_traces, zipped_rt_traces)
 
 
-            zipped_go_caproll = zip(go_trial_arrays, self.bound, [decay]*self.ncond)
-            zipped_ng_caproll = zip(ng_trial_arrays, self.bound, [decay]*self.ncond)
+            zipped_go_caproll = zip(go_trial_arrays, self.bound, self.Tg, [decay]*self.ncond)
+            zipped_ng_caproll = zip(ng_trial_arrays, self.bound, self.Tg, [decay]*self.ncond)
             # generate dataframe of capped and time-thresholded go traces
             self.go_traces = map(self.cap_roll_traces, zipped_go_caproll)
             self.ng_traces = map(self.cap_roll_traces, zipped_ng_caproll)
@@ -220,7 +221,8 @@ class BOLD(Simulator):
 
 
       def make_bold_dfs(self, shape='long', savestr='sim', save=False):
-
+            if not hasattr(self, 'go_traces'):
+                  self.simulate_bold()
             go_csum = [gt.cumsum(axis=0).max(axis=0).values for gt in self.go_traces]
             ng_csum = [ng.cumsum(axis=0).max(axis=0).values for ng in self.ng_traces]
 
@@ -246,7 +248,7 @@ class BOLD(Simulator):
 
 
 
-      def cap_n_bound(self, traces, bound, decay=False):
+      def cap_n_bound(self, traces, bound, Tg, decay=False):
             """ take 2d array and set values >= upper boundary as np.nan
             return dataframe of capped ndarray, assumes all traces meet
             the criteria trials[any(val >= a)]
@@ -271,6 +273,7 @@ class BOLD(Simulator):
             else:
                   traces_capped = traces
             traces_df = pd.DataFrame(traces_capped.T)
+            traces_df.iloc[Tg:, :]=np.nan
             return traces_df
 
 
@@ -373,8 +376,8 @@ class BOLD(Simulator):
 
             titl=describe_model(self.depends_on)
             df = self.bold_mag.copy()
-            df.ix[(df.choice=='go')&(df.cond<=50), 'cond']=60
-            df.ix[(df.choice=='nogo')&(df.cond>=50), 'cond']=40
+            df.ix[(df.choice=='go')&(df.cond<=50), 'cond']=40
+            df.ix[(df.choice=='nogo')&(df.cond>=50), 'cond']=60
             sns.barplot('cond', 'csum', data=df, order=np.sort(df.cond.unique()), palette=redgreen(6), ax=ax)
 
             mu = df.groupby(['choice','cond']).mean()['csum']
@@ -396,59 +399,57 @@ class BOLD(Simulator):
 
       def plot_traces(self, style='HL', ax=None, label_x=True, save=False):
 
-
             cpals = get_cpals(); sns.set(style='white', font_scale=1.5)
             if ax is None:
-                  f, ax = plt.subplots(1, figsize=(5,6))
-            #rts = self.mean_pgo_rts(self.p)['mu']
-            #rt = [int(r*1000) for r in [np.nanmean(rts[:3]), rts[-2], rts[-1]]]
-            tr = self.onset*1000
+                  f, ax = plt.subplots(1, figsize=(5,5))
+
+            tr = self.onset
             titl=describe_model(self.depends_on)
             if style not in ['HL', 'HML']:
-                  gtr, ntr = [tr]*2
                   gmu = [ggt.mean(axis=1) for ggt in self.go_traces]
                   nmu = [ngt.mean(axis=1) for ngt in self.ng_traces]
             else:
-                  gtr = [np.mean(tr[1:3]), tr[-2], tr[-1]]
-                  ntr = [tr[0], tr[1], np.mean(tr[-3:])]
-                  glow = pd.concat(self.go_traces[1:3], axis=1).iloc[:,0]#.mean(axis=1)#[:rt[0]]
-                  gmed = self.go_traces[-2].iloc[:,0]#mean(axis=1)#.iloc[:rt[-2]]
-                  ghi = self.go_traces[-1].iloc[:,0]#.mean(axis=1)#.iloc[:rt[-1]]
-                  nghi = pd.concat(self.ng_traces[-3:], axis=1).iloc[:,0]#.mean(axis=1)
-                  nglow = self.ng_traces[0].iloc[:,0]#.mean(axis=1)
-                  ngmed = self.ng_traces[1].iloc[:,0]#.mean(axis=1)
+                  go_counts = [self.go_traces[i].shape[1] for i in range(len(self.go_traces))]
+                  ng_counts = [self.ng_traces[i].shape[1] for i in range(len(self.ng_traces))]
+                  go_lo_ri = randint(0, high=go_counts[0])
+                  go_hi_ri = randint(0, high=go_counts[-1])
+                  ng_lo_ri = randint(0, high=ng_counts[0])
+                  ng_hi_ri = randint(0, high=ng_counts[-1])
+                  ng_hi_ri = np.argmin(self.ng_traces[-1].iloc[-1, :])
 
-                  if style=='HML':
-                        gmu = [glow, gmed, ghi]
-                        nmu = [nglow, ngmed, nghi]
-                        tr = [tr[-1], tr[-3], tr[0]]
-                  elif style=='HL':
-                        gmu = [glow, ghi]
-                        nmu = [nglow, nghi]
-                        tr = [tr[-1], tr[0]]
-                        gc = ["#7CCD7C", '#34925E']
+                  glow = self.go_traces[0].iloc[:,go_lo_ri].dropna().values
+                  #pd.concat(self.go_traces[1:3], axis=1).iloc[:,0]
+                  ghi = self.go_traces[-1].iloc[:,go_hi_ri].dropna().values
 
-            gc = cpals['gpal'](len(gmu))
-            nc = cpals['rpal'](len(nmu))
+                  nglow = self.ng_traces[0].iloc[:,ng_lo_ri].dropna().values
+                  nghi = self.ng_traces[-1].iloc[:,ng_hi_ri].dropna().values
 
-            gx = [gtr[i] + np.arange(len(gmu[i])) for i in range(len(gmu))]
-            nx = [ntr[i] + np.arange(len(nmu[i])) for i in range(len(nmu))]
+                  #return nglow, nghi
+                  gmu = [glow, ghi]
+                  nmu = [nglow, nghi]
+                  tr = [tr[0], tr[-1]]
+                  gc = ["#40ac5b", '#10ac1d']
+                  nc = ['#dc3c3c', '#d61b1b']
+            #gc = cpals['gpal'](len(gmu))
+            #nc = cpals['rpal'](len(nmu))
 
+            gx = [tr[i] + np.arange(len(gmu[i]))*self.dt for i in range(len(gmu))]
+            nx = [tr[i] + np.arange(len(nmu[i]))*self.dt for i in range(len(nmu))]
+            ls=['-','-']
             for i in range(len(gmu)):
-                  ax.plot(gx[i], gmu[i], color=gc[i])
-                  ax.fill_between(gx[i], gmu[i], y2=0, color=gc[i], alpha=.15)
+                  ax.plot(gx[i], gmu[i], linestyle=ls[i], lw=1, color=gc[i])
+                  ax.fill_between(gx[i], gmu[i], y2=0, lw=1, color=gc[i], alpha=.25)
             for i in range(len(nmu)):
-                  ax.plot(nx[i], nmu[i], color = nc[i])
-                  ax.fill_between(nx[i], nmu[i], y2=0, color=nc[i], alpha=.15)
+                  ax.plot(nx[i], nmu[i], linestyle=ls[i], lw=1, color=nc[i])
+                  ax.fill_between(nx[i], nmu[i], y2=0, lw=1, color=nc[i], alpha=.25)
 
-            ax.set_ylim(0, self.p['a'].max()*1.01)#gmu[0].max()*1.2)
-            ax.set_xlim(gx[0].min()*.8, nx[0].max()*1.05)
+            ax.set_ylim(0, self.p['a'].max()*1.01)
+            ax.set_xlim(gx[-1].min()*.98, nx[0].max()*1.05)
             if label_x:
                   ax.set_xlabel('Time', fontsize=26);
             ax.set_xticklabels([])
             ax.set_yticklabels([])
             ax.set_ylabel('$\\theta_{G}$', fontsize=30)
-            #ax.set_title(" ".join(['Rising Acitivty of', titl, 'Accumulator']))
 
             sns.despine()
             plt.tight_layout()
