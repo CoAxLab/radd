@@ -4,9 +4,8 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.toolbox.analyze import *
-from radd.toolbox.messages import saygo
-from radd import fit, models
+from radd.tools.messages import saygo
+from radd import fit, models, analyze 
 from radd.CORE import RADDCore
 
 class Model(RADDCore):

@@ -7,7 +7,8 @@ from numpy import array
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd.toolbox import analyze, colors, messages
+from radd import analyze
+from radd.tools import colors, messages
 from scipy.stats.mstats import mquantiles as mq
 import prettyplotlib as pl
 

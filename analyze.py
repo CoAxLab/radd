@@ -370,12 +370,6 @@ def weight_by_simulated_variance(opt, p, nsims=200):
       return x.flatten()
 
 
-
-
-
-
-
-
 def get_intersection(iter1, iter2):
 
       intersect_set = set(iter1).intersection(set(iter2))
@@ -388,18 +382,3 @@ def rename_bad_cols(data):
             data.rename(columns={'trial_type':'ttype'}, inplace=True)
 
       return data
-
-
-#def calc_quant_weights(rtvec, quants):
-#
-#      rt=rtvec.copy()
-#      q=quants.copy()
-#
-#      first = rt[rt.between(rt.min(), q[0])].std()
-#      rest = [rt[rt.between(q[i-1], q[i])].std() for i in range(1,len(q))]
-#      #last = rt[rt.between(q[-1], rt.max())].std()
-#      sdrt = np.hstack([first, rest])
-#
-#      wt = (sdrt[np.ceil(len(sdrt)/2)]/sdrt)**2
-#
-#      return wt

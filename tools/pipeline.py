@@ -27,7 +27,7 @@ def run_pipeline(data=pd.DataFrame, kinds='pro', depends_keys=[], condition='pGo
                   If type str all models will be assigned the same dynamic.
             initials (list or None):
                   list of init parameters to use for each model. If None,
-                  init parameters are drawn from toolbox.theta.get_default_inits()
+                  init parameters are drawn from tools.theta.get_default_inits()
             fit_on (str):
                   Fit models to 'average', 'subjects', or 'bootstrap' data
             rootdir (str):

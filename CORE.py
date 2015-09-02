@@ -5,10 +5,9 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.toolbox import theta
-from radd.toolbox import analyze
+from radd import analyze, theta
 from scipy.stats.mstats import mquantiles as mq
-from radd.toolbox.messages import saygo
+from radd.tools.messages import saygo
 
 
 class RADDCore(object):

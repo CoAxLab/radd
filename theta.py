@@ -110,43 +110,6 @@ def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, sca
             rvinits[ix] = dist.rvs()
       return rvinits
 
-def init_distributions_XXXX(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
-      """ sample random parameter sets to explore global minima (called by
-      Optimizer method __hop_around__())
-      """
-      mu_defaults = {'a':.15, 'tr':.29, 'v':.9, 'ssv':-.9, 'z':.1, 'xb':2.5, 'sso':.15}
-      sigma_defaults = {'a':.35, 'tr':.1, 'v':.35, 'ssv':.35, 'z':.05, 'xb':1, 'sso':.01}
-
-      if pkey=='si':
-            return .01
-
-      if 'race' in kind or 'iact' in kind:
-            mu_defaults['ssv']=abs(mu_defaults['ssv'])
-      if loc is None:
-            loc = mu_defaults[pkey]
-      if scale is None:
-            scale = sigma_defaults[pkey]
-
-      # init and freeze dist shape
-      if pkey in ['z', 'xb', 'sso']:
-            dist = norm(loc, scale)
-      elif pkey in ['a', 'tr', 'v', 'ssv']:
-            dist = gamma(1, loc, scale)
-
-      # generate random variates
-      rvinits = dist.rvs(nrvs)
-      while rvinits.min()<=bounds[0]:
-            # apply lower limit
-            ix = rvinits.argmin()
-            rvinits[ix] = dist.rvs()
-      while rvinits.max()>=bounds[1]:
-            # apply upper limit
-            ix = rvinits.argmax()
-            rvinits[ix] = dist.rvs()
-
-      return rvinits
-
-
 def get_bounds(kind='radd', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1,5), si=(.001, .2), sso=(.01,.3)):
       """ set and return boundaries to limit search space
       of parameter optimization in <optimize_theta>

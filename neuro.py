@@ -11,9 +11,9 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
-from radd.toolbox.colors import get_cpals
-from radd.toolbox.theta import get_xbias_theta
-from radd.toolbox.messages import describe_model
+from radd.tools.colors import get_cpals
+from radd theta import get_xbias_theta
+from radd.tools.messages import describe_model
 from radd.models import Simulator
 
 class BOLD(Simulator):
