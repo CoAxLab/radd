@@ -49,7 +49,7 @@ class Model(RADDCore):
             self.prepare_fit()
 
 
-      def make_optimizer(self, ntrials=10000, tol=1.e-10, maxfev=3000, niter=40, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, ninits=2, interval=10, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20):
+      def make_optimizer(self, ntrials=5000, tol=1.e-10, maxfev=3000, niter=40, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, ninits=2, interval=10, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20):
             """ init Optimizer class as Model attr
             """
             fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, prob=prob, get_params=True)
@@ -60,7 +60,7 @@ class Model(RADDCore):
             self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, basinparams=bp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.avg_wts, pc_map=self.pc_map,  multiopt=multiopt)
 
 
-      def optimize(self, save=True, savepth='./', ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, stage='full', inits=None, y=None):
+      def optimize(self, save=True, savepth='./', ntrials=5000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, stage='full', inits=None, y=None):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
@@ -97,7 +97,7 @@ class Model(RADDCore):
             self.simulator=models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
 
 
-      def simulate(self, p=None, analyze=True):
+      def simulate(self, p=None, analyze=True, all_data=True):
             """ simulate yhat vector using popt or inits
             if model is not optimized
             :: Arguments ::
@@ -118,6 +118,8 @@ class Model(RADDCore):
                         p=self.inits
             p = self.simulator.vectorize_params(p)
             out = self.simulator.sim_fx(p, analyze=analyze)
+            if not analyze and all_data:
+                  out = self.simulator.predict_data(out, p)
 
             return out
 

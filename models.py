@@ -144,6 +144,11 @@ class Simulator(object):
             prob=self.prob; nss=self.nss;
             ssd=self.ssd; tb = self.tb; dt=self.dt
 
+            if self.fitparams['data_style']=='re':
+                  self.predict_data=self.analyze_re_data
+            else:
+                  self.predict_data=self.analyze_pro_data
+
             self.resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*dt
             self.ss_resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=3)*dt
             self.resp_lo = lambda trace: np.argmax((trace.T<=0).T, axis=3)*dt
@@ -450,10 +455,8 @@ class Simulator(object):
 
 
       def analyze_pro_data(self, DVg, p):
-
-            prob=self.prob;  ssd=self.ssd;
-            tb=self.tb;  ncond=self.ncond;
-            ix=self.rt_cix;
+            prob=self.prob; tb=self.tb;
+            ncond=self.ncond; ix=self.rt_cix;
             gdec = self.resp_up(DVg, p['a'])
             rt = self.RT(p['tr'], gdec)
             hi = hs(rt[ix:])
@@ -461,3 +464,44 @@ class Simulator(object):
             # Get response and stop accuracy information
             gacc = 1-np.where(rt<self.tb, 1, 0)
             return [gacc, hi[~np.isnan(hi)], low[~np.isnan(low)]]
+
+
+      def analyze_re_data(self, dv, p):
+            import pandas as pd
+            prob=self.prob;  ssd=self.ssd;
+            tb=self.tb;  nc=self.ncond;
+            nss=self.nss; nssd=self.nssd
+            ntot=self.ntot; nsstot=nss*nssd
+            # get condition labels
+            conditions = np.sort(self.fitparams['labels']*int(ntot))
+            # assign go trials pseudo ssd of 1000
+            delays = np.append(np.array([[c]*nss for c in sd]), [1000]*nss*nssd)
+            ttype=np.tile(array(['stop']*nsstot + ['go']*nsstot]),nc)
+
+            DVg, DVs = dv
+            if 'sso' in p.keys():
+                  ssd = ssd + p['sso']
+            gdec = self.resp_up(DVg, p['a'])
+            if 'irace' in self.kind:
+                  sdec = self.ss_resp_up(DVs, p['a'])
+            else:
+                  sdec = self.resp_lo(DVs)
+            gort = self.RT(p['tr'], gdec)
+            ssrt = self.RT(ssd, sdec)
+            ert = np.tile(gort[:,:nss],nssd).reshape(nc, nssd, nss)
+
+            # compare go proc. rt to ssrt and get error resp. (go proc win err)
+            ssgo = map((lambda z: z[0][z[0]<z[1]]), zip(ert, ssrt))
+            gresp = np.where(gort[:,nss*nssd:]<tb, 1, 0)
+            ssresp = np.where(ert<ssrt, 1, 0).reshape(nc,nsstot)
+
+            resp = np.concatenate([ssresp, gresp], axis=1)
+            rt=np.concatenate([ert.reshape(nc, nsstot), gort[:, :nsstot]], axis=1)
+
+            out={'ssd':np.tile(delays, nc),
+            'response':np.hstack(resp),
+            'rt':np.hstack(rt),
+            'cond':conditions,
+            'ttype':ttype}
+
+            return pd.DataFrame(out)

@@ -100,7 +100,7 @@ class RADDCore(object):
                   'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond':self.ncond,
                   'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
                   'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
-                  'rt_cix': self.rt_cix, 'data_style': self.data_style}
+                  'rt_cix': self.rt_cix, 'data_style': self.data_style, 'labels':self.labels}
 
             if get_params:
                   return self.fitparams

@@ -35,6 +35,7 @@ class Optimizer(RADDCore):
             self.fit_on = fit_on
             self.data=dframes['data']
             self.fitparams=fitparams
+            self.labels=self.fitparams['labels']
             self.basinparams=basinparams
             self.global_method=global_method
             self.kind=kind
