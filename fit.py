@@ -7,10 +7,10 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd import models, theta
-from radd.tools.messages import logger, basin_accept_fun
+from radd.tools.messages import logger
 from lmfit import Parameters, minimize
 from radd.CORE import RADDCore
-from scipy.optimize import basinhopping, differential_evolution, brute
+from scipy.optimize import basinhopping
 
 
 class Optimizer(RADDCore):
@@ -29,7 +29,7 @@ class Optimizer(RADDCore):
       Handles fitting routines for models of average, individual subject, and bootstrapped data
       """
 
-      def __init__(self, dframes=None, fitparams=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', basinparams=None, *args, **kws):
+      def __init__(self, dframes=None, fitparams=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', basinparams=None, *args, **kws):
 
             self.multiopt=multiopt
             self.fit_on = fit_on
@@ -74,7 +74,6 @@ class Optimizer(RADDCore):
                   self.__indx_optimize__(save=save, savepth=savepth)
 
             return self.yhat, self.fitinfo, self.popt
-
 
 
       def optimize_flat(self, p0=None, y=None, random_init=True):

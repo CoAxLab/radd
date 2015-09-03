@@ -10,7 +10,7 @@ from radd.utils import *
 from scipy.optimize import minimize as mina
 
 
-def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predictions', depends=['xx'], model='radd', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=1, disp=True):
+def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predictions', depends=['xx'], model='', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=1, disp=True):
 
       m = build.Model(data=data, inits=inits, depends_on={'v':'Cond'}, fit='subjects')
       m.prepare_fit()
@@ -76,7 +76,7 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
       return [y, wls_update, ols_update]
 
 
-def track_optimization(y, inits={}, collector=[], track='residuals', depends=['xx'], wts=None, model='radd', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True):
+def track_optimization(y, inits={}, collector=[], track='residuals', depends=['xx'], wts=None, model='', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=0, disp=True):
 
       """
       passess a list to the objective function (model) that
@@ -159,9 +159,9 @@ def recost_scipy(x0, y=None, wts=None, ntrials=2000, pGo=.5, ssd=np.arange(.2, .
 
       return cost
 
-def get_default_inits(kind='radd', fit_noise=False):
+def get_default_inits(kind='', fit_noise=False):
 
-      if 'radd' in kind:
+      if '' in kind:
             inits = {'a': 0.4441, 'ssv': -0.9473,  'tr': 0.3049, 'v': 1.0919}
 
       elif 'pro' in kind:

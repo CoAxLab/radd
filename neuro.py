@@ -96,7 +96,7 @@ class BOLD(Simulator):
             self.get_hemo = lambda d: d.cumsum(axis=0).apply(get_last_numeric, axis=0).dropna().values
 
 
-      def generate_radd_traces(self):
+      def generate_dpm_traces(self):
 
             """ Get go,ssrt using same function as proactive then use the indices for
             correct go and correct stop trials to slice summed, but momentary, dvg/dvs evidence vectors
@@ -185,7 +185,7 @@ class BOLD(Simulator):
                   self.Tg = np.ceil((self.tb-self.onset)/self.dt).astype(int)
             else:
                   # simulate decision traces
-                  self.generate_radd_traces()
+                  self.generate_dpm_traces()
 
             # zip dvg[ncond, ntrials, ntime], bound[a_c..a_ncond], onset[tr_c..tr_ncond]
             zipped_input_rt = zip(self.dvg, self.bound[:,na], self.onset[:,na])
@@ -200,7 +200,7 @@ class BOLD(Simulator):
             if 'pro' in self.kind:
                   # zip dvg(resp=1), bound[a_c..a_ncond], [decay]*ncond
                   ng_trial_arrays = map(self.get_ng_traces, zipped_rt_traces)
-            elif 'radd' in self.kind:
+            elif 'dpm' in self.kind:
                   ssrt = self.get_ssrt(self.dvs, self.ssd[:,None])
                   strial_gorts = rt[:,:self.nss_all].reshape(self.ncond,self.nssd,self.nss)
                   # zip DVs, SSRT, ssGoRT

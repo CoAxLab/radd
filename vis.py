@@ -41,7 +41,7 @@ def react_fit_plots(m, color="#4168B7", is_flat=False, save=False):
       #datas=[redata.query('Cond=="bsl"'), redata.query('Cond=="pnl"')]
 
       for i in range(ncond):
-            plot_fits(y[i], fits[i], kind='radd', colors=[color]*2, axes=axes[i])# data=datas[i], axes=axes[i])
+            plot_fits(y[i], fits[i], kind='', colors=[color]*2, axes=axes[i])# data=datas[i], axes=axes[i])
 
       for ax in axes.flatten():
             if ax.is_last_col():
@@ -82,7 +82,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
       lines=[(line) if type(line)==list else line for line in lines]
       pse=[];
-      if kind=='radd':
+      if kind=='':
             x=array([400, 350, 300, 250, 200], dtype='float')
             xtls=x.copy()[::-1]; xsim=np.linspace(15, 50, 10000);
             yylabel='P(Stop)'; scale_factor=100; xxlabel='SSD'; xxlim=(18,42)
@@ -139,7 +139,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
 
 
-def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='radd', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
+def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
       sns.set_context('notebook', font_scale=1.6)
 
       pp=plot_params
@@ -188,7 +188,7 @@ def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='r
             plt.savefig(savestr+'.png', format='png', dpi=300)
 
 
-def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='radd', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
+def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
       sns.set_context('notebook', font_scale=1.6)
 
       pp=plot_params
@@ -229,7 +229,7 @@ def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='rad
             plt.savefig(savestr+'.png', format='png', dpi=300)
 
 
-def plot_data_dists(data, kind='radd', data_type='real', cdf=False, axes=[], get_rts=False):
+def plot_data_dists(data, kind='', data_type='real', cdf=False, axes=[], get_rts=False):
 
       emp_kq = lambda rts: analyze.kde_fit_quantiles(mq(rts, prob=np.arange(0,1,.02)), bw=.008)
 
@@ -238,7 +238,7 @@ def plot_data_dists(data, kind='radd', data_type='real', cdf=False, axes=[], get
             if kind=='pro':
                   hi_rts = data.query('response==1 & pGo>.5').rt.values
                   lo_rts = data.query('response==1 & pGo<.5').rt.values
-            elif kind=='radd':
+            elif kind=='':
                   hi_rts = data.query('response==1 & acc==1').rt.values
                   lo_rts = data.query('response==1 & acc==0').rt.values
             dat_cq = emp_kq(hi_rts)
@@ -299,7 +299,7 @@ def plot_reactive_fits(model, cumulative=False, plot_sims=False, save=False, col
 
             labels = [' '.join([model.labels[i], x]) for x in ['data', 'model']]
             # Plot observed and predicted stop curves
-            scurves([sc, sc_hat], labels=labels, kind='radd', colors=col[i], linestyles=['-','--'], ax=ax3, markers=True)
+            scurves([sc, sc_hat], labels=labels, kind='', colors=col[i], linestyles=['-','--'], ax=ax3, markers=True)
             plt.tight_layout()
             sns.despine()
 
@@ -316,7 +316,7 @@ def plot_reactive_fits(model, cumulative=False, plot_sims=False, save=False, col
             plt.savefig(savestr, dpi=300)
 
 
-def unpack_yvector(y, kind='radd'):
+def unpack_yvector(y, kind=''):
 
       if 'pro' in kind:
             sc, gq, eq = y[:6], y[6:11], y[11:]
@@ -334,17 +334,17 @@ def get_model_name(model):
       mname='_'.join([mname, mdep])
       return mname
 
-def plot_idx_fits(obs, sim, kind='radd', save=False):
+def plot_idx_fits(obs, sim, kind='', save=False):
 
 
-      if kind=='radd':
+      if kind=='':
             df = df.where(df>0).dropna()
             for idx, idx_c in obs.iterrows():
                   try:
                         save_str = '_'.join([str(idx), idx_c['Cond'], 'pred'])
                         y = idx_c.loc['Go':'e90'].values.astype(np.float)
                         yhat = df.iloc[idx, :].values.astype(np.float)
-                        plot_fits(y, yhat, kind='radd', save=save, savestr=save_str)
+                        plot_fits(y, yhat, kind='', save=save, savestr=save_str)
                   except Exception:
                         continue
       elif kind=='pro':
@@ -494,7 +494,7 @@ def pro_animate(i, x, protraces, prolines):
       return prolines,
 
 
-def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind='radd'):
+def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind=''):
 
       ncond = DVg.shape[0]
       nssd = DVs.shape[1]
@@ -506,7 +506,7 @@ def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind='radd'):
       return f
 
 
-def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='radd', ssd=.450, ax=None, tau=.001, tb=.650, cg='#2c724f', cr='#c0392b'):
+def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='', ssd=.450, ax=None, tau=.001, tb=.650, cg='#2c724f', cr='#c0392b'):
       if ax is None:
             f,ax=plt.subplots(1,figsize=(8,5))
       tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z'];
@@ -515,7 +515,7 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='radd', ssd=.450, ax=None, ta
             xx = [np.arange(tr, tr+(len(igo[:ind-1])*tau), tau), np.arange(tr, tb, tau)]
             x = xx[0 if len(xx[0])<len(xx[1]) else 1]
             plt.plot(x, igo[:len(x)], color=cg, alpha=.1, linewidth=.5)
-            if kind in ['irace', 'radd', 'iact'] and i<len(DVs):
+            if kind in ['irace', '', 'iact'] and i<len(DVs):
                   if np.any(DVs<=0):
                         ind=np.argmax(DVs[i]<=0)
                   else:

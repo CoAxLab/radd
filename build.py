@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd.tools.messages import saygo
-from radd import fit, models, analyze 
+from radd import fit, models, analyze
 from radd.CORE import RADDCore
 
 class Model(RADDCore):
@@ -19,7 +19,7 @@ class Model(RADDCore):
                   data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
                   <Condition Name> declared in depends_on values
             kind (str):
-                  declares model type ['radd', 'irace', 'pro']
+                  declares model type ['dpm', 'irace', 'pro']
                   append 'x' to front of model name to include a dynamic
                   bias signal in model
             inits (dict):
@@ -40,7 +40,7 @@ class Model(RADDCore):
       """
 
 
-      def __init__(self, data=pd.DataFrame, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, *args, **kws):
+      def __init__(self, data=pd.DataFrame, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, *args, **kws):
 
             self.data=data; self.weighted=weighted; self.verbose=verbose
 

@@ -23,7 +23,7 @@ class RADDCore(object):
       """
 
 
-      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
+      def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
 
             self.data = data
             self.kind = kind
@@ -149,7 +149,7 @@ class RADDCore(object):
             return popt
 
 
-      def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
+      def rangl_data(self, data, kind='dpm', prob=np.array([.1, .3, .5, .7, .9])):
             """ wrapper for analze.rangle_data
             """
             rangled = analyze.rangl_data(data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)

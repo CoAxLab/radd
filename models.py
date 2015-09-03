@@ -9,7 +9,7 @@ from numpy import newaxis as na
 from scipy.stats.mstats import mquantiles as mq
 
 class Simulator(object):
-      """ Core code for simulating RADD models
+      """ Core code for simulating models
 
             * All cond, SSD, & timepoints are simulated simultaneously
 
@@ -18,7 +18,7 @@ class Simulator(object):
             for multiple conditions.
       """
 
-      def __init__(self, model=None, fitparams=None, inits=None, pc_map=None, kind='radd', dt=.001, si=.01):
+      def __init__(self, model=None, fitparams=None, inits=None, pc_map=None, kind='dpm', dt=.001, si=.01):
 
             self.dt=dt
             self.si=si
@@ -112,8 +112,8 @@ class Simulator(object):
             """ initiates the simulation function used in
             optimization routine
             """
-            if any(m in self.kind for m in ['radd', 'sab']):
-                  self.sim_fx = self.simulate_radd
+            if 'dpm' in self.kind:
+                  self.sim_fx = self.simulate_dpm
                   self.analyze_fx = self.analyze_reactive
             elif 'pro' in self.kind:
                   self.sim_fx = self.simulate_pro
@@ -230,8 +230,8 @@ class Simulator(object):
 
 
 
-      def simulate_radd(self, p, analyze=True):
-            """ Simulate the dependent process model (RADD)
+      def simulate_dpm(self, p, analyze=True):
+            """ Simulate the dependent process model (DPM)
             ::Arguments::
                   p (dict):
                         parameter dictionary. values can be single floats
@@ -262,7 +262,7 @@ class Simulator(object):
 
       def simulate_pro(self, p, analyze=True):
             """ Simulate the proactive competition model
-            (see simulate_radd() for I/O details)
+            (see simulate_dpm() for I/O details)
             """
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
@@ -276,7 +276,7 @@ class Simulator(object):
 
       def simulate_irace(self, p, analyze=True):
             """ simulate the independent race model
-            (see selfulate_radd() for I/O details)
+            (see simulate_dpm() for I/O details)
             """
             p = self.vectorize_params(p)
             Pg, Tg = self.__update_go_process__(p)
@@ -295,7 +295,7 @@ class Simulator(object):
       def simulate_interactive(self, p, analyze=True):
             """ simulates a version of the interactive race model in which
             the stop signal directly inhibits the go process after a given delay
-            SSD + SSO (ss onset) (see simulate_radd() for I/O details)
+            SSD + SSO (ss onset) (see simulate_dpm() for I/O details)
             """
             nc=self.ncond; ntot=self.ntot; dx=self.dx;
             nss = self.nss; nssd=self.nssd;
@@ -331,7 +331,7 @@ class Simulator(object):
 
       def analyze_reactive(self, DVg, DVs, p):
             """ get rt and accuracy of go and stop process for simulated
-            conditions generated from simulate_radd
+            conditions generated from simulate_dpm
             """
             nss = self.nss; prob = self.prob
             ssd = self.ssd; tb = self.tb
@@ -377,8 +377,8 @@ class Simulator(object):
 
 
       def analyze_interactive(self, DVg, ssDVg, p):
-            """ get rt and accuracy of go and stop process for selfulated
-            conditions generated from selfulate_radd
+            """ get rt and accuracy of go and stop process for simulated
+            conditions generated from simulate_dpm
             """
             nss = self.nss; prob = self.prob; ssd = self.ssd; tb = self.tb;
             ncond=self.ncond; nssd=self.nssd; nss_di = int(nss/nssd)
@@ -422,7 +422,7 @@ class Simulator(object):
 
       def analyze_data(self, DVg, DVs=None, p=None):
             """ get rt and accuracy of go and stop process for simulated
-            conditions generated from simulate_radd
+            conditions generated from simulate_dpm
             """
             nss = self.nss; prob = self.prob
             ssd = self.ssd; tb = self.tb
@@ -447,7 +447,6 @@ class Simulator(object):
             gacc = np.nanmean(np.where(gort<tb, 1, 0), axis=1)
             sacc = np.where(ert<ssrt, 0, 1).mean(axis=2)
             return hs([hs([i[ii] for i in [gacc,sacc,gq,eq]]) for ii in range(nc)])
-
 
 
       def analyze_pro_data(self, DVg, p):

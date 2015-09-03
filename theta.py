@@ -8,7 +8,7 @@ from numpy import array
 from scipy.stats.distributions import norm, gamma
 from lmfit import Parameters
 
-def random_inits(pkeys, ninits=1, kind='radd'):
+def random_inits(pkeys, ninits=1, kind='dpm'):
       """ random parameter values for initiating model across range of
       parameter values.
       ::Arguments::
@@ -75,7 +75,7 @@ def all_params_to_scalar(params, params_list=None, exclude=[]):
       return params
 
 
-def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
+def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scale=None):
       """ sample random parameter sets to explore global minima (called by
       Optimizer method __hop_around__())
       """
@@ -110,7 +110,7 @@ def init_distributions(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, sca
             rvinits[ix] = dist.rvs()
       return rvinits
 
-def get_bounds(kind='radd', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1,5), si=(.001, .2), sso=(.01,.3)):
+def get_bounds(kind='dpm', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1,5), si=(.001, .2), sso=(.01,.3)):
       """ set and return boundaries to limit search space
       of parameter optimization in <optimize_theta>
       """
@@ -121,7 +121,7 @@ def get_bounds(kind='radd', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.
       return bounds
 
 
-def format_basinhopping_bounds(basin_keys, ncond, kind='radd'):
+def format_basinhopping_bounds(basin_keys, ncond, kind='dpm'):
 
       allbounds = get_bounds(kind=kind)
       xmin, xmax = [], []
@@ -133,49 +133,30 @@ def format_basinhopping_bounds(basin_keys, ncond, kind='radd'):
       return xmin, xmax
 
 
-def get_default_inits(kind='radd', dynamic='hyp', depends_on={}):
+def get_default_inits(kind='dpm', dynamic='hyp', depends_on={}):
       """ if user does not provide inits dict when initializing Model instance,
       grab default dictionary of init params reasonably suited for Model kind
       """
 
-      if 'radd' in kind:
-            # opt bsl v: 1.11356271; opt pnl v: 1.02797132
-            inits = {'a':0.44470913, 'ssv':-0.94151350, 'tr':0.30481227, 'v':1.07049551, 'z':0.15049553}
-            #if 'x' in kind:
-            #      inits['xb']=.09996123
-      elif 'sab' in kind:
-            inits = {'a': array([ 0.53698]), 'xb': array([ 0.8329]), 'ssv': -0.99965152494217069, 'tr': array([ 0.17717]), 'v': array([ 1.26342])}
+      if 'dpm' in kind:
+            popt = {'a': 0.53625, 'v': array([ 1.2887 ,  1.24358]), 'xb': 0.87761, 'ssv': -0.98396, 'tr':0.17801}
       elif 'pro' in kind:
-            if set(['v', 'tr']).issubset(depends_on.keys()):
-                  inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
-            elif 'tr' in depends_on.keys():
-                  inits = {'a':0.3267, 'tr':0.3192, 'v': 1.3813}
-            elif 'v' in depends_on.keys():
-                  inits = {'a':0.48758096, 'tr':0.29223792,'v':1.69870371}
-                  #if 'x' in kind:
-                  #      inits['xb'] = 1.84080798
-            else:
-                  inits = {'a':0.4748, 'tr':0.2725,'v':1.6961}
-
+            popt = {'a': 0.51141, 'xb': 3.8071, 'tr': 0.320013, 'v': 1.518}
       elif 'race' in kind:
-            inits = {'a':0.24266, 'ssv':1.1244, 'tr':0.335, 'v':1.0379}
+            popt ={'a': 0.24266,  'v': 1.05866,  'xb': 1.5, 'ssv': 1.12441, 'tr': 0.335, 'xb': 1.46335}
       elif 'iact' in kind:
-            #'v_bsl':1.31582535, 'v_pnl':1.26935591,
-            # array([1.31582535,1.26935591])
-            inits = {'a':0.4433013, 'sso': 0.1999348, 'ssv': 3.018744, 'tr': 0.2171978 , 'v': 1.290}
-            #inits = {'a':0.44266, 'ssv':3, 'tr':0.21, 'v':1.3, 'sso':.2}
-
-      if 'x' in kind and 'xb' not in inits.keys():
-            inits['xb']=1.5
-      return inits
+            popt={'a': 0.44422598, 'sso': 0.2040, 'ssv': 3.02348, 'tr': 0.21841, 'v': 1.31063, 'xb': 1.46335}
+      if 'x' in kind and 'xb' not in popt.keys():
+            popt['xb']=2.5
+      return popt
 
 
-def check_inits(inits={}, kind='radd', pdep=[], pro_ss=False, fit_noise=False):
+def check_inits(inits={}, kind='dpm', pdep=[], pro_ss=False, fit_noise=False):
       """ ensure inits dict is appropriate for Model kind
       """
       if 'race' in kind or 'iact' in kind:
             inits['ssv']=abs(inits['ssv'])
-      elif 'radd' in kind or 'sab' in kind:
+      elif 'dpm' in kind:
             inits['ssv']=-abs(inits['ssv'])
       if 'pro' in kind:
             if pro_ss and 'ssv' not in inits.keys():
@@ -186,76 +167,11 @@ def check_inits(inits={}, kind='radd', pdep=[], pro_ss=False, fit_noise=False):
             inits['xb'] = 1.5
       if fit_noise or 'si' in pdep and 'si' not in inits.keys():
             inits['si'] = .01
-      if 'radd' not in kind and 'z' in inits.keys():
+      if 'dpm' not in kind and 'z' in inits.keys():
             discard = inits.pop('z')
       if 'x' not in kind and 'xb' in inits:
             inits.pop('xb')
       return inits
-
-
-def get_optimized_params(kind='radd', dynamic='hyp', depends_on={}, inits={}):
-
-      if 'sab' in kind:
-            if ['v'] == depends_on.keys():
-                  inits={'a': array([ 0.53625,  0.53625]), 'v_pnl': 1.2435812523041054, 'v': array([ 1.2887 ,  1.24358], dtype=float32), 'xb': array([ 0.87761,  0.87761]), 'ssv': -0.9839646215235698, 'tr': array([ 0.17801,  0.17801]), 'v_bsl': 1.2886965219271527}
-
-      elif 'radd' in kind:
-            if set(['v', 'tr']).issubset(depends_on.keys()):
-                  inits = {'a':.45, 'ssv':-0.9473, 'tr': 0.2939, 'v': 1.0919, 'z':0.1542}
-            elif ['v'] == depends_on.keys():
-                  inits = {'a':0.44470913, 'ssv':-0.94151350, 'tr':0.30481227, 'v':array([ 1.11356271, 1.02797132]), 'z':0.15049553}
-                  if 'x' in kind:
-                        inits['xb']=.09996123
-            elif ['tr'] == depends_on.keys():
-                  inits = {'a': 0.4670722, 'ssv': -1.01042, 'tr': array([ 0.30429,  0.29477]), 'v':1.164409, 'z': 0.15476}
-            elif ['a'] == depends_on.keys():
-                  inits = {'a': array([0.43864876, 44879925]), 'tr': 0.3049, 'v': 1.0842, 'ssv': -0.9293, 'z': 0.1539}
-            else:
-                  # DEFAULT BASELINE PROACTIVE INITS
-                  inits = {'a': .45, 'tr':.3, 'v': 1.05, 'ssv': -1, 'z':.15}
-      elif 'pro' in kind:
-            if set(['v', 'tr']).issubset(depends_on.keys()):
-                  inits = {'a':.39, 'tr': 0.2939, 'v': 1.0919}
-            elif ['tr']==depends_on.keys():
-                  if dynamic=='hyp':
-                        inits={'tr':array([0.370423,0.353704,0.336991,0.320695,0.298988,0.290798]), 'a':0.331967,'xb':1.996667,'v':1.377375}
-                  elif 'x' not in kind:
-                        inits={'a':0.3267, 'tr': array([0.36803, 0.34669, 0.32555, 0.30535, 0.28855, 0.28082]), 'v': 1.3813}
-            elif ['v']==depends_on.keys():
-                  if 'x' not in kind:
-                        inits = {'a': 0.474838, 'tr': 0.27253, 'v': array([ 1.39321,  1.52084,  1.65874,  1.75702,  1.89732,  1.94936]), 'z': 0}
-                  elif dynamic=='hyp':
-                        inits={'v':array([1.39423800,1.53535562,1.65557698,1.75515234,1.88985329,1.92243114]), 'a':0.487581, 'xb':1.840808, 'tr':0.292237}
-                  elif dynamic=='exp':
-                        inits = {'a':0.4836, 'tr': 0.3375, 'v': array([ 1.08837, 1.31837, 1.54837,  1.77837, 2.00837, 2.23837]), 'xb':  1.4604, 'z': 0}
-            elif ['xb']==depends_on.keys():
-                  inits={'a': 0.473022, "tr":0.330223, "v":1.64306, 'xb': array([0.257877, 0.649422, 1.03762, 1.307329, 1.934637, 2.101918])}
-            elif ['a']==depends_on.keys():
-                  inits={'a':array([0.58689325, 0.54086615, 0.50483462, 0.47312626, 0.43397831, 0.42288989]), 'xb': 1.970817, 'tr': 0.284143, 'v': 1.630117}
-            else:
-                  # DEFAULT BASELINE PROACTIVE INITS
-                  inits = {'a': 0.40, 'tr': .3, 'v': 1.5,  'z': 0}
-      elif 'race' in kind:
-            if ['v']==depends_on.keys():
-                  inits = {'v': array([1.0687, 1.0057]),'a': 0.3926741, 'tr': 0.3379, 'ssv': 1.1243, 'z': 0.1500}
-            elif ['tr']==depends_on.keys():
-                  inits = {'v': 1.0306, 'a': 0.3926741, 'tr': 0.3379, 'ssv': 1.1243, 'z': 0.1500}
-            else:
-                  # DEFAULT BASELINE PROACTIVE INITS
-                  inits = {'a': .45, 'tr':.3, 'v': 1.05, 'ssv': -1, 'z':.15}
-
-      return inits
-
-
-def get_xbias_theta(model=None):
-      """ hyperbolic and expon. simulation parameters
-      """
-      if model.dynamic=='hyp':
-            return {'a': 0.47548, 'tr': 0.27264, 'v': array([1.38303, .53767, 1.6675, 1.7762, 1.967, 2.0506]), 'xb': 0.009}
-      if 'v' in model.depends_on.keys() and model.dynamic=='exp':
-            return {'a': 0.4836, 'tr': 0.3375, 'v': array([ 1.08837,  1.31837,  1.54837,  1.77837,  2.00837,  2.23837]), 'xb': 1.4604, 'z': 0}
-      elif 'tr' in model.depends_on.keys() and model.dynamic=='exp':
-            return {'a': 0.39142, 'tr': array([ 0.36599,  0.34991,  0.33453,  0.3239 ,  0.29896,  0.30856]), 'v': 1.66214, 'xb': 0.09997, 'z': 0}
 
 
 def get_proactive_params(theta, dep='v', pgo=np.arange(0,120,20)):

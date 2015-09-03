@@ -62,7 +62,7 @@ def remove_outliers(df, sd=1.5, verbose=False):
       return clean
 
 
-def rangl_data(data, data_style='re', kind='radd', tb=.650, prob=([.1, .3, .5, .7, .9])):
+def rangl_data(data, data_style='re', kind='dpm', tb=.650, prob=([.1, .3, .5, .7, .9])):
       """ called by __make_dataframes__ to generate observed dataframes and iterables for
       subject fits
       """
@@ -109,7 +109,7 @@ def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.550, nrt_cond
       return np.hstack(rtq)
 
 
-def resample_data(data, data_style='re', n=120, kind='radd', tb=.550):
+def resample_data(data, data_style='re', n=120, kind='dpm', tb=.550):
       """ generates n resampled datasets using rwr()
       for bootstrapping model fits
       """
@@ -172,6 +172,7 @@ def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), tb=.560,
       q_sem_obj = godf.groupby(['idx', split]).apply(mjcix).values
       qwts = np.nanmean(np.vstack(q_sem_obj.reshape(2,61).mean(axis=1)), axis=1)[:, None]/np.vstack(q_sem_obj.reshape(2,61).mean(axis=1))
       return qwts
+
 
 def reactive_mj_quanterr(df, avg_ssd=True, cond='Cond', prob=array([.1,.3,.5,.7,.9]), as_ratio=True):
       """ calculates weight vectors forreactive RT quantiles by estimating
