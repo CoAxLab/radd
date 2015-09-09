@@ -89,7 +89,7 @@ def global_logger(logs):
             f.write('=='*20+'\n')
 
 
-def logger(optmod, finfo={}, depends_on={}, pdict={}, is_flat=True, log_arrays={}, kind=None, dynamic=None, fit_on=None, xbasin=None, pc_map=None):
+def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_arrays={}, kind=None, dynamic=None, fit_on=None, pc_map=None):
 
       wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
       if is_flat:
@@ -117,7 +117,7 @@ def logger(optmod, finfo={}, depends_on={}, pdict={}, is_flat=True, log_arrays={
             f.write('--'*30+'\n')
             f.write("FIT REPORT")
             f.write('\n'+'--'*30+'\n')
-            f.write(fit_report(optmod))
+            f.write(param_report)
             f.write('\n'+'--'*30+'\n')
             f.write('='.join(['popt', repr(pdict)]) + '\n')
             f.write('AIC: %.8f' % finfo['AIC'] + '\n')

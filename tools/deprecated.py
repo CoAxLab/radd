@@ -6,8 +6,56 @@ from scipy.io import loadmat
 import os, re
 
 
+# def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
+#       sns.set_context('notebook', font_scale=1.6)
+#
+#       pp=plot_params
+#       if axes is None:
+#             f, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(14, 5.5), sharey=False)
+#       else:
+#             ax1, ax2, ax3 = axes
+#       if colors is None:
+#             colors=["#4168B7"]*2
+#       if kind=='pro':
+#             xlim=(.48, .58)
+#       # pull out data vectors
+#       sc, gq, eq = unpack_yvector(y, kind=kind)
+#       fitsc, fitgq, fiteq = unpack_yvector(yhat, kind=kind)
+#
+#       if data is not None:
+#             axes, pp = plot_data_dists(data, kind=kind, cdf=cdf, axes=[ax1,ax2,ax3], data_type='real')
+#             fit_cq, fit_eq = [analyze.kde_fit_quantiles(q, bw=.001) for q in [fitgq, fiteq]]
+#       else:
+#             kdefits = [analyze.kde_fit_quantiles(q, bw=.001) for q in [gq, fitgq, eq, fiteq]]
+#             dat_cq, fit_cq, dat_eq, fit_eq = kdefits
+#             axes, pp = plot_data_dists(data=[dat_cq, dat_eq], kind=kind, cdf=cdf, axes=[ax1,ax2,ax3], data_type='interpolated')
+#             #ax1, ax2, ax3 = axes
+#
+#       shade=pp['shade']; lw=pp['lw']; ls=pp['ls']; alpha=pp['alpha']; bw=pp['bw']
+#       sns.distplot(fit_cq, kde=False, color=colors[0], norm_hist=True, ax=ax1, bins=45)
+#       sns.distplot(fit_eq, kde=False, color=colors[1], norm_hist=True, ax=ax2, bins=45)
+#       #sns.kdeplot(fit_cq, color='Blue', cumulative=cdf, linestyle='--', bw=.01, ax=ax1,linewidth=3, alpha=.70, shade=shade, label=label)
+#       #sns.kdeplot(fit_eq, color='Red', cumulative=cdf, linestyle='--', bw=.01, ax=ax2,linewidth=3, alpha=.60, shade=shade)
+#
+#       for ax in axes:
+#             if ax.is_last_col():
+#                   continue
+#             ax.set_xlim(xlim[0], xlim[1])
+#             if ax.is_first_col():
+#                   ax.set_ylabel('P(RT)')
+#             if ax.is_last_row():
+#                   ax.set_xlabel('RT (ms)')
+#             ax.set_xticklabels([int(xx) for xx in ax.get_xticks()*1000])
+#
+#       # Plot observed and predicted stop curves
+#       scurves([sc, fitsc], kind=kind, linestyles=['-','--'], ax=ax3, colors=colors, markers=True, mc=mc)
+#       plt.tight_layout()
+#       sns.despine()
+#       if save:
+#             plt.savefig(savestr+'.png', format='png', dpi=300)
+#
 
-# 
+#
 #
 # def init_distributions_XXXX(pkey, bounds, tb=.65, kind='radd', nrvs=25, loc=None, scale=None):
 #       """ sample random parameter sets to explore global minima (called by

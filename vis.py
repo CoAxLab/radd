@@ -21,49 +21,6 @@ gpal = cdict['gpal']; ppal = cdict['ppal'];
 heat = cdict['heat']; cool = cdict['cool'];
 slate = cdict['slate']
 
-def react_fit_plots(m, color="#4168B7", is_flat=False, save=False):
-
-      #redata = m.data
-      sns.set_context('notebook', font_scale=1.6)
-      if is_flat:
-            f, axes = plt.subplots(1,3,figsize=(12, 4))
-            axes=array([axes])
-            fits=[m.fits[0]]
-            y=[m.flat_y]
-            ncond=1
-      else:
-            f, axes = plt.subplots(2,3,figsize=(12, 7))
-            fits=m.fits.reshape(2,16)
-            y=m.avg_y
-            ncond=m.ncond
-
-      labels=['Baseline', 'Caution']
-      #datas=[redata.query('Cond=="bsl"'), redata.query('Cond=="pnl"')]
-
-      for i in range(ncond):
-            plot_fits(y[i], fits[i], kind='', colors=[color]*2, axes=axes[i])# data=datas[i], axes=axes[i])
-
-      for ax in axes.flatten():
-            if ax.is_last_col():
-                  continue
-            ax.set_xlim(.4, .65)
-            if ax.is_first_col():
-                  ax.set_ylabel('P(RT)')
-            if ax.is_last_row():
-                  ax.set_xlabel('RT (ms)')
-            ax.set_xticklabels([int(xx) for xx in ax.get_xticks()*1000])
-            #ax.set_ylim(0,11)
-      if save:
-            kind=m.kind
-            mdescr = messages.describe_model(m.depends_on)
-            if 'and' in mdescr:
-                  mdeps = mdescr.split(' and ')
-                  mdescr = '_'.join([dep for dep in mdeps])
-
-            savestr = '_'.join([kind, mdescr, 'fits'])
-            plt.savefig(savestr+'.png', dpi=500)
-            plt.savefig(savestr+'.svg', rasterized=True)
-
 
 def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None):
       dont_label=False
@@ -139,7 +96,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
 
 
-def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
+def plot_fits(y, yhat, cdf=True, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.45, .65), label=None, colors=None, data=None, mc=None):
       sns.set_context('notebook', font_scale=1.6)
 
       pp=plot_params
@@ -157,18 +114,18 @@ def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind=''
 
       if data is not None:
             axes, pp = plot_data_dists(data, kind=kind, cdf=cdf, axes=[ax1,ax2,ax3], data_type='real')
-            fit_cq, fit_eq = [analyze.kde_fit_quantiles(q, bw=.001) for q in [fitgq, fiteq]]
+            fit_cq, fit_eq = [analyze.kde_fit_quantiles(q, bw=.01) for q in [fitgq, fiteq]]
       else:
-            kdefits = [analyze.kde_fit_quantiles(q, bw=.001) for q in [gq, fitgq, eq, fiteq]]
+            kdefits = [analyze.kde_fit_quantiles(q, bw=.01) for q in [gq, fitgq, eq, fiteq]]
             dat_cq, fit_cq, dat_eq, fit_eq = kdefits
             axes, pp = plot_data_dists(data=[dat_cq, dat_eq], kind=kind, cdf=cdf, axes=[ax1,ax2,ax3], data_type='interpolated')
             #ax1, ax2, ax3 = axes
 
       shade=pp['shade']; lw=pp['lw']; ls=pp['ls']; alpha=pp['alpha']; bw=pp['bw']
-      sns.distplot(fit_cq, kde=False, color=colors[0], norm_hist=True, ax=ax1, bins=45)
-      sns.distplot(fit_eq, kde=False, color=colors[1], norm_hist=True, ax=ax2, bins=45)
-      #sns.kdeplot(fit_cq, color='Blue', cumulative=cdf, linestyle='--', bw=.01, ax=ax1,linewidth=3, alpha=.70, shade=shade, label=label)
-      #sns.kdeplot(fit_eq, color='Red', cumulative=cdf, linestyle='--', bw=.01, ax=ax2,linewidth=3, alpha=.60, shade=shade)
+      #sns.distplot(fit_cq, kde=False, color=colors[0], norm_hist=True, ax=ax1, bins=45)
+      #sns.distplot(fit_eq, kde=False, color=colors[1], norm_hist=True, ax=ax2, bins=45)
+      sns.kdeplot(fit_cq, color='Blue', cumulative=cdf, linestyle='--', bw=.01, ax=ax1,linewidth=3, alpha=.70, shade=shade, label=label)
+      sns.kdeplot(fit_eq, color='Red', cumulative=cdf, linestyle='--', bw=.01, ax=ax2,linewidth=3, alpha=.60, shade=shade)
 
       for ax in axes:
             if ax.is_last_col():
@@ -186,6 +143,52 @@ def plot_fits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind=''
       sns.despine()
       if save:
             plt.savefig(savestr+'.png', format='png', dpi=300)
+
+
+
+
+def react_fit_plots(m, color="#4168B7", is_flat=False, save=False):
+
+      #redata = m.data
+      sns.set_context('notebook', font_scale=1.6)
+      if is_flat:
+            f, axes = plt.subplots(1,3,figsize=(12, 4))
+            axes=array([axes])
+            fits=[m.fits[0]]
+            y=[m.flat_y]
+            ncond=1
+      else:
+            f, axes = plt.subplots(2,3,figsize=(12, 7))
+            fits=m.fits.reshape(2,16)
+            y=m.avg_y
+            ncond=m.ncond
+
+      labels=['Baseline', 'Caution']
+      #datas=[redata.query('Cond=="bsl"'), redata.query('Cond=="pnl"')]
+
+      for i in range(ncond):
+            plot_fits(y[i], fits[i], kind='', colors=[color]*2, axes=axes[i])# data=datas[i], axes=axes[i])
+
+      for ax in axes.flatten():
+            if ax.is_last_col():
+                  continue
+            ax.set_xlim(.4, .65)
+            if ax.is_first_col():
+                  ax.set_ylabel('P(RT)')
+            if ax.is_last_row():
+                  ax.set_xlabel('RT (ms)')
+            ax.set_xticklabels([int(xx) for xx in ax.get_xticks()*1000])
+            #ax.set_ylim(0,11)
+      if save:
+            kind=m.kind
+            mdescr = messages.describe_model(m.depends_on)
+            if 'and' in mdescr:
+                  mdeps = mdescr.split(' and ')
+                  mdescr = '_'.join([dep for dep in mdeps])
+
+            savestr = '_'.join([kind, mdescr, 'fits'])
+            plt.savefig(savestr+'.png', dpi=500)
+            plt.savefig(savestr+'.svg', rasterized=True)
 
 
 def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.4, .65), label=None, colors=None, data=None, mc=None):
@@ -265,37 +268,31 @@ def plot_data_dists(data, kind='', data_type='real', cdf=False, axes=[], get_rts
 
 
 
-def plot_reactive_fits(model, cumulative=False, plot_sims=False, save=False, col=None):
+def plot_reactive_fits(model, cumulative=True, save=False, col=None):
 
       sns.set_context('notebook', font_scale=1.6)
-      f, (ax1, ax2,ax3) = plt.subplots(1,3,figsize=(14, 6))
+      f, (ax1, ax2,ax3) = plt.subplots(1,3,figsize=(14, 5))
       y = model.avg_y; r,c=y.shape
-      xlim=(.43, .65)
       if col is None:
             col=[bpal(2), ppal(2)]
-
-      if plot_sims:
-            yhat = model.simulator.sim_fx(model.popt).reshape(r, c)
-            yh_id='sims.png'
-      else:
-            yhat = model.fits.reshape(r, c)
-            yh_id='fits.png'
+      yhat = model.fits.reshape(r, c)
+      yh_id='fits.png'
 
       if save:
             savestr = '_'.join([get_model_name(model), yh_id])
 
 
-      linestyles = ['-', '--']*10
+      linestyles = ['-', '--']
       for i in range(model.ncond):
-            gq, eq, sc = unpack_yvector(y[i])
-            gqhat, eqhat, sc_hat = unpack_yvector(yhat[i])
+            sc, cq, eq = unpack_yvector(y[i])
+            sc_hat, cqhat, eqhat = unpack_yvector(yhat[i])
 
-            for ii, qc in enumerate([gq, gqhat]):
-                  kdeqc = analyze.kde_fit_quantiles(qc, bw='scott')
-                  sns.kdeplot(kdeqc, linestyle=linestyles[ii], cumulative=cumulative, ax=ax1, linewidth=3.5, alpha=.7, color=col[ii][i])
+            for ii, qc in enumerate([cq, cqhat]):
+                  kdeqc = analyze.kde_fit_quantiles(qc, bw=.01)
+                  sns.kdeplot(kdeqc, linestyle=linestyles[ii], cumulative=cumulative, ax=ax1, linewidth=3.5, color=col[i][ii])
             for ii, qe in enumerate([eq, eqhat]):
-                  kdeqe = analyze.kde_fit_quantiles(qe, bw='scott')
-                  sns.kdeplot(kdeqe, cumulative=cumulative, color=col[ii][i], linestyle=linestyles[ii], ax=ax2, linewidth=3.5, alpha=.7)
+                  kdeqe = analyze.kde_fit_quantiles(qe, bw=.01)
+                  sns.kdeplot(kdeqe, cumulative=cumulative, linestyle=linestyles[ii], ax=ax2, linewidth=3.5, color=col[i][ii])
 
             labels = [' '.join([model.labels[i], x]) for x in ['data', 'model']]
             # Plot observed and predicted stop curves
@@ -303,15 +300,16 @@ def plot_reactive_fits(model, cumulative=False, plot_sims=False, save=False, col
             plt.tight_layout()
             sns.despine()
 
-      ax1.set_title('Correct RTs')
-      ax2.set_title('SS Trial RTs (Errors)')
-      ax3.set_title('P(Stop) Across SSD')
+      ax1.set_title('Correct RTs', fontsize=17)
+      ax2.set_title('SS Trial RTs (Errors)', fontsize=17)
+      ax3.set_title('P(Stop) Across SSD', fontsize=17)
+      xxticks = ax1.get_xticks()[::2]
       for axx in [ax1, ax2]:
-            axx.set_xlim(.46, .64)
             axx.set_ylabel('P(RT<t)')
             axx.set_xlabel('RT (s)')
             #axx.set_ylim(-.05, 1.05)
-            axx.set_xticklabels(ax1.get_xticks())
+            axx.set_xticks(xxticks)
+            axx.set_xticklabels([int(xx) for xx in xxticks*1000])
       if save:
             plt.savefig(savestr, dpi=300)
 
@@ -349,7 +347,7 @@ def plot_idx_fits(obs, sim, kind='', save=False):
                         continue
       elif kind=='pro':
             """
-            FILL THIS IN
+            TODO
             """
 
             df=None
@@ -405,35 +403,22 @@ def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, retu
             return dvglist
 
 
-def gen_re_traces(rtheta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .05)):
+def gen_re_traces(model, theta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .05)):
 
-      dvglist=[]; dvslist=[]
-      rtheta['pGo']=.5
-      rtheta['ssv']=-abs(rtheta['ssv'])
-      #animation only works if tr<=ssd
-      rtheta['tr']=np.min(ssdlist)-.001
-
-      for ssd in ssdlist:
-            rtheta['ssd'] = ssd
-            dvg, dvs = RADD.run(rtheta, ntrials=10, tb=.650)
-            dvglist.append(dvg[0])
-            dvslist.append(dvs[0])
-
-      if integrate_exec_ss:
-            ssn = len(dvslist[0])
-            traces=[np.append(dvglist[i][:-ssn],(dvglist[i][-ssn:]+ss)-dvglist[i][-ssn:]) for i, ss in enumerate(dvslist)]
-            traces.append(dvglist[-1])
-            return traces
+      dvg, dvs = model.simulate(theta, analyze=False, return_traces=True)
+      dvglist, dvslist = dvg[0, :model.simulator.nssd].tolist(), dvs[0, :, 0].tolist()
 
       ssi, xinit_ss = [], []
-      for i, (gtrace, strace) in enumerate(zip(dvglist, dvslist)):
-            leng = len(gtrace)
-            lens = len(strace)
-            xinit_ss.append(leng - lens)
-            ssi.append(strace[0])
-            dvslist[i] = np.append(gtrace[:leng-lens], strace)
-            dvslist[i] = np.append(dvslist[i], ([0]))
 
+      Ps, Ts = model.simulator.__update_stop_process__(theta)
+      Pg, Tg = model.simulator.__update_go_process__(theta)
+      for i, (gtrace, strace) in enumerate(zip(dvglist, dvslist)):
+            xinit_ss.append(Tg[0] - Ts[i])
+            ssi.append(gtrace[:xinit_ss[i]])
+            sstrace = np.append(strace, array([0]))
+            dvslist[i] = np.append(gtrace[:xinit_ss[i]], sstrace)
+      dvslist=[array(strace) for strace in dvslist]
+      dvglist=[array(gtrace) for gtrace in dvglist]
       return [dvglist, dvslist, xinit_ss, ssi]
 
 
@@ -443,14 +428,13 @@ def build_decision_axis(theta, gotraces):
       f, ax = plt.subplots(1, figsize=(7,4))
 
       w=len(gotraces[0])+50
-      h=theta['a']
+      h=theta['a'][0]
       start=-100
 
       plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
 
       ax.hlines(y=h, xmin=-100, xmax=w, color='k')
       ax.hlines(y=0, xmin=-100, xmax=w, color='k')
-      ax.hlines(y=theta['z'], xmin=start, xmax=w, color='Gray', linestyle='--', alpha=.7)
       ax.vlines(x=w-50, ymin=0, ymax=h, color='r', linestyle='--', alpha=.5)
       ax.vlines(x=start, ymin=0, ymax=h, color='k')
 
@@ -466,11 +450,13 @@ def build_decision_axis(theta, gotraces):
 
 def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
 
-      clist=['#2c724f']*len(dvg_traces)
-      clist_ss = sns.light_palette('#c0392b', n_colors=6)[::-1]
+      clist=['#27ae60']*len(dvg_traces)
+      clist_ss = sns.light_palette('#e74c3c', n_colors=6)[::-1]
 
       for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
-            if g[i]>=rtheta['a'] or dvs_traces[nline][i]<=0:
+            #if g[i]>=rtheta['a'][0]:
+            #      continue
+            if dvs_traces[nline][i]<=0:
                   continue
             gl.set_data(x[:i+1], g[:i+1])
             gl.set_color(clist[nline])

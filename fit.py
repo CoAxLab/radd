@@ -8,13 +8,12 @@ import pandas as pd
 from numpy import array
 from radd import models, theta
 from radd.tools.messages import logger
-from lmfit import Parameters, minimize
+from lmfit import Parameters, minimize, fit_report
 from radd.CORE import RADDCore
 from scipy.optimize import basinhopping
 
 
 class Optimizer(RADDCore):
-
       """ Optimizer class acts as interface between Model and Simulator (see fit.py) objects.
       Structures fitting routines so that Models are first optimized with the full set of
       parameters free, data collapsing across conditions.
@@ -39,7 +38,6 @@ class Optimizer(RADDCore):
             self.basinparams=basinparams
             self.global_method=global_method
             self.kind=kind
-            self.xbasin=[]
             self.dynamic=self.fitparams['dynamic']
 
             if fit_on in ['subjects', 'bootstrap']:
@@ -82,7 +80,7 @@ class Optimizer(RADDCore):
 
             ::Arguments::
             <OPTIONAL>
-                  random_init (bool <True>):
+                  random_init (bool <False>):
                         if True performs random initializaiton by sampling from parameter distributions and uses basinhopping alg. to find global minimum before entering stage 1 simplex
                   p0 (dict):
                         parameter dictionary to initalize model, if None uses init params
@@ -114,14 +112,13 @@ class Optimizer(RADDCore):
             ::Arguments::
             <OPTIONAL>
                   precond (bool <True>):
-                        if True performs pre-conditionalizes params (p1)  using
+                        if True performs pre-conditionalizes params (p)  using
                         basinhopping alg. to find global minimum for each condition
                         before entering final simplex
                   p (dict):
-                        parameter dictionary, if None uses init params passed by Model object
+                        parameter dictionary, if None uses default init params passed by Model object
                   y (ndarray):
                         data to be fit; must be same shape as avg_wts vector
-
             """
 
             if p is None:
@@ -154,28 +151,23 @@ class Optimizer(RADDCore):
             return yhat, finfo, popt
 
 
-      def hop_around(self, p, ninits=2):
+      def hop_around(self, p):
             """ initialize model with niter randomly generated parameter sets
             and perform global minimization using basinhopping algorithm
             ::Arguments::
-                  ninits (int):
-                        number of randomly generated parameter sets
-                  nsuccess (int):
-                        tell basinhopping algorithm to exit after this many
-                        iterations at which a common minimum is found
+                  p (dict):
+                        parameter dictionary
             ::Returns::
                   parameter set with the best fit
             """
 
-            if not hasattr(self, 'basinparams'):
-                  self.set_basinparams()
             bp = self.basinparams
 
             P0X=dict(deepcopy(p))
             pkeys = p.keys()
-            rinits = theta.random_inits(pkeys, ninits=ninits, kind=self.kind)
+            rinits = theta.random_inits(pkeys, ninits=bp['nrand_inits'], kind=self.kind)
             xpopt, xfmin = [], []
-            for i in range(ninits):
+            for i in range(bp['nrand_inits']):
                   if i==0:
                         params=dict(deepcopy(p))
                   else:
@@ -207,8 +199,6 @@ class Optimizer(RADDCore):
             """
 
             fp = self.fitparams
-            if not hasattr(self, 'basinparams'):
-                  self.set_basinparams()
             bp = self.basinparams
 
             if is_flat:
@@ -227,7 +217,7 @@ class Optimizer(RADDCore):
             x = np.hstack(np.hstack([basin_params[pk] for pk in basin_keys])).tolist()
 
             bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
-            mkwargs = {"method":bp['method'], "bounds":bounds, 'tol':bp['tol'], 'options':{'xtol':bp['tol'], 'ftol':bp['tol'], 'maxiter':bp['maxiter']}}
+            mkwargs = {"method":bp['method'], "bounds": bounds, 'tol': bp['tol'], 'options':{'xtol': bp['tol'], 'ftol':bp['tol'], 'maxiter': bp['maxiter']}}
 
             # run basinhopping on simulator.basinhopping_minimizer func
             out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], niter_success=bp['nsuccess'], minimizer_kwargs=mkwargs, niter=bp['niter'], interval=bp['interval'], disp=bp['disp'])
@@ -304,20 +294,21 @@ class Optimizer(RADDCore):
             # gen dict of opt. params
             finfo = dict(deepcopy(optmod.params.valuesdict()))
             popt = dict(deepcopy(finfo))
-            yhat = self.simulator.sim_fx(popt)#y# + self.residual
+            yhat = np.mean([self.simulator.sim_fx(popt) for i in xrange(100)], axis=0)
             wts = self.simulator.wts
 
-            # ASSUMING THE WSSE is CALC BY COSTFX
-            finfo['chi']=np.asscalar(optmod.residual)
+            # ASSUMING THE weighted SSE is CALC BY COSTFX
+            finfo['chi']=np.sum(wts*(y.flatten()-yhat)**2)
             finfo['ndata']=len(yhat)
             finfo['cnvrg'] = optmod.pop('success')
             finfo['nfev'] = optmod.pop('nfev')
             finfo['nvary'] = len(optmod.var_names)
             finfo = self.assess_fit(finfo)
 
+            popt = theta.all_params_to_scalar(popt, exclude=self.pc_map.keys())
             log_arrays = {'y':self.simulator.y, 'yhat':yhat, 'wts':wts}
-            logger(optmod=optmod, finfo=finfo, pdict=popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=self.fit_on, xbasin=self.xbasin, dynamic=self.dynamic, pc_map=self.pc_map)
-
+            param_report=fit_report(optmod.params)
+            logger(param_report=param_report, finfo=finfo, pdict=popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic, pc_map=self.pc_map)
             return  yhat, finfo, popt
 
 

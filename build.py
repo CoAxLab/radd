@@ -49,28 +49,31 @@ class Model(RADDCore):
             self.prepare_fit()
 
 
-      def make_optimizer(self, ntrials=5000, tol=1.e-10, maxfev=3000, niter=40, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, ninits=2, interval=10, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20):
+      def make_optimizer(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='TNC', btol=1.e-3, maxiter=20):
             """ init Optimizer class as Model attr
             """
-            fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, prob=prob, get_params=True)
-            bp = self.set_basinparams(btol=btol, interval=interval, niter=niter, maxiter=maxiter, method=method, nsuccess=nsuccess, stepsize=stepsize, ninits=ninits, get_params=True, disp=disp)
+            fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, get_params=True)
+            bp = self.set_basinparams(btol=btol, interval=interval, niter=niter, maxiter=maxiter, method=method, nsuccess=nsuccess, stepsize=stepsize, nrand_inits=nrand_inits, bdisp=bdisp, get_params=True)
 
-            self.__check_inits__()
+            if inits is None:
+                  inits = self.inits
+            self.__check_inits__(inits=inits)
             inits = dict(deepcopy(self.inits))
+
             self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, basinparams=bp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.avg_wts, pc_map=self.pc_map,  multiopt=multiopt)
 
 
-      def optimize(self, save=True, savepth='./', ntrials=5000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=array([.1, .3, .5, .7, .9]), multiopt=True, stage='full', inits=None, y=None):
+      def optimize(self, inits=None, y=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='TNC', btol=1.e-3, maxiter=20, multiopt=True, stage='full', save=True, savepth='./'):
             """ Method to be used for accessing fitting methods in Optimizer class
             see Optimizer method optimize()
             """
-            #if not hasattr(self, 'opt'):
-            self.make_optimizer(ntrials=ntrials, tol=tol, maxfev=maxfev, niter=niter, disp=disp, prob=prob)
+
+            self.make_optimizer(inits=inits, ntrials=ntrials, tol=tol, maxfev=maxfev, disp=disp, bdisp=bdisp, nrand_inits=nrand_inits, niter=niter, method=method, multiopt=multiopt, btol=btol, interval=interval, stepsize=stepsize, nsuccess=nsuccess, maxiter=maxiter)
 
             if stage=='flat':
                   y, fi, p = self.opt.optimize_flat(p0=inits, y=y, random_init=multiopt)
                   self.flat_fits, self.flat_fitinfo, self.flat_popt = y, fi, p
-            elif stage=='conditional':
+            elif stage=='cond':
                   if inits is None and hasattr(self, 'flat_popt'):
                         inits=self.flat_popt
                   y, fi, p = self.opt.optimize_conditional(p=inits, y=y, precond=multiopt)
@@ -97,7 +100,7 @@ class Model(RADDCore):
             self.simulator=models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
 
 
-      def simulate(self, p=None, analyze=True, all_data=True):
+      def simulate(self, p=None, analyze=True, return_traces=False):
             """ simulate yhat vector using popt or inits
             if model is not optimized
             :: Arguments ::
@@ -118,9 +121,8 @@ class Model(RADDCore):
                         p=self.inits
             p = self.simulator.vectorize_params(p)
             out = self.simulator.sim_fx(p, analyze=analyze)
-            if not analyze and all_data:
+            if not analyze and not return_traces:
                   out = self.simulator.predict_data(out, p)
-
             return out
 
 

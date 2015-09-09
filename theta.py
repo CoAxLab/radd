@@ -72,6 +72,8 @@ def all_params_to_scalar(params, params_list=None, exclude=[]):
                         params[pk] = np.asscalar(params[pk])
                   except ValueError:
                         params[pk] = np.mean(params[pk])
+      for exc in exclude:
+            params[exc]=np.asarray(params[exc], dtype=float)
       return params
 
 

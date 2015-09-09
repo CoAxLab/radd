@@ -176,7 +176,7 @@ class Simulator(object):
             if 'xb' not in p.keys():
                   p['xb']=1.0
             for pkey in self.pvc:
-                  p[pkey]=np.ones(self.ncond)*p[pkey]
+                  p[pkey]=p[pkey]*np.ones(self.ncond).astype(np.float32)
             for pkey, pkc in self.pc_map.items():
                   if self.ncond==1:
                         break
@@ -258,7 +258,7 @@ class Simulator(object):
 
             DVg = self.xtb[:,na]*np.cumsum(np.where((rs((nc, ntot, Tg.max())).T<Pg),dx,-dx).T, axis=2)
             # INITIALIZE DVs FROM DVg(t=SSD)
-            init_ss = array([[DVg[i,:nss,ix-1] for ix in np.where(Ts<Tg[i],Tg[i]-Ts,0)] for i in range(nc)])
+            init_ss = array([[DVg[i,:nss,ix] for ix in np.where(Ts<Tg[i],Tg[i]-Ts,0)] for i in range(nc)])
             DVs = init_ss[:,:,:,None]+np.cumsum(np.where(rs((nss, Ts.max()))<Ps,dx,-dx), axis=1)
             if analyze:
                   return self.analyze_reactive(DVg, DVs, p)
@@ -290,7 +290,7 @@ class Simulator(object):
             nc = self.ncond; dx=self.dx; ntot=self.ntot
 
             DVg = self.xtb[:,None]*np.cumsum(np.where((rs((nc, ntot, Tg.max())).T<Pg),dx,-dx).T, axis=2)
-            # INITIALIZE DVs FROM DVg(t=0)
+            # INITIALIZE DVs FROM 0
             DVs = np.cumsum(np.where(rs((nc, nssd, nss, Ts.max()))<Ps, dx,-dx), axis=3)
             if analyze:
                   return self.analyze_reactive(DVg, DVs, p)
@@ -342,17 +342,15 @@ class Simulator(object):
             ssd = self.ssd; tb = self.tb
             nc = self.ncond; nssd=self.nssd
 
-            if 'sso' in p.keys():
-                  ssd = ssd + p['sso']
+            #if 'sso' in p.keys():
+            #      ssd = ssd + p['sso']
             gdec = self.resp_up(DVg, p['a'])
-
             if 'irace' in self.kind:
                   sdec = self.ss_resp_up(DVs, p['a'])
             else:
                   sdec = self.resp_lo(DVs)
             gort = self.RT(p['tr'], gdec)
             ssrt = self.RT(ssd, sdec)
-            #ert = gort[:,:nss][:, None]*np.ones_like(ssrt)
             ert = np.tile(gort[:,:nss],nssd).reshape(nc, nssd, nss)
 
             eq = self.RTQ(zip(ert, ssrt))
@@ -476,7 +474,7 @@ class Simulator(object):
             conditions = np.sort(self.fitparams['labels']*int(ntot))
             # assign go trials pseudo ssd of 1000
             delays = np.append(np.array([[c]*nss for c in sd]), [1000]*nss*nssd)
-            ttype=np.tile(array(['stop']*nsstot + ['go']*nsstot]),nc)
+            ttype = np.tile(array([['stop']*nsstot + ['go']*nsstot]), nc)
 
             DVg, DVs = dv
             if 'sso' in p.keys():

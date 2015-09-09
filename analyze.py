@@ -82,7 +82,7 @@ def rangl_data(data, data_style='re', kind='dpm', tb=.650, prob=([.1, .3, .5, .7
             return 1-data.response.mean()
 
 
-def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.550, nrt_cond=2, prob=np.array([.1, .3, .5, .7, .9])):
+def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.555, nrt_cond=2, prob=np.array([.1, .3, .5, .7, .9])):
       """ called by __make_dataframes__ for proactive models to generate observed
       dataframes and iterables for subject fits, specifically aggregates proactive rts
       into a smaller number of conditions to offset low trial count issues
@@ -109,7 +109,7 @@ def rt_quantiles(data, split_col='HL', include_zero_rts=False, tb=.550, nrt_cond
       return np.hstack(rtq)
 
 
-def resample_data(data, data_style='re', n=120, kind='dpm', tb=.550):
+def resample_data(data, data_style='re', n=120, kind='dpm', tb=.555):
       """ generates n resampled datasets using rwr()
       for bootstrapping model fits
       """
