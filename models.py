@@ -78,34 +78,13 @@ class Simulator(object):
             self.y=y.flatten()
             self.wts=wts.flatten()
 
+
       def __prep_global__(self,  basin_params={}, basin_keys=[], is_flat=False):
 
             self.basin_keys=basin_keys
             self.basin_params=basin_params
             self.__update__(is_flat=is_flat)
             self.chunk = lambda x, n: [array(x[i:i+n]) for i in xrange(0, len(x), n)]
-
-      def basinhopping_minimizer(self, x):
-            """ used specifically by fit.perform_basinhopping() for Model
-            objects with multiopt attr (See __opt_routine__ and perform_basinhopping
-            methods of Optimizer object)
-            """
-            p = dict(deepcopy(self.basin_params))
-
-            # segment 'x' into equal len arrays (one array,
-            # ncond vals long per free parameter) in basin_keys
-            px = self.chunk(x, self.ncond)
-            for i, pk in enumerate(self.basin_keys):
-                  p[pk]=px[i]
-
-            if np.any(p['tr']>=self.tb):
-                  return 1.e5
-
-            yhat = self.sim_fx(p)
-            cost = np.sum((self.wts*(yhat-self.y)**2))
-            if hasattr(cost, '__iter__'):
-                  return cost[0]
-            return cost
 
 
       def __init_model_functions__(self):
@@ -187,6 +166,42 @@ class Simulator(object):
             return p
 
 
+
+      def basinhopping_minimizer(self, x):
+            """ used specifically by fit.perform_basinhopping() for Model
+            objects with multiopt attr (See __opt_routine__ and perform_basinhopping
+            methods of Optimizer object)
+            """
+            p = dict(deepcopy(self.basin_params))
+
+            # segment 'x' into equal len arrays (one array,
+            # ncond vals long per free parameter) in basin_keys
+            px = self.chunk(x, self.ncond)
+            for i, pk in enumerate(self.basin_keys):
+                  p[pk]=px[i]
+
+            if np.any(p['tr']>=self.tb):
+                  return 1.e5
+
+            yhat = self.sim_fx(p)
+            cost = np.sum((self.wts*(yhat-self.y)**2))
+            if hasattr(cost, '__iter__'):
+                  return cost[0]
+            return cost
+
+
+      def __cost_fx__(self, theta):
+            """ Main cost function used for fitting all models self.sim_fx
+            determines which model is simulated (determined when Simulator
+            is initiated)
+            """
+            if type(theta)==dict:
+                  p = dict(deepcopy(theta))
+            else:
+                  p = theta.valuesdict()
+            yhat = self.sim_fx(p, analyze=True)
+            return np.sum(self.wts*(self.y-yhat)**2).astype(np.float32)
+
       def __update_go_process__(self, p):
             """ update Pg (probability of DVg +dx) and Tg (num go process timepoints)
             for go process and get get dynamic bias signal if 'x' model
@@ -219,20 +234,6 @@ class Simulator(object):
             t = np.cumsum([self.dt]*nt)
             self.xtb = self.temporal_dynamics(p, t)
             return Pg, Tg, Ps, Ts, nt
-
-
-      def __cost_fx__(self, theta):
-            """ Main cost function used for fitting all models self.sim_fx
-            determines which model is simulated (determined when Simulator
-            is initiated)
-            """
-            if type(theta)==dict:
-                  p = dict(deepcopy(theta))
-            else:
-                  p = theta.valuesdict()
-            yhat = self.sim_fx(p, analyze=True)
-            return np.sum(self.wts*(self.y-yhat)**2).astype(np.float32)
-
 
 
       def simulate_dpm(self, p, analyze=True):
