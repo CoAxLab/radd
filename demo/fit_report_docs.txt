@@ -24,12 +24,6 @@ in the data
       yhat = array of best fit model predictions
       y = array of data entered into the cost fx
       ----------------------------------------
-      [[Fit Statistics]]
-          # function evals   =      nfev (float)
-          # data points      =      ndata (float)
-          # variables        =      nvar (float)
-          chi-square         =      X2 (float)
-          reduced chi-square =      rX2 (float)
       [[Variables]]
           a:    optimized boundary height(float) (init value (float))
           xb:   optimized dynamic bias (float)   (init value (float))
