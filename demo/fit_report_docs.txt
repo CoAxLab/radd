@@ -44,14 +44,6 @@ in the data
       ========================================
 
 
-* results of basinhopping routine used to pre-tune conditional parameters
-before initializing the full model submitted to the final simplex optimization
-
-      ----------------------------------------
-      BASINHOPPING RESULTS
-      basin = array of pretuned values (1/level of condition) of parameters in depends_on keys
-      (i.e. parameters allowed to vary across condition)
-      ----------------------------------------
 
 * This section contains all the details of the model fits to
 all conditions of interest in the data.
@@ -65,12 +57,6 @@ all conditions of interest in the data.
       yhat = array of best fit model predictions
       y = array of data entered into the cost fx
       ----------------------------------------
-      [[Fit Statistics]]
-          # function evals   =      nfev (float)
-          # data points      =      ndata (float)
-          # variables        =      nvar (float)
-          chi-square         =      X2 (float)
-          reduced chi-square =      rX2 (float)
       [[Variables]]
           a_0:     optimized boundary height for P(Go=0)    (init value)
           a_20:    optimized boundary height for P(Go=20)   (init value)
