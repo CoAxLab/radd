@@ -9,7 +9,6 @@ from radd import fit, models, analyze
 from radd.CORE import RADDCore
 
 class Model(RADDCore):
-
       """ Main class for instantiating, fitting, and simulating models.
       Inherits from RADDCore parent class (see CORE module).
       Many of the naming conventions as well as the logic behind constructing parameter
