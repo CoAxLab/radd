@@ -447,14 +447,14 @@ def build_decision_axis(onset, bound, ssd=np.arange(200,450,50), tb=650):
       f.subplots_adjust(hspace=.06,top=.99, bottom=.01)
       w=tb+40
       h=bound
-      start=onset*.9
+      start=onset-80
       #c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
       for i, ax in enumerate(axes):
             plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
-            ax.vlines(x=ssd[i], ymin=0, ymax=h, color='k', alpha=.4, lw=1.5)#color="#e74c3c", lw=1.5)
+            ax.vlines(x=ssd[i], ymin=0, ymax=h, color="#e74c3c", lw=1.5, alpha=.5)
             ax.hlines(y=h, xmin=start, xmax=w, color='k')
             ax.hlines(y=0, xmin=start, xmax=w, color='k')
-            ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='--')
+            ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='-', alpha=.5)
             ax.vlines(x=start+2, ymin=0, ymax=h, color='k')
             ax.text(ssd[i]+10, h*.87, str(ssd[i])+'ms', fontsize=15)
             ax.set_xticklabels([]); ax.set_yticklabels([])
@@ -465,7 +465,6 @@ def build_decision_axis(onset, bound, ssd=np.arange(200,450,50), tb=650):
 
 
 def re_animate_all(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
-
 
       clist = sns.blend_palette(['#65b88f','#27ae60'], n_colors=len(dvg_traces)*2)[::2]
       clist_ss = sns.blend_palette(['#e74c3c','#e88379'], n_colors=len(dvs_traces)*2)[::2]
