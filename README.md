@@ -6,9 +6,7 @@ This code should not be used for any type of clinical purposes.
 
 
 ---
-Currently under development. The link below still contains useful examples of the model functionality but the code is outdated. A more comprehensive set of examples and tutorials for using the model will be posted within the next couple of weeks.
+The following link contains a few demonstrations of fitting models with RADD as well as some basic simulation and visualization methods. This repository (+ docs & demos) will be continue to be updated as the code is refactored for more general application to user-specific datasets, task designs, etc.
 
-[**RADD_Demo.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/master/demo/RADD_Demo.ipynb)
-
-
+[**RADD_Demo_Updated.ipynb**](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/master/demo/RADD_Demo_Updated.ipynb)
 ---
