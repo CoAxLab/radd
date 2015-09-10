@@ -207,7 +207,7 @@ def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', 
       # pull out data vectors
       sc, gq, eq = unpack_yvector(y, kind=kind)
       fitsc, fitgq, fiteq = unpack_yvector(yhat, kind=kind)
-      kdefits = [analyze.kde_fit_quantiles(q, bw=.005) for q in [gq, fitgq, eq, fiteq]]
+      kdefits = [analyze.kde_fit_quantiles(q, bw=.01) for q in [gq, fitgq, eq, fiteq]]
       dat_cq, fit_cq, dat_eq, fit_eq = kdefits
       #shade=pp['shade']; lw=pp['lw']; ls=pp['ls']; alpha=pp['alpha']; bw=pp['bw']
       sns.distplot(fit_cq, kde=False, color=colors[0], norm_hist=True, ax=ax1, bins=25)
