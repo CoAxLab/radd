@@ -11,7 +11,8 @@ from radd import analyze
 from radd.tools import colors, messages
 from scipy.stats.mstats import mquantiles as mq
 import prettyplotlib as pl
-
+from numpy import cumsum as cs
+from numpy import append as app
 
 sns.set(font='Helvetica', style='white', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
 
@@ -274,7 +275,7 @@ def plot_reactive_fits(model, cumulative=True, save=False, col=None):
       f, (ax1, ax2,ax3) = plt.subplots(1,3,figsize=(14, 5))
       y = model.avg_y; r,c=y.shape
       if col is None:
-            col=[bpal(2), ppal(2)]
+            col=[bpal(2), rpal(2)]
       yhat = model.fits.reshape(r, c)
       yh_id='fits.png'
 
@@ -398,68 +399,80 @@ def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, retu
 
       elif return_exec_ss:
             return [dvglist, dvslist]
-
       else:
             return dvglist
 
 
-def gen_re_traces(model, theta, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .05)):
+def gen_re_traces(model, params, integrate_exec_ss=False, ssdlist=np.arange(.2, .45, .05), integrate=False):
 
-      dvg, dvs = model.simulate(theta, analyze=False, return_traces=True)
-      dvglist, dvslist = dvg[0, :model.simulator.nssd].tolist(), dvs[0, :, 0].tolist()
+      nssd = model.simulator.nssd;
+      nss = model.simulator.nss;
+      nsstot = nss*nssd
+      nc = model.simulator.ncond
 
-      ssi, xinit_ss = [], []
+      dvg, dvs = model.simulate(params, analyze=False, return_traces=True)
+      gtraces = dvg[0, :nssd]
+      straces = [dvs[0,i,i] for i in range(nssd)]
 
-      Ps, Ts = model.simulator.__update_stop_process__(theta)
-      Pg, Tg = model.simulator.__update_go_process__(theta)
-      for i, (gtrace, strace) in enumerate(zip(dvglist, dvslist)):
+      Ps, Ts = model.simulator.__update_stop_process__(params)
+      Pg, Tg = model.simulator.__update_go_process__(params)
+      bound = params['a'][0]
+      gtraces = [gt[gt<bound] for gt in gtraces]
+      ssi, xinit_ss, integrated, dvgs, dvss=[],[],[],[],[]
+      for i, (g, s) in enumerate(zip(gtraces, straces)):
             xinit_ss.append(Tg[0] - Ts[i])
-            ssi.append(gtrace[:xinit_ss[i]])
-            sstrace = np.append(strace, array([0]))
-            dvslist[i] = np.append(gtrace[:xinit_ss[i]], sstrace)
-      dvslist=[array(strace) for strace in dvslist]
-      dvglist=[array(gtrace) for gtrace in dvglist]
-      return [dvglist, dvslist, xinit_ss, ssi]
+            ssi.append(g[:xinit_ss[i]])
+            ss = s[:Ts[i]]
+            s = np.append(g[:xinit_ss[i]], ss[ss>=0])
+            ixmin = np.min([len(g), len(s)])
+            dvgs.append(g[:ixmin])
+            dvss.append(s[:ixmin])
+
+            if integrate:
+                  tx=xinit_ss[i]
+                  integrated.append(app(g[:tx], cs(app(g[tx],(np.diff(g[tx:])+np.diff(s[tx:]))))))
+
+      nframes = [len(gt) for gt in dvgs]
+      x = params['tr'][0]*1000 + [np.arange(nf) for nf in nframes]
+      return [x, dvgs, dvss, xinit_ss, ssi, np.max(nframes)]
 
 
-def build_decision_axis(theta, gotraces):
+def build_decision_axis(onset, bound, ssd=np.arange(200,450,50), tb=650):
 
       # init figure, axes, properties
-      f, ax = plt.subplots(1, figsize=(7,4))
-
-      w=len(gotraces[0])+50
-      h=theta['a'][0]
-      start=-100
-
-      plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
-
-      ax.hlines(y=h, xmin=-100, xmax=w, color='k')
-      ax.hlines(y=0, xmin=-100, xmax=w, color='k')
-      ax.vlines(x=w-50, ymin=0, ymax=h, color='r', linestyle='--', alpha=.5)
-      ax.vlines(x=start, ymin=0, ymax=h, color='k')
-
-      ax.set_xticklabels([])
-      ax.set_yticklabels([])
-      ax.set_xticks([])
-      ax.set_yticks([])
-
+      f, axes = plt.subplots(len(ssd), 1, figsize=(5,10))
+      f.subplots_adjust(hspace=.06,top=.99, bottom=.01)
+      w=tb+40
+      h=bound
+      start=onset*.9
+      #c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
+      for i, ax in enumerate(axes):
+            plt.setp(ax, xlim=(start-1, w+1), ylim=(0-(.01*h), h+(.01*h)))
+            ax.vlines(x=ssd[i], ymin=0, ymax=h, color="#e74c3c", lw=1.5)
+            ax.hlines(y=h, xmin=start, xmax=w, color='k')
+            ax.hlines(y=0, xmin=start, xmax=w, color='k')
+            ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='--')
+            ax.vlines(x=start+2, ymin=0, ymax=h, color='k')
+            ax.text(ssd[i]+10, h*.87, str(ssd[i])+'ms', fontsize=15)
+            ax.set_xticklabels([]); ax.set_yticklabels([])
+            ax.set_xticks([]); ax.set_yticks([])
       sns.despine(top=True, right=True, bottom=True, left=True)
 
-      return f, ax
+      return f, axes
 
 
-def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
+def re_animate_all(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
 
-      clist=['#27ae60']*len(dvg_traces)
-      clist_ss = sns.light_palette('#e74c3c', n_colors=6)[::-1]
+
+      clist = sns.blend_palette(['#65b88f','#27ae60'], n_colors=len(dvg_traces)*2)[::2]
+      clist_ss = sns.blend_palette(['#e74c3c','#e88379'], n_colors=len(dvs_traces)*2)[::2]
 
       for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
-            #if g[i]>=rtheta['a'][0]:
-            #      continue
-            if dvs_traces[nline][i]<=0:
+            if g[i]>=rtheta['a'][0] or dvs_traces[nline][i]<=0:
                   continue
             gl.set_data(x[:i+1], g[:i+1])
             gl.set_color(clist[nline])
+            dvg_lines[nline].set_linestyle('--')
 
             if dvs_traces[nline][i]>0:
                   ssi = len(g) - len(dvs_traces[nline]) + 1
@@ -467,6 +480,25 @@ def re_animate(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, y
                   dvs_lines[nline].set_color(clist_ss[nline])
 
       return dvs_lines, dvg_lines
+
+
+
+
+def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
+
+      gcolor='#27ae60'
+      scolor = '#e74c3c'
+      for n in range(len(x)):
+            ex, gt, gl, st, sl, ix, iy = [xx[n] for xx in [x, gtraces, glines, straces, slines, xi, yi]]
+            try:
+                  gl.set_data(ex[:i+1], gt[:i+1])
+                  gl.set_color(gcolor)
+                  sl.set_data(ex[ix:i+1], st[ix:i+1])
+                  sl.set_color(scolor)
+            except Exception:
+                  return sl, gl
+      return sl, gl
+
 
 
 def pro_animate(i, x, protraces, prolines):

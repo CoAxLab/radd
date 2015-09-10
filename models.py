@@ -266,6 +266,7 @@ class Simulator(object):
             else:
                   return [DVg, DVs]
 
+
       def simulate_pro(self, p, analyze=True):
             """ Simulate the proactive competition model
             (see simulate_dpm() for I/O details)

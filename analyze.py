@@ -62,7 +62,7 @@ def remove_outliers(df, sd=1.5, verbose=False):
       return clean
 
 
-def rangl_data(data, data_style='re', kind='dpm', prob=([.1, .3, .5, .7, .9])):
+def rangl_data(data, data_style='re', kind='dpm', tb=.555, prob=([.1, .3, .5, .7, .9])):
       """ called by __make_dataframes__ to generate observed dataframes and iterables for
       subject fits
       """
@@ -155,7 +155,7 @@ def rwr(X, get_index=False, n=None):
             return X_resample
 
 
-def proactive_mj_quanterr(df, split='HL', prob=array([.1,.3,.5,.7,.9]), as_ratio=True):
+def proactive_mj_quanterr(df, split='HL', tb=.555, prob=array([.1,.3,.5,.7,.9]), as_ratio=True):
       """ calculates weight vectors for proactive RT quantiles by estimating
       first estimating the SEM of RT quantiles across levels of <split>
       (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
