@@ -304,13 +304,17 @@ def plot_reactive_fits(model, cumulative=True, save=False, col=None):
       ax1.set_title('Correct RTs', fontsize=17)
       ax2.set_title('SS Trial RTs (Errors)', fontsize=17)
       ax3.set_title('P(Stop) Across SSD', fontsize=17)
-      xxticks = ax1.get_xticks()[::2]
+      #[axx.set_xlim(.470,.650) for]
+
       for axx in [ax1, ax2]:
+            axx.set_xlim(.470,.650)
+            xxticks = axx.get_xticks()
             axx.set_ylabel('P(RT<t)')
             axx.set_xlabel('RT (s)')
             #axx.set_ylim(-.05, 1.05)
             axx.set_xticks(xxticks)
             axx.set_xticklabels([int(xx) for xx in xxticks*1000])
+            axx.set_xlim(.470,.650)
       if save:
             plt.savefig(savestr, dpi=300)
 
