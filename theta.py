@@ -141,9 +141,9 @@ def get_default_inits(kind='dpm', dynamic='hyp', depends_on={}):
       """
 
       if 'dpm' in kind:
-            popt = {'a': 0.53625, 'v': array([ 1.2887 ,  1.24358]), 'xb': 0.87761, 'ssv': -0.98396, 'tr':0.17801}
+            popt = {'a': 0.53625, 'v': 1.26, 'xb': 0.87761, 'ssv': -0.98396, 'tr':0.17801}
       elif 'pro' in kind:
-            popt = {'a': 0.51141, 'xb': 3.8071, 'tr': 0.320013, 'v': 1.518}
+            popt = {'a': 0.48722, 'xb': 1.51129, 'tr':0.292126, 'v': 1.718}
       elif 'race' in kind:
             popt ={'a': 0.24266,  'v': 1.05866,  'xb': 1.5, 'ssv': 1.12441, 'tr': 0.335, 'xb': 1.46335}
       elif 'iact' in kind:
