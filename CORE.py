@@ -5,10 +5,9 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.toolbox import theta
-from radd.toolbox import analyze
+from radd import analyze, theta
 from scipy.stats.mstats import mquantiles as mq
-from radd.toolbox.messages import saygo
+from radd.tools.messages import saygo
 
 
 class RADDCore(object):
@@ -24,7 +23,7 @@ class RADDCore(object):
       """
 
 
-      def __init__(self, data=None, kind='radd', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
+      def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
 
             self.data = data
             self.kind = kind
@@ -71,7 +70,7 @@ class RADDCore(object):
             # if split!=None (is set during prep in
             # analyze.__make_proRT_conds__())
             self.rt_cix = None
-            # GET TB BEFORE REMOVING OUTLIERS!!!
+            # Get timebound
             if tb != None:
                   self.tb=tb
             else:
@@ -82,8 +81,6 @@ class RADDCore(object):
             else:
                   self.inits = inits
             self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
-            # DATA TREATMENT AND EXTRACTION
-            #self.__remove_outliers__(sd=2.5, verbose=False)
 
             # DEFINE ITERABLES
             if self.fit_on=='bootstrap':
@@ -92,15 +89,32 @@ class RADDCore(object):
                   self.indx = list(data.idx.unique())
 
 
-      def set_fitparams(self, ntrials=10000, tol=1.e-10, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
+      def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
 
             if not hasattr(self, 'fitparams'):
                   self.fitparams={}
 
-            self.fitparams = {'ntrials':ntrials, 'maxfev':maxfev, 'disp':disp, 'tol':tol, 'niter':niter, 'prob':prob, 'tb':self.tb, 'ssd':self.ssd, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'avg_wts':self.avg_wts, 'ncond':self.ncond, 'pGo':self.pGo, 'flat_wts':self.flat_wts, 'depends_on': self.depends_on, 'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model, 'rt_cix': self.rt_cix, 'data_style':self.data_style, 'nudge_dir':self.nudge_dir}
+            self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev,
+                  'disp': disp, 'tol': tol, 'niter': niter, 'nudge_dir':self.nudge_dir,
+                  'prob': prob, 'tb': self.tb, 'ssd': self.ssd, 'flat_y': self.flat_y,
+                  'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond':self.ncond,
+                  'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
+                  'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
+                  'rt_cix': self.rt_cix, 'data_style': self.data_style, 'labels':self.labels}
 
             if get_params:
                   return self.fitparams
+
+      def set_basinparams(self, nrand_inits=2, interval=10, niter=40, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20, get_params=False, bdisp=False):
+
+            if not hasattr(self, 'basinparams'):
+                  self.basinparams={}
+
+            self.basinparams={'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize, 'nsuccess':nsuccess, 'method':'TNC', 'tol': btol, 'maxiter':maxiter, 'disp': bdisp}
+
+            if get_params:
+                  return self.basinparams
+
 
       def __extract_popt_fitinfo__(self, finfo=None):
             """ takes optimized dict or DF of vectorized parameters and
@@ -134,20 +148,20 @@ class RADDCore(object):
             return popt
 
 
-      def rangl_data(self, data, kind='radd', prob=np.array([.1, .3, .5, .7, .9])):
-            """ wrapper for analze.rangle_data
+      def rangl_data(self, data, kind='dpm', prob=np.array([.1, .3, .5, .7, .9])):
+            """ wrapper for analyze.rangl_data
             """
             rangled = analyze.rangl_data(data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
             return rangled
 
       def resample_data(self, data):
-            """ wrapper for analze.resample_data
+            """ wrapper for analyze.resample_data
             """
             resampled = analyze.resample_data(data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
             return resampled
 
       def rt_quantiles(self, data, split_col='HL', prob=np.array([.1, .3, .5, .7, .9])):
-            """ wrapper for analze.rt_quantiles
+            """ wrapper for analyze.rt_quantiles
             """
             if not hasattr(self, "prort_conds_prepared"):
                   self.__make_proRT_conds__()
@@ -289,7 +303,6 @@ class RADDCore(object):
                   fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
 
             fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
-
             self.dframes = {'data':self.data, 'flat_y':self.flat_y, 'avg_y':self.avg_y, 'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat':dat}
 
 
@@ -369,8 +382,10 @@ class RADDCore(object):
             params = theta.get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
             return params
 
-      def __check_inits__(self, pro_ss=False, fit_noise=False):
-            self.inits = theta.check_inits(inits=self.inits, pdep=self.depends_on.keys(), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
+      def __check_inits__(self, inits=None, pro_ss=False, fit_noise=False):
+            if inits is None:
+                  inits = dict(deepcopy(self.inits))
+            self.inits = theta.check_inits(inits=inits, pdep=self.depends_on.keys(), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
 
       def mean_pgo_rts(self, p={}, return_vals=True):
             """ Simulate proactive model and calculate mean RTs
