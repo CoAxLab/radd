@@ -72,7 +72,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
             pse.append(xp[idx]/scale_factor)
             # Plot the results
             if i==0 and yerr!=[]:
-                  #ax.errorbar(x, y[i], yerr=yerr[i], color=colors[i], marker='o', elinewidth=2, ecolor='k')
+                  ax.errorbar(x, y[i], yerr=yerr[i], color=colors[i], marker='o', elinewidth=2, ecolor='k')
                   ax.errorbar(x, y, yerr=yerr, color=color, ecolor=color, capsize=0, lw=0, elinewidth=3)
             if markers:
                   a = mclinealpha[i]

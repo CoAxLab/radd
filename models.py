@@ -462,7 +462,7 @@ class Simulator(object):
             hi = hs(rt[ix:])
             low = hs(rt[1:ix])
             # Get response and stop accuracy information
-            gacc = 1-np.where(rt<self.tb, 1, 0)
+            gacc = np.where(rt<self.tb, 0, 1)
             return [gacc, hi[~np.isnan(hi)], low[~np.isnan(low)]]
 
 
