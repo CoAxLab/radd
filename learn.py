@@ -40,34 +40,44 @@ def update_execution(p):
 
       return Pd, Pi, Tg
 
-
-def simulate_pro(p, pc_map={'v':['v0', 'v100']}, lr=array([1,1]), tb=.555):
-      """ Simulate the proactive competition model
-      (see simulate_dpm() for I/O details)
-      """
+def simulate_learning(p, pc_map={'vd':['vd_e', 'vd_u', 'vd_l'], 'vi':['vi_e', 'vi_u', 'vi_l']}, nc=3, lr=array([.4,.3]), nssd=5, dt=.0005):
 
       p = vectorize_params(p, pc_map=pc_map, ncond=nc)
-      nc = len(p['vd'])
-
-      p = update_execution(p)
-      xtb = temporal_dynamics(p, np.cumsum([dt]*Tg.max()))
-
+      Pd, Pi, Tex = update_execution(p)
+      t = np.cumsum([dt]*Tex.max())
+      xtb = temporal_dynamics(p, t)
+      #Ph, Th = update_brake(p)
+      #ss_index = [np.where(Th<Tex[c],Tex[c]-Th,0) for c in range(nc)]
+      rts, vd, vi = [], [], []
       for i in xrange(ntot):
 
-            Pd, Pi, Tg = update_execution(p)
+            Pd, Pi, Tex = update_execution(p)
 
-            direct = np.where((rs((nc, Tg.max())).T < Pd),dx,-dx).T
-            indirect = xtb[:,::-1]*np.where((rs((nc, Tg.max())).T < Pi),dx,-dx).T
+            direct = np.where((rs((nc, Tex.max())).T < Pd),dx,-dx).T
+            indirect = np.where((rs((nc, Tex.max())).T < Pi),dx,-dx).T
             execution = np.cumsum(direct+indirect, axis=1)
 
+            #if i<=int(.5*ntot):
+            #      init_ss = array([[execution[c,ix] for ix in ss_index] for c in range(nc)])
+            #      hyper = init_ss[:,:,:,None]+np.cumsum(np.where(rs(Th.max())<Ph, dx, -dx), axis=1)
+
+            
             r = np.argmax((execution.T>=p['a']).T, axis=1)*dt
             rt = p['tr']+(r*np.where(r==0, np.nan, 1))
+            resp = np.where(rt<tb, 1, 0)
 
-            lr_scale = lr.T*np.where(rt<tb, 1, 0)
-            p['vd']=p['vd'] + p['vd']*lr_scale[0]
-            p['vi']=p['vi'] + p['vi']*lr_scale[1]
+            # find conditions where response was recorded
+            for ci in np.where(~np.isnan(rt))[0]:
+                  p['vd'][ci]=p['vd'][ci] + p['vd'][ci]*(lr[0]*(rt[ci]-.500))
+                  p['vi'][ci]=p['vi'][ci] - p['vi'][ci]*(lr[1]*(rt[ci]-.500))
 
-      return p
+            vd.append(deepcopy(p['vd']))
+            vi.append(deepcopy(p['vi']))
+            rts.append(rt)
+
+      vd = np.asarray(vd)
+      vi = np.asarray(vi)
+      rts = np.asarray(rts)
 
 def feedback_signal():
       pass
