@@ -36,23 +36,26 @@ def update_execution(p):
       """
       Pd = 0.5*(1 + p['vd']*dx/si)
       Pi = 0.5*(1 + p['vi']*dx/si)
-      Tg = np.ceil((tb-p['tr'])/dt).astype(int)
+      Tex = np.ceil((tb-p['tr'])/dt).astype(int)
 
-      return Pd, Pi, Tg
+      return Pd, Pi, Tex
 
-def simulate_learning(p, pc_map={'vd':['vd_e', 'vd_u', 'vd_l'], 'vi':['vi_e', 'vi_u', 'vi_l']}, nc=3, lr=array([.4,.3]), nssd=5, dt=.0005):
+def simulate_learning(p, pc_map={'vd':['vd_e', 'vd_u', 'vd_l'], 'vi':['vi_e', 'vi_u', 'vi_l']}, nc=3, lr=array([.4,.3]), nssd=5, dt=.0005, si=.01, ntot=1000, tb=.68):
 
+      dx=np.sqrt(si*dt)
       p = vectorize_params(p, pc_map=pc_map, ncond=nc)
+
       Pd, Pi, Tex = update_execution(p)
       t = np.cumsum([dt]*Tex.max())
       xtb = temporal_dynamics(p, t)
+
       #Ph, Th = update_brake(p)
       #ss_index = [np.where(Th<Tex[c],Tex[c]-Th,0) for c in range(nc)]
+
       rts, vd, vi = [], [], []
       for i in xrange(ntot):
 
             Pd, Pi, Tex = update_execution(p)
-
             direct = np.where((rs((nc, Tex.max())).T < Pd),dx,-dx).T
             indirect = np.where((rs((nc, Tex.max())).T < Pi),dx,-dx).T
             execution = np.cumsum(direct+indirect, axis=1)
@@ -60,8 +63,6 @@ def simulate_learning(p, pc_map={'vd':['vd_e', 'vd_u', 'vd_l'], 'vi':['vi_e', 'v
             #if i<=int(.5*ntot):
             #      init_ss = array([[execution[c,ix] for ix in ss_index] for c in range(nc)])
             #      hyper = init_ss[:,:,:,None]+np.cumsum(np.where(rs(Th.max())<Ph, dx, -dx), axis=1)
-
-            
             r = np.argmax((execution.T>=p['a']).T, axis=1)*dt
             rt = p['tr']+(r*np.where(r==0, np.nan, 1))
             resp = np.where(rt<tb, 1, 0)
