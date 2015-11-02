@@ -1,4 +1,5 @@
 import random
+import numpy as np
 from numpy.random import sample as rs
 from numpy import hstack as hs
 from numpy import newaxis as na
@@ -7,7 +8,9 @@ from scipy.stats.distributions import norm, uniform
 from scipy.misc import factorial
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 import matplotlib.pyplot as plt
+from copy import deepcopy
 import seaborn as sns
+from radd import tools
 
 temporal_dynamics = lambda p, t: np.cosh(p['xb'][:,na]*t)
 resp_up = lambda trace, a: np.argmax((trace.T>=a).T, axis=2)*dt
@@ -34,7 +37,10 @@ def plot_decision_network(Id=3.8, Ii=2.6, Io=4.5, g=12, b=34, rmax=60, wid=.21, 
 
 
 
-def decision_network(Id=6, Ii=3, Io=2, wdi=.22, wid=.22, k=.85, si=2.3, dt=.001, tau=.05, tmax=1.5, rmax=70, b=35, g=15, ntrials=10, y=1, Z=20, IoMax=4.5):
+def decision_network(Id=3.5, Ii=3.5, Io=3., wdi=.22, wid=.22, k=.85, si=2.3, dt=.001, tau=.05, tmax=1.5, rmax=70, b=35, g=15, ntrials=10, y=1, Z=20, IoMax=4.5):
+
+      timepoints = np.arange(0, tmax, dt)
+      ntp=len(timepoints)
 
       rd = np.zeros(ntp)
       ri = np.zeros(ntp)
@@ -72,9 +78,26 @@ def decision_network(Id=6, Ii=3, Io=2, wdi=.22, wid=.22, k=.85, si=2.3, dt=.001,
       return rd, ri, dv[:dv[dv<Z].argmax()]
 
 
+def simulate_network_rts(Id=3.5, Ii=3.5, Io=3., wdi=.22, wid=.22, k=.85, si=2.3, dt=.001, tau=.05, tmax=1.5, rmax=70, b=35, g=15, ntrials=10, y=1, Z=20, IoMax=4.5):
+
+      timepoints = np.arange(0, tmax, dt)
+      ntp=len(timepoints)
+      IoRT, rt = [], []
+      Io=4.; ntrials=10
+
+      for w in [[.20,.22], [.21,.23], [.21, .24]]:
+            for tn in xrange(ntrials):
+                  rd, ri, dv = decision_network(Id=3., Ii=3., Io=4.5, g=12, b=34, rmax=60, wid=w[0], wdi=w[1])
+                  if np.shape(dv)[0]<Z:
+                        continue
+                  rt.append(len(dv))
+            IoRT.append(np.asarray(rt))
+      return IoRT
+
 
 def dual_space_plot(ax1, ax2, rd, ri, dv, rts=None, Z=20, alpha=1, isfirst=True, xlabel=False, i=0, xlim=None):
 
+      colors=tools.colors.style_params()['colors']
       rt=len(dv)
 
       if isfirst:
@@ -82,8 +105,6 @@ def dual_space_plot(ax1, ax2, rd, ri, dv, rts=None, Z=20, alpha=1, isfirst=True,
             ax1.set_xlabel('Time (ms)')
       else:
             labels=[None, None]
-
-      # Neural Space
       ax1.plot(rd, label=labels[0], color=colors[3], alpha=alpha)
       ax1.plot(ri, label=labels[1], color=colors[6], alpha=alpha)
       ax1.vlines(rt, ymin=ri[rt], ymax=rd[rt], color=colors[-2], linestyles='--', alpha=alpha)
@@ -96,34 +117,40 @@ def dual_space_plot(ax1, ax2, rd, ri, dv, rts=None, Z=20, alpha=1, isfirst=True,
 
       ax1.set_ylabel('Firing Rate (Hz)')
       ax2.set_ylabel('Decision Evidence ($\Theta$)')
-      ax1.set_yticks([0, int(hs([rd, ri]).max())+5])
-      ax1.set_yticklabels([])#[0, int(hs([rd, ri]).max())+5])
-      ax2.set_yticklabels([])
-      ax1.set_xticklabels([])
-      ax2.set_xticklabels([])
-      ax2.set_ylim(-1,Z)
 
+
+      ax1.set_yticks([0, int(hs([rd, ri]).max())+5])
+      for ax in [ax1, ax2]:
+            ax.set_yticklabels([])
+            ax.set_xticks(xlim)
+            ax.set_xticklabels(xlim)
+
+      ax2.set_ylim(-1,Z)
       ax1.legend(loc=2)
       ax2.hlines(Z, 0, ax2.get_xlim()[1], linestyle='--')
-
-      if rts is not None:
-            divider = make_axes_locatable(ax2)
-            axx = divider.append_axes("top", size=1.6, pad=0.01, sharex=ax1)
-            sns.distplot(rts[0], kde=True, ax=axx, kde_kws={'shade':True, "color": colors[-2], "alpha":.8}, hist=False);
-            sns.distplot(rts[1], kde=True, ax=axx, kde_kws={'shade':True, "color": colors[-2], "alpha":.5}, hist=False);
-            sns.distplot(rts[2], kde=True, ax=axx, kde_kws={'shade':True, "color": colors[-2], "alpha":.2}, hist=False);
-            axx.spines['top'].set_visible(False)
-            axx.spines['left'].set_visible(False)
-            axx.spines['bottom'].set_visible(False)
-            axx.spines['right'].set_visible(False)
-
-            axx.set_xticklabels([]);
-            axx.set_yticklabels([])
-
+      f=plt.gcf()
       f.subplots_adjust(hspace=0.1)
       sns.despine(ax=ax1)
       sns.despine(top=True, ax=ax2)
       if xlim is not None:
             ax1.set_xlim(xlim[0], xlim[1])
+            ax2.set_xlim(xlim[0], xlim[1])
+
+
+def plot_rt_distributions(ax1, ax2, rts, xlim=None, a=1):
+
+      colors=tools.colors.style_params()['colors']
+      divider = make_axes_locatable(ax2)
+      axx = divider.append_axes("top", size=1.6, pad=0.01, sharex=ax1)
+      for rt in rts:
+            sns.kdeplot(rt, ax=axx, shade=True, color=colors[-2], alpha=a)
+            a=a-.1
+      for spine in ['top', 'left', 'bottom', 'right']:
+            axx.spines[spine].set_visible(False)
+
+      axx.set_xticklabels([]);
+      axx.set_yticklabels([])
+
+      if xlim is not None:
             ax2.set_xlim(xlim[0], xlim[1])
             axx.set_xlim(xlim[0], xlim[1])
