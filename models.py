@@ -166,7 +166,6 @@ class Simulator(object):
             return p
 
 
-
       def basinhopping_minimizer(self, x):
             """ used specifically by fit.perform_basinhopping() for Model
             objects with multiopt attr (See __opt_routine__ and perform_basinhopping
@@ -202,6 +201,7 @@ class Simulator(object):
             yhat = self.sim_fx(p, analyze=True)
             return np.sum(self.wts*(self.y-yhat)**2).astype(np.float32)
 
+
       def __update_go_process__(self, p):
             """ update Pg (probability of DVg +dx) and Tg (num go process timepoints)
             for go process and get get dynamic bias signal if 'x' model
@@ -224,6 +224,7 @@ class Simulator(object):
             Ps = 0.5*(1 + p['ssv']*self.dx/self.si)
             Ts = np.ceil((self.tb-(self.ssd+sso))/self.dt).astype(int)
             return Ps, Ts
+
 
       def __update_interactive_params__(self, p):
             # add ss interact delay to SSD

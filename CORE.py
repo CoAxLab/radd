@@ -287,7 +287,8 @@ class RADDCore(object):
                   self.observed = obs.sort_index().reset_index()
                   self.avg_y = self.observed.groupby(cond).mean().values[:,1:]
                   self.flat_y = self.observed.mean().values[1:]
-                  dat = self.observed.loc[:,qp_cols[1]:].values.reshape(len(indx),ncond,16)
+                  axis0, axis2 = self.observed.loc[:,qp_cols[1]:].values.shape
+                  dat = self.observed.loc[:,qp_cols[1]:].values.reshape(int(axis0/ncond), ncond, axis2)
                   fits = pd.DataFrame(np.zeros((len(indxx),len(qp_cols))), columns=qp_cols, index=indxx)
 
             elif self.data_style=='pro':
@@ -337,7 +338,7 @@ class RADDCore(object):
                   * P(R | SSD) * sd(.5eQ, ... .95eQ)
             """
 
-            nc = self.ncond; cond=self.cond;
+            nc = self.ncond; cond=self.cond; nssd=self.nssd
             if self.data_style=='re':
 
                   rprob = self.data.groupby(['ttype', 'Cond']).mean()['response']

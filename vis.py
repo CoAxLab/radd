@@ -1,4 +1,4 @@
-#!/usr/local/bin/env python
+ #!/usr/local/bin/env python
 from __future__ import division
 import os
 import pandas as pd
@@ -197,7 +197,7 @@ def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', 
 
       pp=plot_params
       if axes is None:
-            f, (ax1, ax2, ax3) = plt.subplots(1,3,figsize=(14, 5.5), sharey=False)
+            f, (ax1, ax2, ax3) = plt.subplots(1,3, figsize=(14, 5.5), sharey=False)
       else:
             ax1, ax2, ax3 = axes
       if colors is None:
@@ -443,8 +443,9 @@ def gen_re_traces(model, params, integrate_exec_ss=False, ssdlist=np.arange(.2, 
 def build_decision_axis(onset, bound, ssd=np.arange(200,450,50), tb=650):
 
       # init figure, axes, properties
-      f, axes = plt.subplots(len(ssd), 1, figsize=(5,10))
-      f.subplots_adjust(hspace=.06,top=.99, bottom=.01)
+      f, axes = plt.subplots(len(ssd), 1, figsize=(5,5), dpi=300)
+      #f.subplots_adjust(wspace=.05, top=.1, bottom=.1)
+      f.subplots_adjust(hspace=.05, top=.99, bottom=.05)
       w=tb+40
       h=bound
       start=onset-80
@@ -464,27 +465,6 @@ def build_decision_axis(onset, bound, ssd=np.arange(200,450,50), tb=650):
       return f, axes
 
 
-def re_animate_all(i, x, dvg_traces, dvg_lines, dvs_traces, dvs_lines, rtheta, xi, yi):
-
-      clist = sns.blend_palette(['#65b88f','#27ae60'], n_colors=len(dvg_traces)*2)[::2]
-      clist_ss = sns.blend_palette(['#e74c3c','#e88379'], n_colors=len(dvs_traces)*2)[::2]
-
-      for nline, (gl, g) in enumerate(zip(dvg_lines, dvg_traces)):
-            if g[i]>=rtheta['a'][0] or dvs_traces[nline][i]<=0:
-                  continue
-            gl.set_data(x[:i+1], g[:i+1])
-            gl.set_color(clist[nline])
-            dvg_lines[nline].set_linestyle('--')
-
-            if dvs_traces[nline][i]>0:
-                  ssi = len(g) - len(dvs_traces[nline]) + 1
-                  dvs_lines[nline].set_data(x[xi[nline]:i+1], dvs_traces[nline][xi[nline]:i+1])
-                  dvs_lines[nline].set_color(clist_ss[nline])
-
-      return dvs_lines, dvg_lines
-
-
-
 
 def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
 
@@ -499,6 +479,7 @@ def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
                   sl.set_color(scolor)
             except Exception:
                   return sl, gl
+            #f.savefig('animation_frames/movie/img' + str(i) +'.png', dpi=300)
       return sl, gl
 
 
@@ -514,7 +495,30 @@ def pro_animate(i, x, protraces, prolines):
       return prolines,
 
 
-def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind=''):
+def anim_to_html(anim):
+
+      from tempfile import NamedTemporaryFile
+
+      VIDEO_TAG = """<video controls>
+             <source src="data:video/x-m4v;base64,{0}" type="video/mp4">
+             Your browser does not support the video tag.
+            </video>"""
+
+      if not hasattr(anim, '_encoded_video'):
+            with NamedTemporaryFile(suffix='.mp4') as f:
+                  anim.save(f.name, dpi=300, extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
+                  video = open(f.name, "rb").read()
+            anim._encoded_video = video.encode("base64")
+      return VIDEO_TAG.format(anim._encoded_video)
+
+
+def display_animation(anim):
+      from IPython.display import HTML
+      plt.close(anim._fig)
+      return HTML(anim_to_html(anim))
+
+
+def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind='dpm'):
 
       ncond = DVg.shape[0]
       nssd = DVs.shape[1]
@@ -525,28 +529,37 @@ def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2,.45,.05), kind=''):
                   plot_traces(DVg=DVg[i], DVs=DVs[i, ii], ssd=ssd[ii], sim_theta=params, ax=axes[ii,i], kind=kind)
       return f
 
+def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='dpm', ssd=.450, ax=None, tau=.005, tb=.650, cg='#16a085', cr=['#f1c40f', '#e74c3c','#c0392b']):
 
-def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='', ssd=.450, ax=None, tau=.001, tb=.650, cg='#2c724f', cr='#c0392b'):
       if ax is None:
             f,ax=plt.subplots(1,figsize=(8,5))
-      tr=sim_theta['tr']; a=sim_theta['a']; z=sim_theta['z'];
+      tr=sim_theta['tr']; a=sim_theta['a'];
+      z=0;
       for i, igo in enumerate(DVg):
             ind = np.argmax(igo>=a)
             xx = [np.arange(tr, tr+(len(igo[:ind-1])*tau), tau), np.arange(tr, tb, tau)]
             x = xx[0 if len(xx[0])<len(xx[1]) else 1]
-            plt.plot(x, igo[:len(x)], color=cg, alpha=.1, linewidth=.5)
-            if kind in ['irace', '', 'iact'] and i<len(DVs):
-                  if np.any(DVs<=0):
-                        ind=np.argmax(DVs[i]<=0)
+            plt.plot(x, igo[:len(x)], color=cg, alpha=1, linewidth=2)
+
+            ax.vlines(ssd, 0, a, linewidth=1, alpha=.5, color='#6C7A89')
+            if kind in ['irace', 'dpm', 'iact'] and i<len(DVs[0]):
+                  if np.any(DVs[0]<=0):
+                        ind=np.argmax(DVs[0]<=0)
                   else:
-                        ind=np.argmax(DVs[i]>=a)
-                  xx = [np.arange(ssd, ssd+(len(DVs[i, :ind-1])*tau), tau), np.arange(ssd, tb, tau)]
+                        ind=np.argmax(DVs[0]>=a)
+                  xx = [np.arange(ssd, ssd+(len(DVs[0][:ind-1])*tau), tau), np.arange(ssd, tb, tau)]
                   x = xx[0 if len(xx[0])<len(xx[1]) else 1]
-                  #x = np.arange(ssd, ssd+(len(DVs[i, :ind-1])*tau), tau)
-                  plt.plot(x, DVs[i, :len(x)], color=cr, alpha=.1, linewidth=.5)
+                  crx=sns.blend_palette(cr, n_colors=len(x))
+
+                  for ii in range(len(x)):
+                        if ii==len(x)-1:
+                              break
+                        plt.plot([x[ii], x[ii+1]], [np.asscalar(DVs[0][ii]), np.asscalar(DVs[0][ii+1])], color=crx[ii], alpha=.9, linewidth=2) #DVs[i, :len(x)], color=cr, alpha=.9, linewidth=2)
 
       xlow = np.min([tr, ssd])
-      xlim = (xlow*.95, 1.05*tb)
+      xlim = (xlow*.75, 1.05*tb)
+
+      print xlim
       if kind=='pro' or np.any(DVs<=0):
             ylow=0
             ylim=(-.03, a*1.03)
@@ -560,7 +573,7 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='', ssd=.450, ax=None, tau=.0
       ax.hlines(y=ylow, xmin=xlow, xmax=tb, linewidth=2, linestyle='-', color="k")
       ax.vlines(x=xlow, ymin=ylow*.998, ymax=a*1.002, linewidth=2, linestyle='-', color="k")
       sns.despine(top=True,bottom=True, right=True, left=True)
-      xlim = (xlow*.95, 1.05*tb)
+      ax.set_xlim(xlim)
       ax.set_xticklabels([])
       ax.set_yticklabels([])
       ax.set_xticks([])
