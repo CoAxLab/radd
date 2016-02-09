@@ -158,23 +158,21 @@ def di_lca(Id=3.5, Ii=3, dt=.005, si=2.5, tau=.05, ntrials=10, tmax=3.0, w=-.2, 
     b:         input needed for 1/2-max firing
     g:         determines steepness of sigmoidal f-I curve
     """
+    
+    ntp = len(np.arange(0, tmax, dt))
 
-    timepoints = np.arange(0, tmax, dt)
-    rd = np.zeros(len(timepoints))
-    ri = np.zeros(len(timepoints))
-    rd[0] = .01
-    ri[0] = 3
+    rd = np.zeros(ntp); rd[0] = .01
+    ri = np.zeros(ntp); ri[0] = 3
 
-    Ed = si * np.sqrt(dt / tau) * rs(len(rd))
-    Ei = si * np.sqrt(dt / tau) * rs(len(ri))
+    Ed = si*np.sqrt(dt/tau)*rs(ntp)
+    Ei = si*np.sqrt(dt/tau)*rs(ntp)
 
-    NInput = lambda x, r: rmax / (1 + np.exp(-(x - b) / g)) - r
+    NInput = lambda x, r: rmax/(1 + np.exp(-(x-b)/g)) - r
+    dspace = lambda rd, ri: (rd-ri)/np.sqrt(2)
 
     for i in timepoints:
-        rd[i] = rd[i - 1] + dt / tau * \
-            NInput(Id + k * rd[i - 1] + -w * ri[i - 1], rd[i - 1]) + Ed[i]
-        ri[i] = ri[i - 1] + dt / tau * \
-            NInput(Ii + k * ri[i - 1] + -w * rd[i - 1], ri[i - 1]) + Ei[i]
+        rd[i] = rd[i-1] + dt/tau*NInput(Id + k*rd[i-1] + -w*ri[i-1], rd[i-1]) + Ed[i]
+        ri[i] = ri[i-1] + dt/tau*NInput(Ii + k*ri[i-1] + -w*rd[i-1], ri[i-1]) + Ei[i]
 
     return rd, ri
 

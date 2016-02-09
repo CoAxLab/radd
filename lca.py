@@ -16,11 +16,10 @@ temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
 resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
 ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
 resp_lo = lambda trace: np.argmax((trace.T <= 0).T, axis=3) * dt
-RT = lambda ontime, rbool: ontime[:, na] + \
-    (rbool * np.where(rbool == 0, np.nan, 1))
+RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool==0, np.nan, 1))
 RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
-prop = lambda n, k: factorial(n) / (factorial(k) * factorial(n - k))
-likelihood = lambda fact, prior, n, k: (fact * prior**k) * (1 - prior)**(n - k)
+prop = lambda n, k: factorial(n)/(factorial(k) * factorial(n-k))
+likelihood = lambda fact, prior, n, k: (fact*prior**k) * (1-prior)**(n-k)
 
 
 def plot_decision_network(Id=3.8, Ii=2.6, Io=4.5, g=12, b=34, rmax=60, wid=.21, wdi=.21):
@@ -51,33 +50,28 @@ def decision_network(Id=3.5, Ii=3.5, Io=3., wdi=.22, wid=.22, k=.85, si=2.3, dt=
     ri = np.zeros(ntp)
     dv = np.zeros(ntp)
 
-    NInput = lambda x, r: rmax / (1 + np.exp(-(x - b) / g)) - r
-    dspace = lambda rd, ri: (rd - ri) / np.sqrt(2)
+    NInput = lambda x, r: rmax/(1 + np.exp(-(x-b)/g)) - r
+    dspace = lambda rd, ri: (rd-ri)/np.sqrt(2)
 
-    Ed = si * np.sqrt(dt / tau) * rs(ntp)
-    Ei = si * np.sqrt(dt / tau) * rs(ntp)
+    Ed = si*np.sqrt(dt/tau)*rs(ntp)
+    Ei = si*np.sqrt(dt/tau)*rs(ntp)
     x = 200
     rd[:x], ri[:x] = [v[0][:x] + Io + v[1][:x] for v in [[rd, Ed], [ri, Ei]]]
 
     subZ = True
     IIi, IId = [deepcopy(ii) for ii in [Id, Ii]]
+
     for i in xrange(x, ntp):
-
-        rd[i] = rd[i - 1] + dt / tau * \
-            (NInput(Id + y * Io + k * rd[i - 1] + -
-                    wid * ri[i - 1], rd[i - 1])) + Ed[i]
-        ri[i] = ri[i - 1] + dt / tau * \
-            (NInput(Ii + y * Io + k * ri[i - 1] + -
-                    wdi * rd[i - 1], ri[i - 1])) + Ei[i]
-
+        rd[i] = rd[i-1] + dt/tau*(NInput(Id + y*Io + k*rd[i-1] + -wid*ri[i-1], rd[i-1])) + Ed[i]
+        ri[i] = ri[i-1] + dt/tau*(NInput(Ii + y*Io + k*ri[i-1] + -wdi*rd[i-1], ri[i-1])) + Ei[i]
         if dv[i - 1] < Z and subZ:
-            dv[i] = dspace(rd[i - 1], ri[i - 1])
+            dv[i] = dspace(rd[i - 1], ri[i-1])
         elif subZ:
             Id, Ii, Io = -Id * Io, -Ii * Io, Io
             wdi, wid = 0, 0
-            NInput = lambda x, r: Io / (1 + np.exp(-(x - b) / g)) - r - IoMax
+            NInput = lambda x, r: Io/(1 + np.exp(-(x-b)/g))-r-IoMax
             subZ = False
-        elif not subZ and rd[i] < (IoMax + 1):
+        elif not subZ and rd[i]<(IoMax+1):
             x = len(rd[i:])
             rd0 = hs(rd[:200].tolist() * 3)
             ri0 = hs(ri[:200].tolist() * 3)
