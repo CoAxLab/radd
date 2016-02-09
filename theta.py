@@ -26,8 +26,7 @@ def random_inits(pkeys, ninits=1, kind='dpm'):
     if isinstance(pkeys, dict):
         pkeys = pkeys.keys()
     bnd = get_bounds(kind=kind)
-    params = {pk: init_distributions(
-        pk, bnd[pk], nrvs=ninits, kind=kind) for pk in pkeys}
+    params = {pk: init_distributions(pk, bnd[pk], nrvs=ninits, kind=kind) for pk in pkeys}
     return params
 
 
@@ -207,11 +206,9 @@ def get_proactive_params(theta, dep='v', pgo=np.arange(0, 120, 20)):
 def update_params(theta):
 
     if 't_hi' in theta.keys():
-        theta['tr'] = theta['t_lo'] + \
-            np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
+        theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
     if 'z_hi' in theta.keys():
-        theta['z'] = theta['z_lo'] + np.random.uniform() * \
-            (theta['z_hi'] - theta['z_lo'])
+        theta['z'] = theta['z_lo'] + np.random.uniform() * (theta['z_hi'] - theta['z_lo'])
     if 'sv' in theta.keys():
         theta['v'] = theta['sv'] * np.random.randn() + theta['v']
 

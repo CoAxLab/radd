@@ -32,8 +32,7 @@ def finfo_to_params(finfo='./finfo.csv', pc_map=None):
 
     pnames = set(['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso'])
     if isinstance(finfo, str):
-        finfo = pd.read_csv(finfo, header=None, names=[
-                            'id', 'vals'], index_col=0)
+        finfo = pd.read_csv(finfo, header=None, names=['id', 'vals'], index_col=0)
         finfo = pd.Series(finfo.to_dict()['vals'])
     elif isinstance(finfo, dict):
         finfo = pd.Series(finfo)
@@ -177,8 +176,7 @@ def proactive_mj_quanterr(df, split='HL', tb=.555, prob=array([.1, .3, .5, .7, .
 
     mjcix = lambda x: mjci(x.rt, prob=prob)
     q_sem_obj = godf.groupby(['idx', split]).apply(mjcix).values
-    qwts = np.nanmean(np.vstack(q_sem_obj.reshape(2, 61).mean(axis=1)), axis=1)[
-        :, None] / np.vstack(q_sem_obj.reshape(2, 61).mean(axis=1))
+    qwts = np.nanmean(np.vstack(q_sem_obj.reshape(2, 61).mean(axis=1)), axis=1)[:, None] / np.vstack(q_sem_obj.reshape(2, 61).mean(axis=1))
     return qwts
 
 
@@ -257,8 +255,7 @@ def get_observed_vector(rt, prob=array([10, 30, 50, 70, 90])):
     the total number of observations (len(rt)) and the RT values at those
     percentiles (rtquant)
     """
-    inter_prob = array([prob[0] - 0] + [prob[i] - prob[i - 1]
-                                        for i in range(1, len(prob))] + [100 - prob[-1]])
+    inter_prob = array([prob[0] - 0] + [prob[i] - prob[i - 1] for i in range(1, len(prob))] + [100 - prob[-1]])
     rtquant = mq(rt, prob=prob * .01)
     ocounts = np.ceil((inter_prob) * .01 * len(rt)).astype(int)
     n_obs = np.sum(ocounts)
@@ -273,12 +270,9 @@ def get_expected_vector(simrt, obsinfo):
     simrt = pd.Series(simrt)
     """
     counts, q, n_obs = obsinfo[0], obsinfo[1], obsinfo[2]
-    first = array(
-        [len(simrt[simrt.between(simrt.min(), q[0])]) / len(simrt)]) * n_obs
-    middle = array([len(simrt[simrt.between(q[i - 1], q[i])]) /
-                    len(simrt) for i in range(1, len(q))]) * n_obs
-    last = array(
-        [len(simrt[simrt.between(q[-1], simrt.max())]) / len(simrt)]) * n_obs
+    first = array([len(simrt[simrt.between(simrt.min(), q[0])]) / len(simrt)]) * n_obs
+    middle = array([len(simrt[simrt.between(q[i - 1], q[i])]) / len(simrt) for i in range(1, len(q))]) * n_obs
+    last = array([len(simrt[simrt.between(q[-1], simrt.max())]) / len(simrt)]) * n_obs
 
     expected = np.ceil(np.hstack([first, middle, last]))
     return expected
@@ -290,11 +284,9 @@ def ssrt_calc(df, avgrt=.3):
     dfgo = df.query('choice=="go"')
 
     pGoErr = ([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
-    nlist = [int(pGoErr[i] * len(idf))
-             for i, (ix, idf) in enumerate(df.groupby('idx'))]
+    nlist = [int(pGoErr[i] * len(idf)) for i, (ix, idf) in enumerate(df.groupby('idx'))]
 
-    GoRTs = ([idf.rt.sort(inplace=False).values for ix,
-              idf in dfgo.groupby('idx')])
+    GoRTs = ([idf.rt.sort(inplace=False).values for ix,idf in dfgo.groupby('idx')])
     ssrt_list = ([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
 
     return ssrt_list
@@ -325,8 +317,7 @@ def get_obs_quant_counts(df, prob=([.10, .30, .50, .70, .90])):
     else:
         rt = df.rt.copy()
 
-    inter_prob = [prob[0] - 0] + [prob[i] - prob[i - 1]
-                                  for i in range(1, len(prob))] + [1.00 - prob[-1]]
+    inter_prob = [prob[0] - 0] + [prob[i] - prob[i - 1] for i in range(1, len(prob))] + [1.00 - prob[-1]]
     obs_quant = mq(rt, prob=prob)
     observed = np.ceil((inter_prob) * len(rt) * .94).astype(int)
 
@@ -361,8 +352,7 @@ def get_exp_counts(simdf, obs_quant, n_obs, prob=([.10, .30, .50, .70, .90])):
         simrt = simdf.rt.copy()
     exp_quant = mq(simrt, prob)
     oq = obs_quant
-    expected = np.ceil(
-        np.diff([0] + [pscore(simrt, oq_rt) * .01 for oq_rt in oq] + [1]) * n_obs)
+    expected = np.ceil(np.diff([0] + [pscore(simrt, oq_rt) * .01 for oq_rt in oq] + [1]) * n_obs)
 
     return expected, exp_quant
 
@@ -390,7 +380,6 @@ def weight_by_simulated_variance(opt, p, nsims=200):
 
 
 def get_intersection(iter1, iter2):
-
     intersect_set = set(iter1).intersection(set(iter2))
     return ([i for i in intersect_set])
 

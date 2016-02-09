@@ -11,8 +11,7 @@ from scipy.stats.mstats import mquantiles as mq
 resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
 ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
 resp_lo = lambda trace: np.argmax((trace.T <= 0).T, axis=3) * dt
-RT = lambda ontime, rbool: ontime[:, na] + \
-    (rbool * np.where(rbool == 0, np.nan, 1))
+RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
 RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
 
 
@@ -110,26 +109,21 @@ def qlearn_wdi_exploration(p, stim=[['a', 'b'], ['c', 'd'], ['e', 'f']], preward
         else:
             r = rew_func(1 - preward[i])
 
-        update_q = stim_pair_qval[choice] + \
-            alpha * (r - stim_pair_qval[choice])
+        update_q = stim_pair_qval[choice] + alpha * (r - stim_pair_qval[choice])
         qdict[stim_pair_t[choice]].append(update_q)
         qdict[stim_pair_t[xchoice]].append(stim_pair_qval[xchoice])
 
         if r:
-            di_theta['vd'][choice] = di_theta['vd'][
-                choice] + di_theta['vd'][choice] * update_q
-            di_theta['vi'][choice] = di_theta['vi'][
-                choice] - di_theta['vi'][choice] * update_q
+            di_theta['vd'][choice] = di_theta['vd'][choice] + di_theta['vd'][choice] * update_q
+            di_theta['vi'][choice] = di_theta['vi'][choice] - di_theta['vi'][choice] * update_q
             if di_theta['vd'][choice] < 0:
                 di_theta['vd'][choice] = .01
             if di_theta['vd'][choice] > 5.0:
                 di_theta['vd'][choice] = 5.0
 
         else:
-            di_theta['vd'][choice] = di_theta['vd'][
-                choice] - di_theta['vd'][choice] * update_q
-            di_theta['vi'][choice] = di_theta['vi'][
-                choice] + di_theta['vi'][choice] * update_q
+            di_theta['vd'][choice] = di_theta['vd'][choice] - di_theta['vd'][choice] * update_q
+            di_theta['vi'][choice] = di_theta['vi'][choice] + di_theta['vi'][choice] * update_q
             if di_theta['vi'][choice] < 0:
                 di_theta['vi'][choice] = .01
             if di_theta['vi'][choice] > 5.0:
@@ -158,7 +152,7 @@ def di_lca(Id=3.5, Ii=3, dt=.005, si=2.5, tau=.05, ntrials=10, tmax=3.0, w=-.2, 
     b:         input needed for 1/2-max firing
     g:         determines steepness of sigmoidal f-I curve
     """
-    
+
     ntp = len(np.arange(0, tmax, dt))
 
     rd = np.zeros(ntp); rd[0] = .01

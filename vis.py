@@ -75,8 +75,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
             color = colors[i]
         y = analyze.res(yi, lower=yi[-1], upper=yi[0])
         p_guess = (np.mean(x), np.mean(y), .5, .5)
-        p, cov, infodict, mesg, ier = optimize.leastsq(
-            analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=5000, ftol=1.e-20)
+        p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=5000, ftol=1.e-20)
         x0, y0, c, k = p
         xp = xsim
         pxp = analyze.sigmoid(p, xp)
@@ -84,25 +83,19 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
         pse.append(xp[idx] / scale_factor)
         # Plot the results
         if i == 0 and yerr != []:
-            ax.errorbar(x, y[i], yerr=yerr[i], color=colors[
-                        i], marker='o', elinewidth=2, ecolor='k')
-            ax.errorbar(x, y, yerr=yerr, color=color, ecolor=color,
-                        capsize=0, lw=0, elinewidth=3)
+            ax.errorbar(x, y[i], yerr=yerr[i], color=colors[i], marker='o', elinewidth=2, ecolor='k')
+            ax.errorbar(x, y, yerr=yerr, color=color, ecolor=color, capsize=0, lw=0, elinewidth=3)
         if markers:
             a = mclinealpha[i]
-            ax.plot(xp, pxp, linestyle=linestyles[
-                    i], lw=2.5, color=color, label=labels[i], alpha=a)
+            ax.plot(xp, pxp, linestyle=linestyles[i], lw=2.5, color=color, label=labels[i], alpha=a)
             for ii in range(len(y)):
                 if i % 2 == 0:
-                    ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color='k',
-                            markerfacecolor='none', mec='k', mew=1.5, alpha=.8)  # mc[ii], alpha=1)
+                    ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color='k', markerfacecolor='none', mec='k', mew=1.5, alpha=.8)
                 else:
                     # color=mc[ii]
-                    ax.plot(x[ii], y[ii], lw=0, marker='x',
-                            ms=7, color=color, mew=3, alpha=a)
+                    ax.plot(x[ii], y[ii], lw=0, marker='x', ms=7, color=color, mew=3, alpha=a)
         else:
-            ax.plot(xp, pxp, linestyle=linestyles[
-                    i], lw=3.5, color=colors[i], label=labels[i])
+            ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
         pse.append(xp[idx] / scale_factor)
 
     plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.01, 1.05), yticks=[0, 1])
@@ -110,7 +103,7 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
     ax.set_yticklabels([0.0, 1.0])
     ax.set_xlabel(xxlabel)
     ax.set_ylabel(yylabel)
-    # if dont_label:
+
     ax.legend(loc=0)
     plt.tight_layout()
     sns.despine()
@@ -118,12 +111,11 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
 
 def plot_fits(y, yhat, cdf=True, plot_params={}, save=False, axes=None, kind='', savestr='fit_plot', split='HL', xlim=(.45, .65), label=None, colors=None, data=None, mc=None):
-    sns.set_context('notebook', font_scale=1.6)
 
+    sns.set_context('notebook', font_scale=1.6)
     pp = plot_params
     if axes is None:
-        f, (ax1, ax2, ax3) = plt.subplots(
-            1, 3, figsize=(14, 5.5), sharey=False)
+        f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14, 5.5), sharey=False)
     else:
         ax1, ax2, ax3 = axes
     if colors is None:
@@ -135,17 +127,12 @@ def plot_fits(y, yhat, cdf=True, plot_params={}, save=False, axes=None, kind='',
     fitsc, fitgq, fiteq = unpack_yvector(yhat, kind=kind)
 
     if data is not None:
-        axes, pp = plot_data_dists(data, kind=kind, cdf=cdf, axes=[
-                                   ax1, ax2, ax3], data_type='real')
-        fit_cq, fit_eq = [analyze.kde_fit_quantiles(
-            q, bw=.01) for q in [fitgq, fiteq]]
+        axes, pp = plot_data_dists(data, kind=kind, cdf=cdf, axes=[ax1, ax2, ax3], data_type='real')
+        fit_cq, fit_eq = [analyze.kde_fit_quantiles(q, bw=.01) for q in [fitgq, fiteq]]
     else:
-        kdefits = [analyze.kde_fit_quantiles(q, bw=.01) for q in [
-            gq, fitgq, eq, fiteq]]
+        kdefits = [analyze.kde_fit_quantiles(q, bw=.01) for q in [gq, fitgq, eq, fiteq]]
         dat_cq, fit_cq, dat_eq, fit_eq = kdefits
-        axes, pp = plot_data_dists(data=[dat_cq, dat_eq], kind=kind, cdf=cdf, axes=[
-                                   ax1, ax2, ax3], data_type='interpolated')
-        #ax1, ax2, ax3 = axes
+        axes, pp = plot_data_dists(data=[dat_cq, dat_eq], kind=kind, cdf=cdf, axes=[ax1, ax2, ax3], data_type='interpolated')
 
     shade = pp['shade']
     lw = pp['lw']
@@ -170,8 +157,7 @@ def plot_fits(y, yhat, cdf=True, plot_params={}, save=False, axes=None, kind='',
         ax.set_xticklabels([int(xx) for xx in ax.get_xticks() * 1000])
 
     # Plot observed and predicted stop curves
-    scurves([sc, fitsc], kind=kind, linestyles=['-', '--'],
-            ax=ax3, colors=colors, markers=True, mc=mc)
+    scurves([sc, fitsc], kind=kind, linestyles=['-', '--'], ax=ax3, colors=colors, markers=True, mc=mc)
     plt.tight_layout()
     sns.despine()
     if save:
@@ -195,11 +181,9 @@ def react_fit_plots(m, color="#4168B7", is_flat=False, save=False):
         ncond = m.ncond
 
     labels = ['Baseline', 'Caution']
-    #datas=[redata.query('Cond=="bsl"'), redata.query('Cond=="pnl"')]
 
     for i in range(ncond):
-        plot_fits(y[i], fits[i], kind='', colors=[color] * 2,
-                  axes=axes[i])  # data=datas[i], axes=axes[i])
+        plot_fits(y[i], fits[i], kind='', colors=[color] * 2, axes=axes[i])
 
     for ax in axes.flatten():
         if ax.is_last_col():
@@ -210,7 +194,7 @@ def react_fit_plots(m, color="#4168B7", is_flat=False, save=False):
         if ax.is_last_row():
             ax.set_xlabel('RT (ms)')
         ax.set_xticklabels([int(xx) for xx in ax.get_xticks() * 1000])
-        # ax.set_ylim(0,11)
+
     if save:
         kind = m.kind
         mdescr = messages.describe_model(m.depends_on)
@@ -239,16 +223,10 @@ def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', 
     # pull out data vectors
     sc, gq, eq = unpack_yvector(y, kind=kind)
     fitsc, fitgq, fiteq = unpack_yvector(yhat, kind=kind)
-    kdefits = [analyze.kde_fit_quantiles(q, bw=.01) for q in [
-        gq, fitgq, eq, fiteq]]
+    kdefits = [analyze.kde_fit_quantiles(q, bw=.01) for q in [gq, fitgq, eq, fiteq]]
     dat_cq, fit_cq, dat_eq, fit_eq = kdefits
-    #shade=pp['shade']; lw=pp['lw']; ls=pp['ls']; alpha=pp['alpha']; bw=pp['bw']
-    sns.distplot(fit_cq, kde=False, color=colors[
-                 0], norm_hist=True, ax=ax1, bins=25)
-    sns.distplot(fit_eq, kde=False, color=colors[
-                 1], norm_hist=True, ax=ax2, bins=25)
-    #sns.kdeplot(fit_cq, color='Blue', cumulative=cdf, linestyle='--', bw=.01, ax=ax1,linewidth=3, alpha=.70, shade=shade, label=label)
-    #sns.kdeplot(fit_eq, color='Red', cumulative=cdf, linestyle='--', bw=.01, ax=ax2,linewidth=3, alpha=.60, shade=shade)
+    sns.distplot(fit_cq, kde=False, color=colors[0], norm_hist=True, ax=ax1, bins=25)
+    sns.distplot(fit_eq, kde=False, color=colors[1], norm_hist=True, ax=ax2, bins=25)
 
     for ax in axes:
         if ax.is_last_col():
@@ -261,8 +239,7 @@ def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', 
         ax.set_xticklabels([int(xx) for xx in ax.get_xticks() * 1000])
 
     # Plot observed and predicted stop curves
-    scurves([sc, fitsc], kind=kind, linestyles=['-', '--'],
-            ax=ax3, colors=colors, markers=True, mc=mc)
+    scurves([sc, fitsc], kind=kind, linestyles=['-', '--'], ax=ax3, colors=colors, markers=True, mc=mc)
     plt.tight_layout()
     sns.despine()
     if save:
@@ -271,8 +248,7 @@ def profits(y, yhat, cdf=False, plot_params={}, save=False, axes=None, kind='', 
 
 def plot_data_dists(data, kind='', data_type='real', cdf=False, axes=[], get_rts=False):
 
-    emp_kq = lambda rts: analyze.kde_fit_quantiles(
-        mq(rts, prob=np.arange(0, 1, .02)), bw=.008)
+    emp_kq = lambda rts: analyze.kde_fit_quantiles(mq(rts, prob=np.arange(0, 1, .02)), bw=.008)
 
     ax1, ax2, ax3 = axes
     if data_type == 'real':
@@ -295,10 +271,8 @@ def plot_data_dists(data, kind='', data_type='real', cdf=False, axes=[], get_rts
         bw = .01
         lw = 3.5
         ls = '--'
-        sns.kdeplot(dat_cq, color='k', cumulative=cdf,
-                    ax=ax1, linewidth=lw, linestyle='-')
-        sns.kdeplot(dat_eq, color='k', cumulative=cdf,
-                    ax=ax2, linewidth=lw, linestyle='-')
+        sns.kdeplot(dat_cq, color='k', cumulative=cdf, ax=ax1, linewidth=lw, linestyle='-')
+        sns.kdeplot(dat_eq, color='k', cumulative=cdf, ax=ax2, linewidth=lw, linestyle='-')
     else:
         # set parameters for simulated plots
         shade = True
@@ -306,13 +280,10 @@ def plot_data_dists(data, kind='', data_type='real', cdf=False, axes=[], get_rts
         bw = .01
         lw = 2.5
         ls = '-'
-        sns.distplot(dat_cq, kde=False, color='k',
-                     norm_hist=True, ax=ax1, bins=50)
-        sns.distplot(dat_eq, kde=False, color='k',
-                     norm_hist=True, ax=ax2, bins=50)
+        sns.distplot(dat_cq, kde=False, color='k', norm_hist=True, ax=ax1, bins=50)
+        sns.distplot(dat_eq, kde=False, color='k', norm_hist=True, ax=ax2, bins=50)
 
-    plot_params = {'shade': shade, 'alpha': alpha,
-                   'bw': bw, 'lw': lw, 'ls': ls}
+    plot_params = {'shade': shade, 'alpha': alpha, 'bw': bw, 'lw': lw, 'ls': ls}
     if get_rts:
         return axes, plot_params, rts
     return axes, plot_params
@@ -339,17 +310,14 @@ def plot_reactive_fits(model, cumulative=True, save=False, col=None):
 
         for ii, qc in enumerate([cq, cqhat]):
             kdeqc = analyze.kde_fit_quantiles(qc, bw=.01)
-            sns.kdeplot(kdeqc, linestyle=linestyles[
-                        ii], cumulative=cumulative, ax=ax1, linewidth=3.5, color=col[i][ii])
+            sns.kdeplot(kdeqc, linestyle=linestyles[ii], cumulative=cumulative, ax=ax1, linewidth=3.5, color=col[i][ii])
         for ii, qe in enumerate([eq, eqhat]):
             kdeqe = analyze.kde_fit_quantiles(qe, bw=.01)
-            sns.kdeplot(kdeqe, cumulative=cumulative, linestyle=linestyles[
-                        ii], ax=ax2, linewidth=3.5, color=col[i][ii])
+            sns.kdeplot(kdeqe, cumulative=cumulative, linestyle=linestyles[ii], ax=ax2, linewidth=3.5, color=col[i][ii])
 
         labels = [' '.join([model.labels[i], x]) for x in ['data', 'model']]
         # Plot observed and predicted stop curves
-        scurves([sc, sc_hat], labels=labels, kind='', colors=col[
-                i], linestyles=['-', '--'], ax=ax3, markers=True)
+        scurves([sc, sc_hat], labels=labels, kind='', colors=col[i], linestyles=['-', '--'], ax=ax3, markers=True)
         plt.tight_layout()
         sns.despine()
 
@@ -450,8 +418,7 @@ def gen_pro_traces(ptheta, bias_vals=[], bias='v', integrate_exec_ss=False, retu
 
     if integrate_exec_ss:
         ssn = len(dvslist[0])
-        traces = [np.append(dvglist[i][:-ssn], (dvglist[i][-ssn:] + ss) -
-                            dvglist[i][-ssn:]) for i, ss in enumerate(dvslist)]
+        traces = [np.append(dvglist[i][:-ssn], (dvglist[i][-ssn:] + ss) - dvglist[i][-ssn:]) for i, ss in enumerate(dvslist)]
         traces.append(dvglist[-1])
         return traces
 
@@ -487,8 +454,7 @@ def gen_re_traces(model, params, integrate_exec_ss=False, ssdlist=np.arange(.2, 
         dvss.append(s[:ixmin])
         if integrate:
             tx = xinit_ss[i]
-            integrated.append(
-                app(g[:tx], cs(app(g[tx], (np.diff(g[tx:]) + np.diff(s[tx:]))))))
+            integrated.append(app(g[:tx], cs(app(g[tx], (np.diff(g[tx:]) + np.diff(s[tx:]))))))
 
     nframes = [len(gt) for gt in dvgs]
     x = params['tr'][0] * 1000 + [np.arange(nf) for nf in nframes]
@@ -506,13 +472,11 @@ def build_decision_axis(onset, bound, ssd=np.arange(200, 450, 50), tb=650):
     start = onset - 80
     # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
     for i, ax in enumerate(axes):
-        plt.setp(ax, xlim=(start - 1, w + 1),
-                 ylim=(0 - (.01 * h), h + (.01 * h)))
+        plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
         ax.vlines(x=ssd[i], ymin=0, ymax=h, color="#e74c3c", lw=1.5, alpha=.5)
         ax.hlines(y=h, xmin=start, xmax=w, color='k')
         ax.hlines(y=0, xmin=start, xmax=w, color='k')
-        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0',
-                  lw=1.5, linestyle='-', alpha=.5)
+        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='-', alpha=.5)
         ax.vlines(x=start + 2, ymin=0, ymax=h, color='k')
         ax.text(ssd[i] + 10, h * .87, str(ssd[i]) + 'ms', fontsize=15)
         ax.set_xticklabels([])
@@ -529,8 +493,7 @@ def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
     gcolor = '#27ae60'
     scolor = '#e74c3c'
     for n in range(len(x)):
-        ex, gt, gl, st, sl, ix, iy = [xx[n] for xx in [
-            x, gtraces, glines, straces, slines, xi, yi]]
+        ex, gt, gl, st, sl, ix, iy = [xx[n] for xx in [x, gtraces, glines, straces, slines, xi, yi]]
         try:
             gl.set_data(ex[:i + 1], gt[:i + 1])
             gl.set_color(gcolor)
@@ -564,8 +527,7 @@ def anim_to_html(anim):
 
     if not hasattr(anim, '_encoded_video'):
         with NamedTemporaryFile(suffix='.mp4') as f:
-            anim.save(f.name, dpi=300, extra_args=[
-                      '-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
+            anim.save(f.name, dpi=300, extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
             video = open(f.name, "rb").read()
         anim._encoded_video = video.encode("base64")
     return VIDEO_TAG.format(anim._encoded_video)
@@ -583,11 +545,9 @@ def plot_all_traces(DVg, DVs, theta, ssd=np.arange(.2, .45, .05), kind='dpm'):
     nssd = DVs.shape[1]
     f, axes = plt.subplots(nssd, ncond, figsize=(12, 14))
     for i in range(ncond):
-        params = {k: v[i] if hasattr(
-            v, '__iter__') else v for k, v in theta.items()}
+        params = {k: v[i] if hasattr(v, '__iter__') else v for k, v in theta.items()}
         for ii in range(nssd):
-            plot_traces(DVg=DVg[i], DVs=DVs[i, ii], ssd=ssd[
-                        ii], sim_theta=params, ax=axes[ii, i], kind=kind)
+            plot_traces(DVg=DVg[i], DVs=DVs[i, ii], ssd=ssd[ii], sim_theta=params, ax=axes[ii, i], kind=kind)
     return f
 
 
@@ -600,8 +560,7 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='dpm', ssd=.450, ax=None, tau
     z = 0
     for i, igo in enumerate(DVg):
         ind = np.argmax(igo >= a)
-        xx = [np.arange(tr, tr + (len(igo[:ind - 1]) * tau),
-                        tau), np.arange(tr, tb, tau)]
+        xx = [np.arange(tr, tr + (len(igo[:ind - 1]) * tau), tau), np.arange(tr, tb, tau)]
         x = xx[0 if len(xx[0]) < len(xx[1]) else 1]
         plt.plot(x, igo[:len(x)], color=cg, alpha=1, linewidth=2)
 
@@ -611,16 +570,14 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='dpm', ssd=.450, ax=None, tau
                 ind = np.argmax(DVs[0] <= 0)
             else:
                 ind = np.argmax(DVs[0] >= a)
-            xx = [np.arange(ssd, ssd + (len(DVs[0][:ind - 1])
-                                        * tau), tau), np.arange(ssd, tb, tau)]
+            xx = [np.arange(ssd, ssd + (len(DVs[0][:ind - 1]) * tau), tau), np.arange(ssd, tb, tau)]
             x = xx[0 if len(xx[0]) < len(xx[1]) else 1]
             crx = sns.blend_palette(cr, n_colors=len(x))
 
             for ii in range(len(x)):
                 if ii == len(x) - 1:
                     break
-                plt.plot([x[ii], x[ii + 1]], [np.asscalar(DVs[0][ii]), np.asscalar(DVs[0][ii + 1])],
-                         color=crx[ii], alpha=.9, linewidth=2)  # DVs[i, :len(x)], color=cr, alpha=.9, linewidth=2)
+                plt.plot([x[ii], x[ii + 1]], [np.asscalar(DVs[0][ii]), np.asscalar(DVs[0][ii + 1])], color=crx[ii], alpha=.9, linewidth=2)
 
     xlow = np.min([tr, ssd])
     xlim = (xlow * .75, 1.05 * tb)
@@ -634,13 +591,10 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='dpm', ssd=.450, ax=None, tau
         ylim = (z - .03, a * 1.03)
 
     plt.setp(ax, xlim=xlim, ylim=ylim)
-    ax.hlines(y=z, xmin=xlow, xmax=tb, linewidth=2,
-              linestyle='--', color="k", alpha=.5)
+    ax.hlines(y=z, xmin=xlow, xmax=tb, linewidth=2, linestyle='--', color="k", alpha=.5)
     ax.hlines(y=a, xmin=xlow, xmax=tb, linewidth=2, linestyle='-', color="k")
-    ax.hlines(y=ylow, xmin=xlow, xmax=tb,
-              linewidth=2, linestyle='-', color="k")
-    ax.vlines(x=xlow, ymin=ylow * .998, ymax=a * 1.002,
-              linewidth=2, linestyle='-', color="k")
+    ax.hlines(y=ylow, xmin=xlow, xmax=tb, linewidth=2, linestyle='-', color="k")
+    ax.vlines(x=xlow, ymin=ylow * .998, ymax=a * 1.002, linewidth=2, linestyle='-', color="k")
     sns.despine(top=True, bottom=True, right=True, left=True)
     ax.set_xlim(xlim)
     ax.set_xticklabels([])

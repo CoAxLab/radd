@@ -34,8 +34,7 @@ class BOLD(Simulator):
             self.p = model.popt
             try:
                 for pkey, pkc_list in model.pc_map.items():
-                    self.p[pkey] = np.array([model.popt[pkc]
-                                             for pkc in pkc_list])
+                    self.p[pkey] = np.array([model.popt[pkc] for pkc in pkc_list])
             except KeyError:
                 pass
         elif sim_xbias:
@@ -65,10 +64,8 @@ class BOLD(Simulator):
         # x[0] = DVg (go accumulator: all trials in single condition)
         # x[1] = a   (boundary, single condition)
         # x[2] = tr  (onset time, cond i)
-        self.get_rt = lambda x: np.where(x[0].max(axis=1) >= x[1], x[
-                                         2] + np.argmax(x[0] >= x[1], axis=1) * self.dt, 999)
-        self.get_ssrt = lambda dvs, delay: np.where(
-            dvs.min(axis=3) <= 0, delay + np.argmax(dvs <= 0, axis=3) * self.dt, 999)
+        self.get_rt = lambda x: np.where(x[0].max(axis=1) >= x[1], x[2] + np.argmax(x[0] >= x[1], axis=1) * self.dt, 999)
+        self.get_ssrt = lambda dvs, delay: np.where(dvs.min(axis=3) <= 0, delay + np.argmax(dvs <= 0, axis=3) * self.dt, 999)
 
         ###############################################################
         # LAMBDA FUNC: GET_GO_TRACES FOR ALL THAT CROSS BOUND BEFORE TB
@@ -85,8 +82,7 @@ class BOLD(Simulator):
         # x[1] = a (boundary, single condition)
         # x[2] = Tg (ntime points, single condition)
         # x[3] = BOOL (decay if True, <default False>)
-        self.cap_roll_traces = lambda x: self.drop_n_roll(
-            self.cap_n_bound(x[0], x[1], x[2], x[3]))
+        self.cap_roll_traces = lambda x: self.drop_n_roll(self.cap_n_bound(x[0], x[1], x[2], x[3]))
 
         #######################################################################
         # LAMBDA FUNC: GET_HEMO get last occurence of numeric vals along cumsum axis=1
@@ -99,8 +95,7 @@ class BOLD(Simulator):
             else:
                 return x[x.last_valid_index()]
 
-        self.get_hemo = lambda d: d.cumsum(axis=0).apply(
-            get_last_numeric, axis=0).dropna().values
+        self.get_hemo = lambda d: d.cumsum(axis=0).apply(get_last_numeric, axis=0).dropna().values
 
     def generate_dpm_traces(self):
         """ Get go,ssrt using same function as proactive then use the indices for
@@ -125,17 +120,13 @@ class BOLD(Simulator):
         nss = self.nss_all / self.nssd
         xtb = self.xtb
 
-        get_ssbase = lambda Ts, Tg, DVg: array([[DVc[:nss / nssd, ix] for ix in np.where(
-            Ts < Tg[i], Tg[i] - Ts, 0)] for i, DVc in enumerate(DVg)])[:, :, :, na]
+        get_ssbase = lambda Ts, Tg, DVg: array([[DVc[:nss / nssd, ix] for ix in np.where(Ts < Tg[i], Tg[i] - Ts, 0)] for i, DVc in enumerate(DVg)])[:, :, :, na]
 
-        self.gomoments = xtb[
-            :, na] * np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T
-        self.ssmoments = np.where(
-            rs((ncond, nssd, nss, Ts.max())) < Ps, dx, -dx)
+        self.gomoments = xtb[:, na] * np.where((rs((ncond, ntot, Tg.max())).T < Pg), dx, -dx).T
+        self.ssmoments = np.where(rs((ncond, nssd, nss, Ts.max())) < Ps, dx, -dx)
         DVg = base[:, na] + xtb[:, na] * np.cumsum(self.gomoments, axis=2)
         self.dvg = DVg[:, :nss_all, :]
-        self.dvs = self.get_ssbase(Ts, Tg, DVg) + \
-            np.cumsum(self.ssmoments, axis=3)
+        self.dvs = self.get_ssbase(Ts, Tg, DVg) + np.cumsum(self.ssmoments, axis=3)
 
         dg = self.gomoments[:, nss_all:, :].reshape(ncond, nssd, nss, Tg.max())
         ds = self.ssmoments.copy()
@@ -145,17 +136,13 @@ class BOLD(Simulator):
             diff = Ts - Tg[i]
             pad_go = diff[diff > 0]
             pad_ss = abs(diff[diff < 0])
-
-            go_list.extend([concat((np.zeros((nss, gp)), g[i]), axis=1)
-                            for gp in pad_go])
+            go_list.extend([concat((np.zeros((nss, gp)), g[i]), axis=1) for gp in pad_go])
             go_list.extend([g[x] for x in range(len(pad_ss))])
 
-            ss_list.extend([concat((np.zeros((nss, abs(spad))), s[
-                           i, :, -(Tg[i] - spad):]), axis=1) for spad in pad_ss])
+            ss_list.extend([concat((np.zeros((nss, abs(spad))), s[i, :, -(Tg[i] - spad):]), axis=1) for spad in pad_ss])
             ss_list.extend([s[i, :, -tss:] for tss in Ts[:len(pad_go)]])
 
-        r = map((lambda x: np.cumsum(
-            (x[0] + x[1]), axis=1)), zip(go_list, ss_list))
+        r = map((lambda x: np.cumsum((x[0] + x[1]), axis=1)), zip(go_list, ss_list))
 
     def generate_pro_traces(self, ntrials=500):
         """ ensures parameters are vectorized and sets
@@ -219,40 +206,31 @@ class BOLD(Simulator):
             ng_trial_arrays = map(self.get_ng_traces, zipped_rt_traces)
         elif 'dpm' in self.kind:
             ssrt = self.get_ssrt(self.dvs, self.ssd[:, None])
-            strial_gorts = rt[:, :self.nss_all].reshape(
-                self.ncond, self.nssd, self.nss)
+            strial_gorts = rt[:, :self.nss_all].reshape(self.ncond, self.nssd, self.nss)
             # zip DVs, SSRT, ssGoRT
             zipped_rt_traces = zip(self.dvs, ssrt, strial_gorts)
             ng_trial_arrays = map(self.get_ng_traces, zipped_rt_traces)
 
-        zipped_go_caproll = zip(
-            go_trial_arrays, self.bound, self.Tg, [decay] * self.ncond)
-        zipped_ng_caproll = zip(
-            ng_trial_arrays, self.bound, self.Tg, [decay] * self.ncond)
+        zipped_go_caproll = zip(go_trial_arrays, self.bound, self.Tg, [decay] * self.ncond)
+        zipped_ng_caproll = zip(ng_trial_arrays, self.bound, self.Tg, [decay] * self.ncond)
         # generate dataframe of capped and time-thresholded go traces
         self.go_traces = map(self.cap_roll_traces, zipped_go_caproll)
         self.ng_traces = map(self.cap_roll_traces, zipped_ng_caproll)
 
         if hemodynamic:
             self.make_bold_dfs(shape=shape, save=save)
-            self.mean_go_traces = [
-                gt.mean(axis=1).dropna().values for gt in self.go_traces]
-            self.mean_ng_traces = [
-                ng.mean(axis=1).dropna().values for ng in self.ng_traces]
+            self.mean_go_traces = [gt.mean(axis=1).dropna().values for gt in self.go_traces]
+            self.mean_ng_traces = [ng.mean(axis=1).dropna().values for ng in self.ng_traces]
 
     def make_bold_dfs(self, shape='long', savestr='sim', save=False):
         if not hasattr(self, 'go_traces'):
             self.simulate_bold()
-        go_csum = [gt.cumsum(axis=0).max(
-            axis=0).values for gt in self.go_traces]
-        ng_csum = [ng.cumsum(axis=0).max(
-            axis=0).values for ng in self.ng_traces]
+        go_csum = [gt.cumsum(axis=0).max(axis=0).values for gt in self.go_traces]
+        ng_csum = [ng.cumsum(axis=0).max(axis=0).values for ng in self.ng_traces]
 
         if shape == 'fat':
-            dfgo_csum = pd.DataFrame.from_dict(OrderedDict(
-                zip(self.labels, go_csum)), orient='index').T
-            dfng_csum = pd.DataFrame.from_dict(OrderedDict(
-                zip(self.labels, ng_csum)), orient='index').T
+            dfgo_csum = pd.DataFrame.from_dict(OrderedDict(zip(self.labels, go_csum)), orient='index').T
+            dfng_csum = pd.DataFrame.from_dict(OrderedDict(zip(self.labels, ng_csum)), orient='index').T
             dfgo_csum.insert(0, 'choice', 'go')
             dfng_csum.insert(0, 'choice', 'nogo')
 
@@ -264,13 +242,11 @@ class BOLD(Simulator):
             choices = np.sort(['go', 'nogo'] * self.ncond)
             lbls = [int(lbl) for lbl in self.labels] * 2
             for i, gb in enumerate(go_csum):
-                boldf_list.append(pd.DataFrame.from_dict(
-                    {'cond': lbls[i], 'csum': gb, 'choice': choices[i]}))
+                boldf_list.append(pd.DataFrame.from_dict({'cond': lbls[i], 'csum': gb, 'choice': choices[i]}))
             self.bold_mag = pd.concat(boldf_list)
 
         if save:
-            self.bold_mag.to_csv(
-                '_'.join([savestr, 'bold_mag.csv']), index=False)
+            self.bold_mag.to_csv('_'.join([savestr, 'bold_mag.csv']), index=False)
 
     def cap_n_bound(self, traces, bound, Tg, decay=False):
         """ take 2d array and set values >= upper boundary as np.nan
@@ -386,8 +362,7 @@ class BOLD(Simulator):
 
     def plot_means(self, save=False, ax=None, label_x=True):
 
-        redgreen = lambda nc: sns.blend_palette(
-            ["#c0392b", "#27ae60"], n_colors=nc)
+        redgreen = lambda nc: sns.blend_palette(["#c0392b", "#27ae60"], n_colors=nc)
         sns.set(style='white', font_scale=1.5)
         if not hasattr(self, 'bold_mag'):
             self.make_bold_dfs()
@@ -398,8 +373,7 @@ class BOLD(Simulator):
         df = self.bold_mag.copy()
         df.ix[(df.choice == 'go') & (df.cond <= 50), 'cond'] = 40
         df.ix[(df.choice == 'nogo') & (df.cond >= 50), 'cond'] = 60
-        sns.barplot('cond', 'csum', data=df, order=np.sort(
-            df.cond.unique()), palette=redgreen(6), ax=ax)
+        sns.barplot('cond', 'csum', data=df, order=np.sort(df.cond.unique()), palette=redgreen(6), ax=ax)
 
         mu = df.groupby(['choice', 'cond']).mean()['csum']
         ax.set_ylim(mu.min() * .55, mu.max() * 1.15)
@@ -457,10 +431,8 @@ class BOLD(Simulator):
         #gc = cpals['gpal'](len(gmu))
         #nc = cpals['rpal'](len(nmu))
 
-        gx = [tr[i] + np.arange(len(gmu[i])) *
-              self.dt for i in range(len(gmu))]
-        nx = [tr[i] + np.arange(len(nmu[i])) *
-              self.dt for i in range(len(nmu))]
+        gx = [tr[i] + np.arange(len(gmu[i])) * self.dt for i in range(len(gmu))]
+        nx = [tr[i] + np.arange(len(nmu[i])) * self.dt for i in range(len(nmu))]
         ls = ['-', '-']
         for i in range(len(gmu)):
             ax.plot(gx[i], gmu[i], linestyle=ls[i], lw=1, color=gc[i])
@@ -481,6 +453,5 @@ class BOLD(Simulator):
         plt.tight_layout()
         if save:
             plt.savefig('_'.join([titl, self.decay, 'traces.png']), dpi=300)
-            plt.savefig(
-                '_'.join([titl, self.decay, 'traces.svg']), format='svg', rasterized=True)
+            plt.savefig('_'.join([titl, self.decay, 'traces.svg']), format='svg', rasterized=True)
         return ax

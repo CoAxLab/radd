@@ -107,8 +107,7 @@ def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_ar
         model_id = ' ('.join([model_id, dynamic]) + ')'
     dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
     wts_str = 'wts = array([' + ', '.join(str(elem)[:6] for elem in wts) + '])'
-    yhat_str = 'yhat = array([' + ', '.join(str(elem)[:6]
-                                            for elem in yhat) + '])'
+    yhat_str = 'yhat = array([' + ', '.join(str(elem)[:6] for elem in yhat) + '])'
     y_str = 'y = array([' + ', '.join(str(elem)[:6] for elem in y) + '])'
     with open(fname, 'a') as f:
         f.write('==' * 30 + '\n')

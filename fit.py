@@ -39,27 +39,21 @@ class Optimizer(RADDCore):
         self.global_method = global_method
         self.kind = kind
         self.dynamic = self.fitparams['dynamic']
-
         if fit_on in ['subjects', 'bootstrap']:
             self.prep_indx(dframes)
-
         self.method = method
         self.avg_y = self.fitparams['avg_y'].flatten()
         self.avg_wts = self.fitparams['avg_wts']
-
         self.flat_y = self.fitparams['flat_y']
         self.flat_wts = self.fitparams['flat_wts']
-
         self.pc_map = pc_map
         self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
         self.pvc = deepcopy(['a', 'tr', 'v', 'xb'])
 
-        super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on,
-                                        depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
+        super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
 
         # initate simulator object of model being optimized
-        self.simulator = models.Simulator(
-            fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
+        self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
     def optimize_model(self, save=True, savepth='./'):
 
@@ -101,8 +95,7 @@ class Optimizer(RADDCore):
             p0 = self.hop_around(p0)
 
         # p1: STAGE 1 (Initial Simplex)
-        yh1, finfo1, p1 = self.gradient_descent(
-            y=y, wts=self.flat_wts, inits=p0, is_flat=True)
+        yh1, finfo1, p1 = self.gradient_descent(y=y, wts=self.flat_wts, inits=p0, is_flat=True)
         self.flat_finfo = finfo1
         return yh1, finfo1, p1
 
@@ -133,8 +126,7 @@ class Optimizer(RADDCore):
             p2 = self.single_basin(p2)
 
         # STAGE 3: (Final Simplex)
-        yhat, finfo, popt = self.gradient_descent(
-            y=y, wts=self.avg_wts, inits=p2, is_flat=False)
+        yhat, finfo, popt = self.gradient_descent(y=y, wts=self.avg_wts, inits=p2, is_flat=False)
 
         return yhat, finfo, popt
 
@@ -164,8 +156,7 @@ class Optimizer(RADDCore):
 
         P0X = dict(deepcopy(p))
         pkeys = p.keys()
-        rinits = theta.random_inits(
-            pkeys, ninits=bp['nrand_inits'], kind=self.kind)
+        rinits = theta.random_inits(pkeys, ninits=bp['nrand_inits'], kind=self.kind)
         xpopt, xfmin = [], []
         for i in range(bp['nrand_inits']):
             if i == 0:
@@ -185,8 +176,7 @@ class Optimizer(RADDCore):
             self.basin_decision = "using default inits: fmin=%.9f" % xfmin[0]
             return P0X
         else:
-            self.basin_decision = "found global miniumum new: fmin=%.9f; norig=%9f)" % (
-                fmin, xfmin[0])
+            self.basin_decision = "found global miniumum new: fmin=%.9f; norig=%9f)" % (fmin, xfmin[0])
             self.global_inits = dict(deepcopy(new_inits))
         return new_inits
 
@@ -211,21 +201,16 @@ class Optimizer(RADDCore):
             ncond = len(self.pc_map.values()[0])
             basin_params = deepcopy(p)
 
-        self.simulator.__prep_global__(
-            basin_params=basin_params, basin_keys=basin_keys, is_flat=is_flat)
-        xmin, xmax = theta.format_basinhopping_bounds(
-            basin_keys, kind=self.kind, ncond=ncond)
+        self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys, is_flat=is_flat)
+        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, ncond=ncond)
 
-        x = np.hstack(np.hstack([basin_params[pk]
-                                 for pk in basin_keys])).tolist()
+        x = np.hstack(np.hstack([basin_params[pk] for pk in basin_keys])).tolist()
 
         bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
-        mkwargs = {"method": bp['method'], "bounds": bounds, 'tol': bp['tol'], 'options': {
-            'xtol': bp['tol'], 'ftol': bp['tol'], 'maxiter': bp['maxiter']}}
+        mkwargs = {"method": bp['method'], "bounds": bounds, 'tol': bp['tol'], 'options': {'xtol': bp['tol'], 'ftol': bp['tol'], 'maxiter': bp['maxiter']}}
 
         # run basinhopping on simulator.basinhopping_minimizer func
-        out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], niter_success=bp[
-                           'nsuccess'], minimizer_kwargs=mkwargs, niter=bp['niter'], interval=bp['interval'], disp=bp['disp'])
+        out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], niter_success=bp['nsuccess'], minimizer_kwargs=mkwargs, niter=bp['niter'], interval=bp['interval'], disp=bp['disp'])
 
         xopt = out.x
         funcmin = out.fun
@@ -233,7 +218,6 @@ class Optimizer(RADDCore):
             xopt = array([xopt]).reshape(len(basin_keys), ncond)
         for i, k in enumerate(basin_keys):
             p[k] = xopt[i]
-
         return p, funcmin
 
     def single_basin(self, p, niter=100, nsuccess=40):
@@ -254,19 +238,15 @@ class Optimizer(RADDCore):
             p = self.__nudge_params__(p)
 
         p = theta.all_params_to_scalar(p, exclude=pkeys)
-        mkwargs = {"method": bp['method'], 'bounds': [
-            allbounds[pk] for pk in pkeys]}
-        self.simulator.__prep_global__(
-            basin_params=p, basin_keys=pkeys, is_flat=True)
+        mkwargs = {"method": bp['method'], 'bounds': [allbounds[pk] for pk in pkeys]}
+        self.simulator.__prep_global__(basin_params=p, basin_keys=pkeys, is_flat=True)
         # make list of init values for all keys in pc_map,
         # for all conditions in depends_on.values()
         vals = [[p[pk][i] for pk in pkeys] for i in range(fp['ncond'])]
 
         for i, x in enumerate(vals):
-            self.simulator.__update__(
-                is_flat=True, y=self.bdata[i], wts=self.bwts[i])
-            out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp[
-                               'stepsize'], minimizer_kwargs=mkwargs, interval=bp['interval'], niter=niter, niter_success=nsuccess, disp=bp['disp'])
+            self.simulator.__update__(is_flat=True, y=self.bdata[i], wts=self.bwts[i])
+            out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], minimizer_kwargs=mkwargs, interval=bp['interval'], niter=niter, niter_success=nsuccess, disp=bp['disp'])
             xbasin.append(out.x)
         for i, pk in enumerate(pkeys):
             p[pk] = array([xbasin[ci][i] for ci in range(fp['ncond'])])
@@ -291,22 +271,17 @@ class Optimizer(RADDCore):
         if inits is None:
             inits = dict(deepcopy(self.inits))
 
-        self.simulator.__update__(
-            y=y.flatten(), wts=wts.flatten(), is_flat=is_flat)
-        opt_kws = {'disp': fp['disp'], 'xtol': fp['tol'],
-                   'ftol': fp['tol'], 'maxfev': fp['maxfev']}
+        self.simulator.__update__(y=y.flatten(), wts=wts.flatten(), is_flat=is_flat)
+        opt_kws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev']}
 
         # GEN PARAMS OBJ & OPTIMIZE THETA
-        lmParams = theta.loadParameters(
-            inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
-        optmod = minimize(self.simulator.__cost_fx__, lmParams,
-                          method='nelder', options=opt_kws)
+        lmParams = theta.loadParameters(inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
+        optmod = minimize(self.simulator.__cost_fx__, lmParams, method='nelder', options=opt_kws)
 
         # gen dict of opt. params
         finfo = dict(deepcopy(optmod.params.valuesdict()))
         popt = dict(deepcopy(finfo))
-        yhat = np.mean([self.simulator.sim_fx(popt)
-                        for i in xrange(100)], axis=0)
+        yhat = np.mean([self.simulator.sim_fx(popt) for i in xrange(100)], axis=0)
         wts = self.simulator.wts
 
         # ASSUMING THE weighted SSE is CALC BY COSTFX
@@ -320,9 +295,10 @@ class Optimizer(RADDCore):
         popt = theta.all_params_to_scalar(popt, exclude=self.pc_map.keys())
         log_arrays = {'y': self.simulator.y, 'yhat': yhat, 'wts': wts}
         param_report = fit_report(optmod.params)
-        logger(param_report=param_report, finfo=finfo, pdict=popt, depends_on=fp[
-               'depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic, pc_map=self.pc_map)
+        logger(param_report=param_report, finfo=finfo, pdict=popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic, pc_map=self.pc_map)
+
         return yhat, finfo, popt
+
 
     def prep_indx(self, dframes):
 
@@ -337,8 +313,7 @@ class Optimizer(RADDCore):
         if self.data_style == 're':
             self.get_flaty = lambda x: x.mean(axis=0)
         elif self.data_style == 'pro':
-            self.get_flaty = lambda x: np.hstack(
-                [x[:nc].mean(), x[nc:].reshape(2, nq).mean(axis=0)])
+            self.get_flaty = lambda x: np.hstack([x[:nc].mean(), x[nc:].reshape(2, nq).mean(axis=0)])
 
     def __indx_optimize__(self, save=True, savepth='./'):
 
@@ -356,8 +331,7 @@ class Optimizer(RADDCore):
 
             self.fitinfo.iloc[i] = pd.Series({pc: finfo[pc] for pc in pcols})
             if self.data_style == 're':
-                self.fits.iloc[ri:ri + nc,
-                               :] = yhat.reshape(nc, len(self.fits.columns))
+                self.fits.iloc[ri:ri+nc, :] = yhat.reshape(nc, len(self.fits.columns))
                 ri += nc
             elif self.data_style == 'pro':
                 self.fits.iloc[i] = yhat

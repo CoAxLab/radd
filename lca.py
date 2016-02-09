@@ -27,18 +27,13 @@ def plot_decision_network(Id=3.8, Ii=2.6, Io=4.5, g=12, b=34, rmax=60, wid=.21, 
     sns.set(style='white', font_scale=2.)
     f, (ax1, ax2) = plt.subplots(2, 1, sharex=True, figsize=(8, 13))
 
-    rd1, ri1, dv1 = decision_network(
-        Id=Id, Ii=Ii, Io=4.5, g=g, b=b, rmax=rmax, wid=wid, wdi=wdi)
-    rd2, ri2, dv2 = decision_network(
-        Id=Id, Ii=Ii, Io=3.6, g=g, b=b, rmax=rmax, wid=wid, wdi=wdi)
-    rd3, ri3, dv3 = decision_network(
-        Id=Id, Ii=Ii, Io=2.8, g=g, b=b, rmax=rmax, wid=wid, wdi=wdi)
-    data = [[rd1, ri1, dv1, 1, True], [
-        rd2, ri2, dv2, .5, False], [rd3, ri3, dv3, .25, False]]
+    rd1, ri1, dv1 = decision_network(Id=Id, Ii=Ii, Io=4.5, g=g, b=b, rmax=rmax, wid=wid, wdi=wdi)
+    rd2, ri2, dv2 = decision_network(Id=Id, Ii=Ii, Io=3.6, g=g, b=b, rmax=rmax, wid=wid, wdi=wdi)
+    rd3, ri3, dv3 = decision_network(Id=Id, Ii=Ii, Io=2.8, g=g, b=b, rmax=rmax, wid=wid, wdi=wdi)
+    data = [[rd1, ri1, dv1, 1, True], [rd2, ri2, dv2, .5, False], [rd3, ri3, dv3, .25, False]]
     xlim = (0, len(rd1))
     for i, dat in enumerate(data):
-        dual_space_plot(ax2, ax1, dat[0], dat[1], dat[2], rts=IoRT, alpha=dat[
-                        3], isfirst=dat[4], i=i, xlim=xlim)
+        dual_space_plot(ax2, ax1, dat[0], dat[1], dat[2], rts=IoRT, alpha=dat[3], isfirst=dat[4], i=i, xlim=xlim)
 
 
 def decision_network(Id=3.5, Ii=3.5, Io=3., wdi=.22, wid=.22, k=.85, si=2.3, dt=.001, tau=.05, tmax=1.5, rmax=70, b=35, g=15, ntrials=10, y=1, Z=20, IoMax=4.5):
@@ -91,8 +86,7 @@ def simulate_network_rts(Id=3.5, Ii=3.5, Io=3., wdi=.22, wid=.22, k=.85, si=2.3,
 
     for w in [[.20, .22], [.21, .23], [.21, .24]]:
         for tn in xrange(ntrials):
-            rd, ri, dv = decision_network(
-                Id=3., Ii=3., Io=4.5, g=12, b=34, rmax=60, wid=w[0], wdi=w[1])
+            rd, ri, dv = decision_network(Id=3., Ii=3., Io=4.5, g=12, b=34, rmax=60, wid=w[0], wdi=w[1])
             if np.shape(dv)[0] < Z:
                 continue
             rt.append(len(dv))
@@ -112,8 +106,7 @@ def dual_space_plot(ax1, ax2, rd, ri, dv, rts=None, Z=20, alpha=1, isfirst=True,
         labels = [None, None]
     ax1.plot(rd, label=labels[0], color=colors[3], alpha=alpha)
     ax1.plot(ri, label=labels[1], color=colors[6], alpha=alpha)
-    ax1.vlines(rt, ymin=ri[rt], ymax=rd[rt],
-               color=colors[-2], linestyles='--', alpha=alpha)
+    ax1.vlines(rt, ymin=ri[rt], ymax=rd[rt], color=colors[-2], linestyles='--', alpha=alpha)
 
     # Decision Space
     ax2.plot(dv, color=colors[-2], alpha=alpha)

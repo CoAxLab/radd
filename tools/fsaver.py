@@ -15,20 +15,13 @@ class FSaver():
         self.style = style
         self.set_style_params()
 
-        self.rpal = lambda nc: sns.blend_palette(
-            ['#e88379', '#c0392b'], n_colors=nc)
-        self.bpal = lambda nc: sns.blend_palette(
-            ['#81aedb', '#3A539B'], n_colors=nc)
-        self.gpal = lambda nc: sns.blend_palette(
-            ['#65b88f', '#27ae60'], n_colors=nc)
-        self.ppal = lambda nc: sns.blend_palette(
-            ['#848bb6', '#663399'], n_colors=nc)
-        self.heat = lambda nc: sns.blend_palette(
-            ['#f39c12', '#c0392b'], n_colors=nc)
-        self.cool = lambda nc: sns.blend_palette(
-            ["#4168B7", "#27ae60"], n_colors=nc)
-        self.slate = lambda nc: sns.blend_palette(
-            ['#95A5A6', "#6C7A89"], n_colors=nc)
+        self.rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
+        self.bpal = lambda nc: sns.blend_palette(['#81aedb', '#3A539B'], n_colors=nc)
+        self.gpal = lambda nc: sns.blend_palette(['#65b88f', '#27ae60'], n_colors=nc)
+        self.ppal = lambda nc: sns.blend_palette(['#848bb6', '#663399'], n_colors=nc)
+        self.heat = lambda nc: sns.blend_palette(['#f39c12', '#c0392b'], n_colors=nc)
+        self.cool = lambda nc: sns.blend_palette(["#4168B7", "#27ae60"], n_colors=nc)
+        self.slate = lambda nc: sns.blend_palette(['#95A5A6', "#6C7A89"], n_colors=nc)
 
     def set_style_params(self, style=None):
 
@@ -42,8 +35,7 @@ class FSaver():
             fc = '#39414F'
             tc = 'white'
 
-        sns.set(style='ticks', font='Helvetica', rc={'text.color': tc, 'axes.labelcolor': tc, 'figure.facecolor': fc,
-                                                     'axes.facecolor': fc, 'figure.edgecolor': tc, 'axes.edgecolor': tc, 'xtick.color': tc, 'ytick.color': tc, 'lines.linewidth': 2})
+        sns.set(style='ticks', font='Helvetica', rc={'text.color': tc, 'axes.labelcolor': tc, 'figure.facecolor': fc, 'axes.facecolor': fc, 'figure.edgecolor': tc, 'axes.edgecolor': tc, 'xtick.color': tc, 'ytick.color': tc, 'lines.linewidth': 2})
 
     def savefig(self, fig=None):
 
@@ -53,14 +45,10 @@ class FSaver():
         for ax in fig.axes():
             ax.patch.set_facecolor('#39414F')
         fig.savefig(''.join([savestr, '.png']), facecolor=white, edgecolor='k')
-
         fig.patch.set_facecolor('#39414F')
         fig.patch.set_alpha(0.7)
-
         ax = fig.add_subplot(111)
-
         ax.plot(range(10))
-
         ax.patch.set_facecolor('red')
         ax.patch.set_alpha(0.5)
 

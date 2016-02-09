@@ -44,10 +44,8 @@ def run_pipeline(data=pd.DataFrame, kinds='pro', depends_keys=[], condition='pGo
     # if no inits then generarte permutations of model attr
     if initials is None:
         initials = [None] * nmodels
-        minfo = model_permutations(
-            deplist=depends_on, kinds=kinds, dynamics=dynamics)
-        kinds, depends_on, dynamics = minfo[
-            'kinds'], minfo['depends_on'], minfo['dynamics']
+        minfo = model_permutations(deplist=depends_on, kinds=kinds, dynamics=dynamics)
+        kinds, depends_on, dynamics = minfo['kinds'], minfo['depends_on'], minfo['dynamics']
     elif isinstance(initials, dict):
         initials = [initials] * nmodels
 
@@ -64,8 +62,7 @@ def run_pipeline(data=pd.DataFrame, kinds='pro', depends_keys=[], condition='pGo
         # make/change to model save dir
         go_to(kind=kind, model_id=model_id, rootdir=rootdir)
         # build model
-        fitted_model = model_and_analyze(data=data, kind=kind, inits=initials[
-                                         i], depends_on=dep, dynamic=dyn, fit_on=fit_on, verbose=False, weighted=weighted, model_id=model_id, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, results='both')
+        fitted_model = model_and_analyze(data=data, kind=kind, inits=initials[i], depends_on=dep, dynamic=dyn, fit_on=fit_on, verbose=False, weighted=weighted, model_id=model_id, ntrials=10000, tol=1.e-20, maxfev=5000, niter=500, results='both')
         # store model object
         mlist.append(fitted_model)
 
@@ -77,8 +74,7 @@ def model_and_analyze(data=pd.DataFrame, kind=None, inits={}, depends_on={}, dyn
     from radd import build
 
     # build model
-    model = build.Model(data=data, kind=kind, inits=inits, depends_on=depends_on,
-                        dynamic=dynamic, fit_on=fit_on, verbose=False, weighted=weighted)
+    model = build.Model(data=data, kind=kind, inits=inits, depends_on=depends_on, dynamic=dynamic, fit_on=fit_on, verbose=False, weighted=weighted)
 
     # fit model to data
     model.optimize(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter)
@@ -96,13 +92,11 @@ def model_permutations(kinds=[], deplist=[], dynamics=[]):
     minfo = {}
     print kinds
     # generate permutations of kinds, depends_on, and dynamics
-    infop = [product([k], deplist) if not 'x' in k else product(
-        [k], deplist, dynamics) for k in kinds]
+    infop = [product([k], deplist) if not 'x' in k else product([k], deplist, dynamics) for k in kinds]
 
     # convert product tuples to lists then combine permutations of dynamic
     # models and linear models
-    allmodels = [list(tup) for tup in list(infop[0])] + \
-        [list(tup) + ['Null'] for tup in list(infop[1])]
+    allmodels = [list(tup) for tup in list(infop[0])] + [list(tup) + ['Null'] for tup in list(infop[1])]
 
     minfo['kinds'] = [mi[0] for mi in allmodels]
     minfo['depends_on'] = [mi[1] for mi in allmodels]
@@ -112,9 +106,7 @@ def model_permutations(kinds=[], deplist=[], dynamics=[]):
 
 def id_model(kind, depends_on, dynamic):
     #### AS LAMBDA ###
-    #id_model = lambda mod: [['_'.join([dirname, mod.dynamic]).upper() if 'x' in mod.kind else dirname.upper() for dirname in ['_'.join([k for k in mod.depends_on.keys()])]][0]]
-    model_id = ['_'.join([dkeys, dynamic]).upper() if 'x' in kind else dkeys.upper(
-    ) for dkeys in ['_'.join([k for k in depends_on.keys()])]][0]
+    model_id = ['_'.join([dkeys, dynamic]).upper() if 'x' in kind else dkeys.upper() for dkeys in ['_'.join([k for k in depends_on.keys()])]][0]
     return model_id
 
 
@@ -147,15 +139,12 @@ def plot_results(model, results='both', model_id=None):
         model_id = id_model(model)
 
     if 'pro' not in model.kind:
-        yhat = model.fits.reshape(
-            model.ncond, int(len(model.fits) / model.ncond))
+        yhat = model.fits.reshape(model.ncond, int(len(model.fits) / model.ncond))
         for i, yh in enumerate(yhat):
-            vis.plot_fits(model.y[i], yh, kind='radd', save=True, savestr='_'.join(
-                [model_id, model.labels[i]]))
+            vis.plot_fits(model.y[i], yh, kind='radd', save=True, savestr='_'.join([model_id, model.labels[i]]))
     else:
         if results in ['behavior', 'both']:
-            vis.plot_fits(model.y, model.fits, kind='pro',
-                          save=True, savestr=model_id)
+            vis.plot_fits(model.y, model.fits, kind='pro', save=True, savestr=model_id)
         if results in ['bold', 'both']:
             bold = neuro.BOLD(model)
             bold.simulate_bold(save=True, savestr=model_id)

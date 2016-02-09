@@ -106,8 +106,7 @@ class RADDCore(object):
         if not hasattr(self, 'basinparams'):
             self.basinparams = {}
 
-        self.basinparams = {'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize,
-                            'nsuccess': nsuccess, 'method': 'TNC', 'tol': btol, 'maxiter': maxiter, 'disp': bdisp}
+        self.basinparams = {'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize, 'nsuccess': nsuccess, 'method': 'TNC', 'tol': btol, 'maxiter': maxiter, 'disp': bdisp}
         if get_params:
             return self.basinparams
 
@@ -153,8 +152,7 @@ class RADDCore(object):
     def resample_data(self, data):
         """ wrapper for analyze.resample_data
         """
-        resampled = analyze.resample_data(
-            data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
+        resampled = analyze.resample_data(data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
         return resampled
 
     def rt_quantiles(self, data, split_col='HL', prob=np.array([.1, .3, .5, .7, .9])):
@@ -162,8 +160,7 @@ class RADDCore(object):
         """
         if not hasattr(self, "prort_conds_prepared"):
             self.__make_proRT_conds__()
-        rtq = analyze.rt_quantiles(data, include_zero_rts=self.include_zero_rts,
-                                   split_col=split_col, prob=prob, nrt_cond=self.nrt_cond, tb=self.tb)
+        rtq = analyze.rt_quantiles(data, include_zero_rts=self.include_zero_rts, split_col=split_col, prob=prob, nrt_cond=self.nrt_cond, tb=self.tb)
         return rtq
 
     def assess_fit(self, finfo=None):
@@ -192,8 +189,7 @@ class RADDCore(object):
             else:
                 y = self.avg_y
             index = np.arange(len(fits))
-            df = pd.DataFrame({'y': y, 'wts': self.avg_wts,
-                               'yhat': fits}, index=index)
+            df = pd.DataFrame({'y': y, 'wts': self.avg_wts, 'yhat': fits}, index=index)
             df.to_csv(''.join([iostr, '.csv']))
 
         elif io == 'r':
@@ -231,8 +227,7 @@ class RADDCore(object):
                 inits[pkc] = inits[pkey]
                 b[pkc] = b[pkey]
 
-        pbounds = tuple(
-            [slice(b[pk][0], b[pk][1], .25 * np.max(np.abs(b[pk]))) for pk in pfit])
+        pbounds = tuple([slice(b[pk][0], b[pk][1], .25 * np.max(np.abs(b[pk]))) for pk in pfit])
         params = tuple([inits[pk] for pk in pfit])
 
         return pbounds, params
@@ -273,55 +268,43 @@ class RADDCore(object):
         i_grp = data.groupby(['idx'])
 
         if self.fit_on == 'bootstrap':
-            self.dat = np.vstack(
-                [i_grp.apply(self.resample_data, kind=self.kind).values for i in indx]).unstack()
+            self.dat = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in indx]).unstack()
 
         if self.data_style == 're':
-            datdf = ic_grp.apply(
-                self.rangl_data, kind=self.kind).unstack().unstack()
+            datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack().unstack()
             indxx = pd.Series(indx * ncond, name='idx')
-            obs = pd.DataFrame(np.vstack(datdf.values),
-                               columns=qp_cols[1:], index=indxx)
+            obs = pd.DataFrame(np.vstack(datdf.values), columns=qp_cols[1:], index=indxx)
             obs.insert(0, qp_cols[0], np.sort(labels * len(indx)))
 
             self.observed = obs.sort_index().reset_index()
             self.avg_y = self.observed.groupby(cond).mean().values[:, 1:]
             self.flat_y = self.observed.mean().values[1:]
             axis0, axis2 = self.observed.loc[:, qp_cols[1]:].values.shape
-            dat = self.observed.loc[:, qp_cols[1]:].values.reshape(
-                int(axis0 / ncond), ncond, axis2)
-            fits = pd.DataFrame(
-                np.zeros((len(indxx), len(qp_cols))), columns=qp_cols, index=indxx)
+            dat = self.observed.loc[:, qp_cols[1]:].values.reshape(int(axis0 / ncond), ncond, axis2)
+            fits = pd.DataFrame(np.zeros((len(indxx), len(qp_cols))), columns=qp_cols, index=indxx)
 
         elif self.data_style == 'pro':
             datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
-            rtdat = pd.DataFrame(np.vstack(i_grp.apply(
-                self.rt_quantiles).values), index=indx)
+            rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
             rtdat[rtdat < .1] = np.nan
-            rts_flat = pd.DataFrame(np.vstack(i_grp.apply(
-                self.rt_quantiles, split_col=None).values), index=indx)
+            rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split_col=None).values), index=indx)
             self.observed = pd.concat([datdf, rtdat], axis=1)
             self.observed.columns = qp_cols
             self.avg_y = self.observed.mean().values
             self.flat_y = np.append(datdf.mean().mean(), rts_flat.mean())
             dat = self.observed.values.reshape((len(indx), len(qp_cols)))
-            fits = pd.DataFrame(np.zeros_like(
-                dat), columns=qp_cols, index=indx)
+            fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
 
         fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
-        self.dframes = {'data': self.data, 'flat_y': self.flat_y, 'avg_y': self.avg_y,
-                        'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat': dat}
+        self.dframes = {'data': self.data, 'flat_y': self.flat_y, 'avg_y': self.avg_y,                        'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat': dat}
 
     def __prep_basin_data__(self):
 
         fp = self.fitparams
         if 'pro' in self.kind:
             # regroup y vectors into conditions
-            wtsp = fp['avg_wts'].flatten()[:fp['ncond']].reshape(
-                2, int(fp['ncond'] / 2))
-            nogo = self.avg_y.flatten()[:fp['ncond']].reshape(
-                2, int(fp['ncond'] / 2))
-
+            wtsp = fp['avg_wts'].flatten()[:fp['ncond']].reshape(2, int(fp['ncond'] / 2))
+            nogo = self.avg_y.flatten()[:fp['ncond']].reshape(2, int(fp['ncond'] / 2))
             rts = self.avg_y[fp['ncond']:].reshape(2, 5)
             wtsq = fp['avg_wts'][fp['ncond']:].reshape(2, 5)
 
@@ -348,25 +331,21 @@ class RADDCore(object):
         cond = self.cond
         nssd = self.nssd
         if self.data_style == 're':
-
             rprob = self.data.groupby(['ttype', 'Cond']).mean()['response']
             qwts = analyze.reactive_mj_quanterr(df=self.data, cond=cond)
             # multiply by prob. of response on cor. and err. trials
-            wtd_qwts = np.vstack(
-                rprob.unstack().unstack().values) * qwts.reshape(nc * 2, 5)
+            wtd_qwts = np.vstack(rprob.unstack().unstack().values) * qwts.reshape(nc * 2, 5)
             wtd_qwts = wtd_qwts.reshape(nc, 10)
 
             perr = self.observed.groupby(cond).std().iloc[:, 1:7].values
             pwts = np.median(perr, axis=1)[:, None] / perr
-            self.avg_wts = np.array([np.append(pw, qw)
-                                     for pw, qw in zip(pwts, wtd_qwts)]).flatten()
+            self.avg_wts = np.array([np.append(pw, qw) for pw, qw in zip(pwts, wtd_qwts)]).flatten()
             self.flat_wts = self.avg_wts.reshape(nc, 16).mean(axis=0)
 
         elif self.data_style == 'pro':
             upper = self.data[self.data['HL'] == 1].mean()['response']
             lower = self.data[self.data['HL'] == 2].mean()['response']
-            qwts = analyze.proactive_mj_quanterr(
-                df=self.data, split='HL', tb=self.tb)
+            qwts = analyze.proactive_mj_quanterr(df=self.data, split='HL', tb=self.tb)
             wtqwts = np.hstack(np.array([upper, lower])[:, None] * qwts)
             perr = self.observed.std()[:nc]
             pwts = np.median(perr) / perr
@@ -374,8 +353,7 @@ class RADDCore(object):
             nogo = self.avg_wts[:nc].mean()
             quant = self.avg_wts[nc:].reshape(2, 5).mean(axis=0)
             self.flat_wts = np.hstack([nogo, quant])
-        self.avg_wts, self.flat_wts = analyze.ensure_numerical_wts(
-            self.avg_wts, self.flat_wts)
+        self.avg_wts, self.flat_wts = analyze.ensure_numerical_wts(self.avg_wts, self.flat_wts)
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         self.data = analyze.remove_outliers(self.data, sd=sd, verbose=verbose)
@@ -383,26 +361,22 @@ class RADDCore(object):
     def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9]), cond='Cond'):
         if not hasattr(self, 'delays'):
             self.delays = self.ssd
-        qp_cols = analyze.get_header(params=params, data_style=self.data_style,
-                                     labels=self.labels, prob=prob, delays=self.delays, cond=cond)
+        qp_cols = analyze.get_header(params=params, data_style=self.data_style, labels=self.labels, prob=prob, delays=self.delays, cond=cond)
         if params is not None:
             self.infolabels = qp_cols[1]
         return qp_cols[0]
 
     def __get_default_inits__(self):
-        self.inits = theta.get_default_inits(
-            kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+        self.inits = theta.get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
 
     def __get_optimized_params__(self, include_ss=False, fit_noise=False):
-        params = theta.get_optimized_params(
-            kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+        params = theta.get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
         return params
 
     def __check_inits__(self, inits=None, pro_ss=False, fit_noise=False):
         if inits is None:
             inits = dict(deepcopy(self.inits))
-        self.inits = theta.check_inits(inits=inits, pdep=self.depends_on.keys(
-        ), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
+        self.inits = theta.check_inits(inits=inits, pdep=self.depends_on.keys(), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
 
     def mean_pgo_rts(self, p={}, return_vals=True):
         """ Simulate proactive model and calculate mean RTs
@@ -423,8 +397,7 @@ class RADDCore(object):
             return self.pgo_rts
 
     def __make_proRT_conds__(self):
-        self.data, self.rt_cix = analyze.make_proRT_conds(
-            self.data, self.split)
+        self.data, self.rt_cix = analyze.make_proRT_conds(self.data, self.split)
         self.prort_conds_prepared = True
 
     def __rename_bad_cols__(self):

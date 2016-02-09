@@ -18,7 +18,7 @@ class Simulator(object):
           1 x Ncond so Optimizer can optimize a single costfx
           for multiple conditions.
     """
-
+    
     def __init__(self, model=None, fitparams=None, inits=None, pc_map=None, kind='dpm', dt=.001, si=.01):
 
         self.dt = dt
@@ -128,15 +128,11 @@ class Simulator(object):
         else:
             self.predict_data = self.analyze_pro_data
 
-        self.resp_up = lambda trace, a: np.argmax(
-            (trace.T >= a).T, axis=2) * dt
-        self.ss_resp_up = lambda trace, a: np.argmax(
-            (trace.T >= a).T, axis=3) * dt
+        self.resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
+        self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
         self.resp_lo = lambda trace: np.argmax((trace.T <= 0).T, axis=3) * dt
-        self.RT = lambda ontime, rbool: ontime[
-            :, na] + (rbool * np.where(rbool == 0, np.nan, 1))
-        self.RTQ = lambda zpd: map(
-            (lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+        self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
+        self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
 
     def vectorize_params(self, p):
         """ ensures that all parameters are converted to arrays before simulation. see
@@ -258,13 +254,10 @@ class Simulator(object):
         dx = self.dx
         ntot = self.ntot
 
-        DVg = self.xtb[
-            :, na] * np.cumsum(np.where((rs((nc, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:, na] * np.cumsum(np.where((rs((nc, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         # INITIALIZE DVs FROM DVg(t=SSD)
-        init_ss = array([[DVg[i, :nss, ix] for ix in np.where(
-            Ts < Tg[i], Tg[i] - Ts, 0)] for i in range(nc)])
-        DVs = init_ss[:, :, :, None] + \
-            np.cumsum(np.where(rs((nss, Ts.max())) < Ps, dx, -dx), axis=1)
+        init_ss = array([[DVg[i, :nss, ix] for ix in np.where(Ts < Tg[i], Tg[i] - Ts, 0)] for i in range(nc)])
+        DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((nss, Ts.max())) < Ps, dx, -dx), axis=1)
         if analyze:
             return self.analyze_reactive(DVg, DVs, p)
         else:
@@ -280,8 +273,7 @@ class Simulator(object):
         dx = self.dx
         ntot = self.ntot
 
-        DVg = self.xtb[
-            :, na] * np.cumsum(np.where((rs((nc, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:, na] * np.cumsum(np.where((rs((nc, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         if analyze:
             return self.analyze_proactive(DVg, p)
         return DVg
@@ -299,11 +291,9 @@ class Simulator(object):
         dx = self.dx
         ntot = self.ntot
 
-        DVg = self.xtb[
-            :, None] * np.cumsum(np.where((rs((nc, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:, None] * np.cumsum(np.where((rs((nc, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         # INITIALIZE DVs FROM 0
-        DVs = np.cumsum(
-            np.where(rs((nc, nssd, nss, Ts.max())) < Ps, dx, -dx), axis=3)
+        DVs = np.cumsum(np.where(rs((nc, nssd, nss, Ts.max())) < Ps, dx, -dx), axis=3)
         if analyze:
             return self.analyze_reactive(DVg, DVs, p)
         return [DVg, DVs]
@@ -329,11 +319,9 @@ class Simulator(object):
 
         diff = Tg[:, na] - Ts
         # fill ssmoments[:time to go onset] with zeros for all SSD
-        null = [[ssmoments[ci, ssdi, :, :diff[ci, ssdi]].fill(
-            0) for ssdi in range(nssd)] for ci in range(nc)]
+        null = [[ssmoments[ci, ssdi, :, :diff[ci, ssdi]].fill(0) for ssdi in range(nssd)] for ci in range(nc)]
         # fill gomoments[:time to go onset] with zeros
-        null = [[gomoments[ci, :nss, :(nt - Tg[ci])].fill(0)]
-                for ci in range(nc)]
+        null = [[gomoments[ci, :nss, :(nt - Tg[ci])].fill(0)] for ci in range(nc)]
 
         # accumulate gomoments/ssmoments
         DVg = self.xtb[:, na] * np.cumsum(gomoments, axis=2)
@@ -501,8 +489,7 @@ class Simulator(object):
         # get condition labels
         conditions = np.sort(self.fitparams['labels'] * int(ntot))
         # assign go trials pseudo ssd of 1000
-        delays = np.append(
-            np.array([[c] * nss for c in sd]), [1000] * nss * nssd)
+        delays = np.append(np.array([[c] * nss for c in sd]), [1000] * nss * nssd)
         ttype = np.tile(array([['stop'] * nsstot + ['go'] * nsstot]), nc)
 
         DVg, DVs = dv
@@ -523,8 +510,7 @@ class Simulator(object):
         ssresp = np.where(ert < ssrt, 1, 0).reshape(nc, nsstot)
 
         resp = np.concatenate([ssresp, gresp], axis=1)
-        rt = np.concatenate(
-            [ert.reshape(nc, nsstot), gort[:, :nsstot]], axis=1)
+        rt = np.concatenate([ert.reshape(nc, nsstot), gort[:, :nsstot]], axis=1)
 
         out = {'ssd': np.tile(delays, nc),
                'response': np.hstack(resp),
