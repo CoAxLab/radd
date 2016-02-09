@@ -4,9 +4,7 @@ import os
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-
 sns.set(font="Helvetica")
-
 
 def get_cpals(name='all'):
     rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
@@ -16,8 +14,7 @@ def get_cpals(name='all'):
     heat = lambda nc: sns.blend_palette(['#f39c12', '#c0392b'], n_colors=nc)
     cool = lambda nc: sns.blend_palette(["#4168B7", "#27ae60"], n_colors=nc)
     slate = lambda nc: sns.blend_palette(['#95A5A6', "#6C7A89"], n_colors=nc)
-    color_dict = {'rpal': rpal, 'bpal': bpal, 'gpal': gpal,
-                  'ppal': ppal, 'heat': heat, 'cool': cool, 'slate': slate}
+    color_dict = {'rpal': rpal, 'bpal': bpal, 'gpal': gpal, 'ppal': ppal, 'heat': heat, 'cool': cool, 'slate': slate}
     if name == 'all':
         return color_dict
     else:

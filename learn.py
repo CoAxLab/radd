@@ -11,8 +11,7 @@ from scipy.stats.mstats import mquantiles as mq
 resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
 ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
 resp_lo = lambda trace: np.argmax((trace.T <= 0).T, axis=3) * dt
-RT = lambda ontime, rbool: ontime[:, na] + \
-    (rbool * np.where(rbool == 0, np.nan, 1))
+RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
 RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
 
 
@@ -110,26 +109,21 @@ def qlearn_wdi_exploration(p, stim=[['a', 'b'], ['c', 'd'], ['e', 'f']], preward
         else:
             r = rew_func(1 - preward[i])
 
-        update_q = stim_pair_qval[choice] + \
-            alpha * (r - stim_pair_qval[choice])
+        update_q = stim_pair_qval[choice] + alpha * (r - stim_pair_qval[choice])
         qdict[stim_pair_t[choice]].append(update_q)
         qdict[stim_pair_t[xchoice]].append(stim_pair_qval[xchoice])
 
         if r:
-            di_theta['vd'][choice] = di_theta['vd'][
-                choice] + di_theta['vd'][choice] * update_q
-            di_theta['vi'][choice] = di_theta['vi'][
-                choice] - di_theta['vi'][choice] * update_q
+            di_theta['vd'][choice] = di_theta['vd'][choice] + di_theta['vd'][choice] * update_q
+            di_theta['vi'][choice] = di_theta['vi'][choice] - di_theta['vi'][choice] * update_q
             if di_theta['vd'][choice] < 0:
                 di_theta['vd'][choice] = .01
             if di_theta['vd'][choice] > 5.0:
                 di_theta['vd'][choice] = 5.0
 
         else:
-            di_theta['vd'][choice] = di_theta['vd'][
-                choice] - di_theta['vd'][choice] * update_q
-            di_theta['vi'][choice] = di_theta['vi'][
-                choice] + di_theta['vi'][choice] * update_q
+            di_theta['vd'][choice] = di_theta['vd'][choice] - di_theta['vd'][choice] * update_q
+            di_theta['vi'][choice] = di_theta['vi'][choice] + di_theta['vi'][choice] * update_q
             if di_theta['vi'][choice] < 0:
                 di_theta['vi'][choice] = .01
             if di_theta['vi'][choice] > 5.0:
@@ -159,22 +153,20 @@ def di_lca(Id=3.5, Ii=3, dt=.005, si=2.5, tau=.05, ntrials=10, tmax=3.0, w=-.2, 
     g:         determines steepness of sigmoidal f-I curve
     """
 
-    timepoints = np.arange(0, tmax, dt)
-    rd = np.zeros(len(timepoints))
-    ri = np.zeros(len(timepoints))
-    rd[0] = .01
-    ri[0] = 3
+    ntp = len(np.arange(0, tmax, dt))
 
-    Ed = si * np.sqrt(dt / tau) * rs(len(rd))
-    Ei = si * np.sqrt(dt / tau) * rs(len(ri))
+    rd = np.zeros(ntp); rd[0] = .01
+    ri = np.zeros(ntp); ri[0] = 3
 
-    NInput = lambda x, r: rmax / (1 + np.exp(-(x - b) / g)) - r
+    Ed = si*np.sqrt(dt/tau)*rs(ntp)
+    Ei = si*np.sqrt(dt/tau)*rs(ntp)
+
+    NInput = lambda x, r: rmax/(1 + np.exp(-(x-b)/g)) - r
+    dspace = lambda rd, ri: (rd-ri)/np.sqrt(2)
 
     for i in timepoints:
-        rd[i] = rd[i - 1] + dt / tau * \
-            NInput(Id + k * rd[i - 1] + -w * ri[i - 1], rd[i - 1]) + Ed[i]
-        ri[i] = ri[i - 1] + dt / tau * \
-            NInput(Ii + k * ri[i - 1] + -w * rd[i - 1], ri[i - 1]) + Ei[i]
+        rd[i] = rd[i-1] + dt/tau*NInput(Id + k*rd[i-1] + -w*ri[i-1], rd[i-1]) + Ed[i]
+        ri[i] = ri[i-1] + dt/tau*NInput(Ii + k*ri[i-1] + -w*rd[i-1], ri[i-1]) + Ei[i]
 
     return rd, ri
 

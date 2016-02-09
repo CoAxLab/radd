@@ -12,16 +12,13 @@ from scipy.optimize import minimize as mina
 
 def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predictions', depends=['xx'], model='', ntrials=5000, maxfev=50, ftol=1.e-3, xtol=1.e-3, all_params=1, disp=True):
 
-    m = build.Model(data=data, inits=inits, depends_on={
-                    'v': 'Cond'}, fit='subjects')
+    m = build.Model(data=data, inits=inits, depends_on={'v': 'Cond'}, fit='subjects')
     m.prepare_fit()
     y = m.observed.query('Cond=="bsl"').mean().iloc[1:].values
 
-    wls_update = track_optimization(y, inits=inits, wts=m.wts['bsl'], collector=[
-    ], track=track, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params)
+    wls_update = track_optimization(y, inits=inits, wts=m.wts['bsl'], collector=[], track=track, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params)
 
-    ols_update = track_optimization(y, inits=inits, wts=np.ones_like(m.wts['bsl']), collector=[
-    ], track=track, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params)
+    ols_update = track_optimization(y, inits=inits, wts=np.ones_like(m.wts['bsl']), collector=[], track=track, ntrials=ntrials, maxfev=maxfev, ftol=ftol, xtol=xtol, all_params=all_params)
 
     sns.set_context('notebook', font_scale=1.4)
     htmin, htmax = [], []
@@ -36,7 +33,6 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
             if i > 0:
                 wres_pre = y - wls_update[i - 1]
                 ores_pre = y - ols_update[i - 1]
-
         else:
             wres = wls_update[i]
             ores = ols_update[i]
@@ -48,10 +44,8 @@ def compare_ols_wls_predictions(data, inits, wts=None, save=False, track='predic
         plt.plot(ores, color='#e84b3a', alpha=alpha[i], linestyle='-', lw=.42)
 
         if i != 0:
-            wls_fill = plt.fill_between(
-                np.arange(16), wres_pre, wres, facecolor='#3498db', alpha=alpha[i])
-            ols_fill = plt.fill_between(
-                np.arange(16), ores_pre, ores, facecolor='#e84b3a', alpha=alpha[i])
+            wls_fill = plt.fill_between(np.arange(16), wres_pre, wres, facecolor='#3498db', alpha=alpha[i])
+            ols_fill = plt.fill_between(np.arange(16), ores_pre, ores, facecolor='#e84b3a', alpha=alpha[i])
         htmin.append(np.hstack([ores, wres]).min())
         htmax.append(np.hstack([ores, wres]).max())
 
@@ -99,12 +93,10 @@ def track_optimization(y, inits={}, collector=[], track='residuals', depends=['x
 
     if all_params:
         p.add('a', value=inits['a'], vary=1, min=lim['a'][0], max=lim['a'][1])
-        p.add('ssv', value=-abs(inits['ssv']), vary=1,
-              min=lim['ssv'][0], max=lim['ssv'][1])
+        p.add('ssv', value=-abs(inits['ssv']), vary=1, min=lim['ssv'][0], max=lim['ssv'][1])
         p.add('v', value=inits['v'], vary=1, min=lim['v'][0], max=lim['v'][1])
         p.add('zperc', value=inits['z'] / inits['a'], vary=1, min=.01, max=.99)
-        p.add('tr', value=inits['tr'], vary=1,
-              min=lim['tr'][0], max=lim['tr'][1])
+        p.add('tr', value=inits['tr'], vary=1, min=lim['tr'][0], max=lim['tr'][1])
         p.add('z', expr="zperc*a")
     else:
         for key, val in inits.items():
@@ -116,13 +108,8 @@ def track_optimization(y, inits={}, collector=[], track='residuals', depends=['x
     if wts is None:
         wts = np.ones_like(y)
 
-    #popt = Minimizer(recost_collector, p, fcn_args=(y, ntrials), fcn_kws={'wts':wts, 'collector':collector, 'track':track}, method='Nelder-Mead')
-    #popt.fmin(maxfev=maxfev, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
-
-    popt = Minimizer(recost, p, fcn_args=(y, ntrials),
-                     fcn_kws={'wts': m.wts['bsl']})
-    popt.scalar_minimize(maxfev=50, full_output=True,
-                         disp=True, method='differential_evolution')
+    popt = Minimizer(recost, p, fcn_args=(y, ntrials), fcn_kws={'wts': m.wts['bsl']})
+    popt.scalar_minimize(maxfev=50, full_output=True, disp=True, method='differential_evolution')
     popt.fmin(maxfev=maxfev, ftol=ftol, xtol=xtol, full_output=True, disp=disp)
 
     return collector
@@ -137,15 +124,13 @@ def recost_collector(theta, y=None, ntrials=5000, collector=[], track='residuals
     if not type(theta) == dict:
         theta = theta.valuesdict()
 
-    a, tr, v, ssv, z = theta['a'], theta['tr'], theta[
-        'v'], -abs(theta['ssv']),  theta['z']
+    a, tr, v, ssv, z = theta['a'], theta['tr'], theta['v'], -abs(theta['ssv']),  theta['z']
     nss = int((1 - pGo) * ntrials)
     dvg, dvs = cRADD.run(a, tr, v, ssv, z, ssd, nss=nss, ntot=ntrials)
     yhat = cRADD.analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
 
     wtc, wte = wts[0], wts[1]
-    cost = np.hstack([y[:6] - yhat[:6], wtc * y[6:11] - wtc *
-                      yhat[6:11], wte * y[11:] - wte * yhat[11:]]).astype(np.float32)
+    cost = np.hstack([y[:6] - yhat[:6], wtc * y[6:11] - wtc * yhat[6:11], wte * y[11:] - wte * yhat[11:]]).astype(np.float32)
 
     if track == 'residuals':
         collector.append(cost)
@@ -163,32 +148,9 @@ def recost_scipy(x0, y=None, wts=None, ntrials=2000, pGo=.5, ssd=np.arange(.2, .
     yhat = cRADD.analyze_reactive(dvg, dvs, a, tr, ssd, nss=nss)
 
     if wts is None:
-        cost = np.sum((y[0] - yhat[0])**2 + (y[1:6] - yhat[1:6]) **
-                      2 + (y[6:11] - yhat[6:11])**2 + (y[11:] - yhat[11:])**2)
+        cost = np.sum((y[0] - yhat[0])**2 + (y[1:6] - yhat[1:6]) ** 2 + (y[6:11] - yhat[6:11])**2 + (y[11:] - yhat[11:])**2)
     else:
         wta, wtc, wte = wts[0], wts[1], wts[2]
-        cost = np.hstack([wta * (y[:6] - yhat[:6]), wtc * y[0] * (y[6:11] -
-                                                                  yhat[6:11]), wte * y(y[11:] - yhat[11:])]).astype(np.float32)
+        cost = np.hstack([wta * (y[:6] - yhat[:6]), wtc * y[0] * (y[6:11] - yhat[6:11]), wte * y(y[11:] - yhat[11:])]).astype(np.float32)
 
     return cost
-
-
-def get_default_inits(kind='', fit_noise=False):
-
-    if '' in kind:
-        inits = {'a': 0.4441, 'ssv': -0.9473,  'tr': 0.3049, 'v': 1.0919}
-
-    elif 'pro' in kind:
-        inits = {'a': 0.4748, 'tr': 0.2725, 'v': 1.6961}
-
-    elif 'race' in kind:
-        inits = {'a': 0.3926740, 'ssv': 1.1244,
-                 'tr': 0.33502, 'v': 1.0379,  'z': 0.1501}
-
-    if 'x' in kind:
-        inits['xb'] = 2
-
-    if fit_noise:
-        inits['si'] = .01
-
-    return inits
