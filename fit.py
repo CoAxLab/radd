@@ -55,6 +55,7 @@ class Optimizer(RADDCore):
         # initate simulator object of model being optimized
         self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
+
     def optimize_model(self, save=True, savepth='./'):
 
         # make sure inits only contains subsets of these params
@@ -68,6 +69,7 @@ class Optimizer(RADDCore):
             self.__indx_optimize__(save=save, savepth=savepth)
 
         return self.yhat, self.fitinfo, self.popt
+
 
     def optimize_flat(self, p0=None, y=None, random_init=True):
         """ optimizes flat model to data collapsing across all conditions
@@ -98,6 +100,7 @@ class Optimizer(RADDCore):
         yh1, finfo1, p1 = self.gradient_descent(y=y, wts=self.flat_wts, inits=p0, is_flat=True)
         self.flat_finfo = finfo1
         return yh1, finfo1, p1
+
 
     def optimize_conditional(self, p=None, y=None, precond=True):
         """ optimizes full model to all conditions in data
@@ -130,6 +133,7 @@ class Optimizer(RADDCore):
 
         return yhat, finfo, popt
 
+
     def __opt_routine__(self):
         """ main function for running optimization routine through all phases
         (flat optimization, pre-tuning with basinhopping alg., final simplex)
@@ -141,6 +145,7 @@ class Optimizer(RADDCore):
         yhat, finfo, popt = self.optimize_conditional(p=flat_p)
 
         return yhat, finfo, popt
+
 
     def hop_around(self, p):
         """ initialize model with niter randomly generated parameter sets
@@ -179,6 +184,7 @@ class Optimizer(RADDCore):
             self.basin_decision = "found global miniumum new: fmin=%.9f; norig=%9f)" % (fmin, xfmin[0])
             self.global_inits = dict(deepcopy(new_inits))
         return new_inits
+
 
     def basinhopping_full(self, p, is_flat=True):
         """ uses fmin_tnc in combination with basinhopping to perform bounded global
@@ -220,6 +226,7 @@ class Optimizer(RADDCore):
             p[k] = xopt[i]
         return p, funcmin
 
+
     def single_basin(self, p, niter=100, nsuccess=40):
         """ uses basinhopping and fmin_tnc to pre-optimize init cond parameters
         to individual conditions to prevent terminating in local minima
@@ -251,6 +258,7 @@ class Optimizer(RADDCore):
         for i, pk in enumerate(pkeys):
             p[pk] = array([xbasin[ci][i] for ci in range(fp['ncond'])])
         return p
+
 
     def gradient_descent(self, y=None, wts=None, inits={}, is_flat=True):
         """ Optimizes parameters following specified parameter

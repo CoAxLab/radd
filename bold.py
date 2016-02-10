@@ -16,7 +16,6 @@ from radd theta import get_xbias_theta
 from radd.tools.messages import describe_model
 from radd.models import Simulator
 
-
 class BOLD(Simulator):
     """ Simulated BOLD response // neural activity
     from optimized RADD models

@@ -196,6 +196,7 @@ class RADDCore(object):
             df = pd.read_csv(''.join([iostr, '.csv']), index_col=0)
             return df
 
+
     def __nudge_params__(self, p, lim=(.98, 1.02)):
         """
         nudge params so not all initialized at same val
@@ -214,6 +215,7 @@ class RADDCore(object):
                 p[pkey] = p[pkey] * bump
         return p
 
+
     def slice_bounds_global(self, inits, pfit):
 
         b = theta.get_bounds(kind=self.kind, tb=self.fitparams['tb'])
@@ -231,6 +233,7 @@ class RADDCore(object):
         params = tuple([inits[pk] for pk in pfit])
 
         return pbounds, params
+
 
     def __make_dataframes__(self, qp_cols):
         """ Generates the following dataframes and arrays:
@@ -298,6 +301,7 @@ class RADDCore(object):
         fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
         self.dframes = {'data': self.data, 'flat_y': self.flat_y, 'avg_y': self.avg_y,                        'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat': dat}
 
+
     def __prep_basin_data__(self):
 
         fp = self.fitparams
@@ -319,6 +323,7 @@ class RADDCore(object):
             cond_data = self.avg_y
             cond_wts = self.avg_wts
         return cond_data, cond_wts
+
 
     def get_wts(self):
         """ wtc: weights applied to correct rt quantiles in cost f(x)
@@ -355,8 +360,10 @@ class RADDCore(object):
             self.flat_wts = np.hstack([nogo, quant])
         self.avg_wts, self.flat_wts = analyze.ensure_numerical_wts(self.avg_wts, self.flat_wts)
 
+
     def __remove_outliers__(self, sd=1.5, verbose=False):
         self.data = analyze.remove_outliers(self.data, sd=sd, verbose=verbose)
+
 
     def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9]), cond='Cond'):
         if not hasattr(self, 'delays'):
@@ -366,17 +373,21 @@ class RADDCore(object):
             self.infolabels = qp_cols[1]
         return qp_cols[0]
 
+
     def __get_default_inits__(self):
         self.inits = theta.get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+
 
     def __get_optimized_params__(self, include_ss=False, fit_noise=False):
         params = theta.get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
         return params
 
+
     def __check_inits__(self, inits=None, pro_ss=False, fit_noise=False):
         if inits is None:
             inits = dict(deepcopy(self.inits))
         self.inits = theta.check_inits(inits=inits, pdep=self.depends_on.keys(), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
+
 
     def mean_pgo_rts(self, p={}, return_vals=True):
         """ Simulate proactive model and calculate mean RTs
@@ -396,9 +407,11 @@ class RADDCore(object):
         if return_vals:
             return self.pgo_rts
 
+
     def __make_proRT_conds__(self):
         self.data, self.rt_cix = analyze.make_proRT_conds(self.data, self.split)
         self.prort_conds_prepared = True
+
 
     def __rename_bad_cols__(self):
         self.data = analyze.rename_bad_cols(self.data)

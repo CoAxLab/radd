@@ -8,7 +8,6 @@ from radd.tools.messages import saygo
 from radd import fit, models, analyze
 from radd.CORE import RADDCore
 
-
 class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
     Inherits from RADDCore parent class (see CORE module).
@@ -49,6 +48,7 @@ class Model(RADDCore):
 
         self.prepare_fit()
 
+
     def make_optimizer(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='TNC', btol=1.e-3, maxiter=20):
         """ init Optimizer class as Model attr
         """
@@ -61,6 +61,7 @@ class Model(RADDCore):
         inits = dict(deepcopy(self.inits))
 
         self.opt = fit.Optimizer(dframes=self.dframes, fitparams=fp, basinparams=bp, kind=self.kind, inits=inits, depends_on=self.depends_on, fit_on=self.fit_on, wts=self.avg_wts, pc_map=self.pc_map,  multiopt=multiopt)
+
 
     def optimize(self, inits=None, y=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='TNC', btol=1.e-3, maxiter=20, multiopt=True, stage='full', save=True, savepth='./'):
         """ Method to be used for accessing fitting methods in Optimizer class
@@ -85,6 +86,7 @@ class Model(RADDCore):
         # Optimizer to fit the model
         self.simulator = self.opt.simulator
 
+
     def make_simulator(self, p=None):
         """ initializes Simulator object as Model attr
         using popt or inits if model is not optimized
@@ -95,6 +97,7 @@ class Model(RADDCore):
             else:
                 p = self.inits
         self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
+
 
     def simulate(self, p=None, analyze=True, return_traces=False):
         """ simulate yhat vector using popt or inits
@@ -121,24 +124,26 @@ class Model(RADDCore):
             out = self.simulator.predict_data(out, p)
         return out
 
+
     def prepare_fit(self):
-        """ performs model setup and initiates dataframes.
-        Automatically run when Model object is initialized
-        pc_map is a dict containing parameter names as keys with values
-        corresponding to the names given to that parameter in Parameters object
-        (see optmize.Optimizer). i.e.
-        * Parameters (p[pkey]=pval) that are constant across conditions
-        are broadcast as [pval]*n. Conditional parameters are treated as arrays with
-        distinct values [V1, V2...Vn], one for each condition.
-        pc_map (dict):    keys: conditional parameter names (i.e. 'v')
-                          values: keys + condition names ('v_bsl, v_pnl')
-        |<--- PARAMETERS OBJECT [LMFIT] <-------- [IN]
-        |
-        |---> p = {'v_bsl': V1, 'v_pnl': V2..} --->|
-                                                   |
-        |<--- pc_map = {'v': 'v_bsl', 'v_pnl'} <---|
-        |
-        |---> p['v'] = array([V1, V2]) --------> [OUT]
+        """ performs model setup and initiates dataframes. Automatically run when Model object is initialized
+            *   pc_map is a dict containing parameter names as keys with values
+                    corresponding to the names given to that parameter in Parameters object
+                    (see optmize.Optimizer).
+            *   Parameters (p[pkey]=pval) that are constant across conditions are broadcast as [pval]*n.
+                    Conditional parameters are treated as arrays with distinct values [V1, V2...Vn], one for
+                    each condition.
+
+            pc_map (dict):    keys: conditional parameter names (i.e. 'v')
+                              values: keys + condition names ('v_bsl, v_pnl')
+
+            |<--- PARAMETERS OBJECT [LMFIT] <-------- [IN]
+            |
+            |---> p = {'v_bsl': V1, 'v_pnl': V2...} --->|
+                                                        |
+            |<--- pc_map = {'v':['v_bsl', 'v_pnl']} <---|
+            |
+            |---> p['v'] = array([V1, V2]) -------> [OUT]
         """
 
         if not isinstance(self.labels[0], str):
