@@ -51,7 +51,7 @@ def simulate_learning(p, pc_map={'vd': ['vd_e', 'vd_u', 'vd_l'], 'vi': ['vi_e', 
     t = np.cumsum([dt] * Tex.max())
     xtb = temporal_dynamics(p, t)
 
-    #Ph, Th = update_brake(p)
+    Ph, Th = update_brake(p)
     #ss_index = [np.where(Th<Tex[c],Tex[c]-Th,0) for c in range(nc)]
 
     rts, vd, vi = [], [], []
@@ -66,6 +66,45 @@ def simulate_learning(p, pc_map={'vd': ['vd_e', 'vd_u', 'vd_l'], 'vi': ['vi_e', 
         #      init_ss = array([[execution[c,ix] for ix in ss_index] for c in range(nc)])
         #      hyper = init_ss[:,:,:,None]+np.cumsum(np.where(rs(Th.max())<Ph, dx, -dx), axis=1)
         r = np.argmax((execution.T >= p['a']).T, axis=1) * dt
+        rt = p['tr'] + (r * np.where(r == 0, np.nan, 1))
+        resp = np.where(rt < tb, 1, 0)
+
+        # find conditions where response was recorded
+        for ci in np.where(~np.isnan(rt))[0]:
+            p['vd'][ci] = p['vd'][ci] + p['vd'][ci] * (lr[0] * (rt[ci] - .500))
+            p['vi'][ci] = p['vi'][ci] - p['vi'][ci] * (lr[1] * (rt[ci] - .500))
+
+        vd.append(deepcopy(p['vd']))
+        vi.append(deepcopy(p['vi']))
+        rts.append(rt)
+
+    vd = np.asarray(vd)
+    vi = np.asarray(vi)
+    rts = np.asarray(rts)
+
+def simulate_multi_resp(p, pc_map={'vd': ['vd_e', 'vd_u', 'vd_l'], 'vi': ['vi_e', 'vi_u', 'vi_l']}, nc=3, nresp=4, lr=array([.4, .3]), nssd=5, dt=.001, si=.1, ntot=1000, tb=.3):
+
+    dx = np.sqrt(si * dt)
+    p = vectorize_params(p, pc_map=pc_map, ncond=nc)
+
+    Pd, Pi, Tex = update_execution(p)
+    t = np.cumsum([dt] * Tex.max())
+    xtb = temporal_dynamics(p, t)
+
+    Ph, Th = update_brake(p)
+    #ss_index = [np.where(Th<Tex[c],Tex[c]-Th,0) for c in range(nc)]
+
+    rts, vd, vi = [], [], []
+    for i in xrange(ntot):
+        Pd, Pi, Tex = update_execution(p)
+        direct = np.where((rs((nc, nresp, Tex.max())).T < Pd), dx, -dx).T
+        indirect = np.where((rs((nc, nresp, Tex.max())).T < Pi), dx, -dx).T
+        execution = np.cumsum(direct + indirect, axis=2)
+
+        # if i<=int(.5*ntot):
+        #      init_ss = array([[execution[c,ix] for ix in ss_index] for c in range(nc)])
+        #      hyper = init_ss[:,:,:,None]+np.cumsum(np.where(rs(Th.max())<Ph, dx, -dx), axis=1)
+        r = np.argmax((execution.T >= p['a']).T, axis=2) * dt
         rt = p['tr'] + (r * np.where(r == 0, np.nan, 1))
         resp = np.where(rt < tb, 1, 0)
 

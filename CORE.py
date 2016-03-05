@@ -87,6 +87,7 @@ class RADDCore(object):
         else:
             self.indx = list(data.idx.unique())
 
+
     def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
 
         if not hasattr(self, 'fitparams'):
@@ -100,6 +101,7 @@ class RADDCore(object):
                           'rt_cix': self.rt_cix, 'data_style': self.data_style, 'labels': self.labels}
         if get_params:
             return self.fitparams
+
 
     def set_basinparams(self, nrand_inits=2, interval=10, niter=40, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20, get_params=False, bdisp=False):
 
@@ -142,6 +144,7 @@ class RADDCore(object):
 
         return popt
 
+
     def rangl_data(self, data, kind='dpm', prob=np.array([.1, .3, .5, .7, .9])):
         """ wrapper for analyze.rangl_data
         """
@@ -149,11 +152,13 @@ class RADDCore(object):
             data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
         return rangled
 
+
     def resample_data(self, data):
         """ wrapper for analyze.resample_data
         """
         resampled = analyze.resample_data(data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
         return resampled
+
 
     def rt_quantiles(self, data, split_col='HL', prob=np.array([.1, .3, .5, .7, .9])):
         """ wrapper for analyze.rt_quantiles
@@ -163,11 +168,13 @@ class RADDCore(object):
         rtq = analyze.rt_quantiles(data, include_zero_rts=self.include_zero_rts, split_col=split_col, prob=prob, nrt_cond=self.nrt_cond, tb=self.tb)
         return rtq
 
+
     def assess_fit(self, finfo=None):
         """ wrapper for analyze.assess_fit calculates and stores
         rchi, AIC, BIC and other fit statistics
         """
         return analyze.assess_fit(finfo)
+
 
     def params_io(self, p={}, io='w', iostr='popt'):
         """ read // write parameters dictionaries
@@ -178,6 +185,7 @@ class RADDCore(object):
             ps = pd.read_csv(''.join([iostr, '.csv']), header=None)
             p = dict(zip(ps[0], ps[1]))
             return p
+
 
     def fits_io(self, fits=[], io='w', iostr='fits'):
         """ read // write y, wts, yhat arrays

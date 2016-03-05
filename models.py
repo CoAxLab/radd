@@ -8,23 +8,21 @@ from numpy import hstack as hs
 from numpy import newaxis as na
 from scipy.stats.mstats import mquantiles as mq
 
-
 class Simulator(object):
     """ Core code for simulating models
 
-          * All cond, SSD, & timepoints are simulated simultaneously
+          * All cond, trials, & timepoints are simulated simultaneously
 
           * a, tr, and v parameters are initialized as vectors,
-          1 x Ncond so Optimizer can optimize a single costfx
+          1 x Ncond so Optimizer class can minimize a single cost function
           for multiple conditions.
     """
-    
+
     def __init__(self, model=None, fitparams=None, inits=None, pc_map=None, kind='dpm', dt=.001, si=.01):
 
         self.dt = dt
         self.si = si
         self.dx = np.sqrt(self.si * self.dt)
-
         if model:
             self.fitparams = model.fitparams
             self.inits = model.inits
@@ -36,6 +34,7 @@ class Simulator(object):
             self.kind = kind
             self.pc_map = pc_map
         self.__prepare_simulator__()
+
 
     def __prepare_simulator__(self):
 
@@ -58,6 +57,7 @@ class Simulator(object):
         self.__init_model_functions__()
         self.__init_analyze_functions__()
 
+
     def __update__(self, is_flat=False, y=None, wts=None):
 
         fp = self.fitparams
@@ -77,13 +77,14 @@ class Simulator(object):
         self.y = y.flatten()
         self.wts = wts.flatten()
 
+
     def __prep_global__(self,  basin_params={}, basin_keys=[], is_flat=False):
 
         self.basin_keys = basin_keys
         self.basin_params = basin_params
         self.__update__(is_flat=is_flat)
-        self.chunk = lambda x, n: [array(x[i:i + n])
-                                   for i in xrange(0, len(x), n)]
+        self.chunk = lambda x, n: [array(x[i:i + n]) for i in xrange(0, len(x), n)]
+
 
     def __init_model_functions__(self):
         """ initiates the simulation function used in
@@ -112,6 +113,7 @@ class Simulator(object):
             # dynamic bias is exponential
             self.temporal_dynamics = lambda p, t: np.exp(p['xb'][:, na] * t)
 
+
     def __init_analyze_functions__(self):
         """ initiates the analysis function used in
         optimization routine to produce the yhat vector
@@ -133,6 +135,7 @@ class Simulator(object):
         self.resp_lo = lambda trace: np.argmax((trace.T <= 0).T, axis=3) * dt
         self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
         self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+
 
     def vectorize_params(self, p):
         """ ensures that all parameters are converted to arrays before simulation. see
@@ -164,6 +167,7 @@ class Simulator(object):
                 p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
         return p
 
+
     def basinhopping_minimizer(self, x):
         """ used specifically by fit.perform_basinhopping() for Model
         objects with multiopt attr (See __opt_routine__ and perform_basinhopping
@@ -186,6 +190,7 @@ class Simulator(object):
             return cost[0]
         return cost
 
+
     def __cost_fx__(self, theta):
         """ Main cost function used for fitting all models self.sim_fx
         determines which model is simulated (determined when Simulator
@@ -197,6 +202,7 @@ class Simulator(object):
             p = theta.valuesdict()
         yhat = self.sim_fx(p, analyze=True)
         return np.sum(self.wts * (self.y - yhat)**2).astype(np.float32)
+
 
     def __update_go_process__(self, p):
         """ update Pg (probability of DVg +dx) and Tg (num go process timepoints)
@@ -210,6 +216,7 @@ class Simulator(object):
         #self.xtb = np.vstack([np.append(np.ones(diff[i]), xtb[i][:tg]) for i, tg in enumerate(Tg)])
         return Pg, Tg
 
+
     def __update_stop_process__(self, p, sso=0):
         """ update Ps (probability of DVs +dx) and Ts (num ss process timepoints)
         for stop process
@@ -220,6 +227,7 @@ class Simulator(object):
         Ts = np.ceil((self.tb - (self.ssd + sso)) / self.dt).astype(int)
         return Ps, Ts
 
+
     def __update_interactive_params__(self, p):
         # add ss interact delay to SSD
         Ps, Ts = self.__update_stop_process__(p)
@@ -229,6 +237,7 @@ class Simulator(object):
         t = np.cumsum([self.dt] * nt)
         self.xtb = self.temporal_dynamics(p, t)
         return Pg, Tg, Ps, Ts, nt
+
 
     def simulate_dpm(self, p, analyze=True):
         """ Simulate the dependent process model (DPM)
@@ -263,6 +272,7 @@ class Simulator(object):
         else:
             return [DVg, DVs]
 
+
     def simulate_pro(self, p, analyze=True):
         """ Simulate the proactive competition model
         (see simulate_dpm() for I/O details)
@@ -277,6 +287,7 @@ class Simulator(object):
         if analyze:
             return self.analyze_proactive(DVg, p)
         return DVg
+
 
     def simulate_irace(self, p, analyze=True):
         """ simulate the independent race model
@@ -297,6 +308,7 @@ class Simulator(object):
         if analyze:
             return self.analyze_reactive(DVg, DVs, p)
         return [DVg, DVs]
+
 
     def simulate_interactive(self, p, analyze=True):
         """ simulates a version of the interactive race model in which
@@ -337,6 +349,7 @@ class Simulator(object):
             return self.analyze_interactive(DVg, ssDVg, p)
         return [DVg, ssDVg]
 
+
     def analyze_reactive(self, DVg, DVs, p):
         """ get rt and accuracy of go and stop process for simulated
         conditions generated from simulate_dpm
@@ -348,8 +361,6 @@ class Simulator(object):
         nc = self.ncond
         nssd = self.nssd
 
-        # if 'sso' in p.keys():
-        #      ssd = ssd + p['sso']
         gdec = self.resp_up(DVg, p['a'])
         if 'irace' in self.kind:
             sdec = self.ss_resp_up(DVs, p['a'])
@@ -364,6 +375,7 @@ class Simulator(object):
         gacc = np.nanmean(np.where(gort < tb, 1, 0), axis=1)
         sacc = np.where(ert < ssrt, 0, 1).mean(axis=2)
         return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(nc)])
+
 
     def analyze_proactive(self, DVg, p):
         """ get proactive rt and accuracy of go process for simulated
@@ -384,6 +396,7 @@ class Simulator(object):
         # Get response and stop accuracy information
         gacc = 1 - np.mean(np.where(rt < tb, 1, 0), axis=1)
         return hs([gacc, qrt])
+
 
     def analyze_interactive(self, DVg, ssDVg, p):
         """ get rt and accuracy of go and stop process for simulated
@@ -412,6 +425,7 @@ class Simulator(object):
 
         return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(ncond)])
 
+
     def mean_pgo_rts(self, p, return_vals=True):
         """ Simulate proactive model and calculate mean RTs
         for all conditions rather than collapse across high and low
@@ -431,6 +445,7 @@ class Simulator(object):
         self.pgo_rts = {'mu': mu, 'ci': ci, 'std': std}
         if return_vals:
             return self.pgo_rts
+
 
     def analyze_data(self, DVg, DVs=None, p=None):
         """ get rt and accuracy of go and stop process for simulated
@@ -463,6 +478,7 @@ class Simulator(object):
         sacc = np.where(ert < ssrt, 0, 1).mean(axis=2)
         return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(nc)])
 
+
     def analyze_pro_data(self, DVg, p):
         prob = self.prob
         tb = self.tb
@@ -475,6 +491,7 @@ class Simulator(object):
         # Get response and stop accuracy information
         gacc = np.where(rt < self.tb, 0, 1)
         return [gacc, hi[~np.isnan(hi)], low[~np.isnan(low)]]
+
 
     def analyze_re_data(self, dv, p):
         import pandas as pd
