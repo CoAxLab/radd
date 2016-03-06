@@ -148,8 +148,7 @@ class RADDCore(object):
     def rangl_data(self, data, kind='dpm', prob=np.array([.1, .3, .5, .7, .9])):
         """ wrapper for analyze.rangl_data
         """
-        rangled = analyze.rangl_data(
-            data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
+        rangled = analyze.rangl_data(data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
         return rangled
 
 
