@@ -4,4 +4,6 @@ This repository is associated with the manuscript [Competing basal-ganglia pathw
 
 The ***elife2015*** branch is a snapshot of the code at the time of publication and contains a brief tutorial on how to run fits & simulations etc. described in the study (see demo link below). Ongoing developments will be pushed to the ***dev*** branch until stable enough to merge with the ***master*** branch (currently in alpha). We're hoping to release a stable version for public use within the next few months.
 
-[*RADD Demo (Jupyter NB)*](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/master/demo/RADD_Demo_Updated.ipynb)
+
+The following link contains demo for fitting & simulating models with RADD.
+[**RADD Demo (Jupyter NB)**](http://nbviewer.ipython.org/github/CoAxLab/radd/blob/elife2015/demo/RADD_Demo_Updated.ipynb)
