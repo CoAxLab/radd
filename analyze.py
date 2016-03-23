@@ -390,3 +390,20 @@ def rename_bad_cols(data):
         data.rename(columns={'trial_type': 'ttype'}, inplace=True)
 
     return data
+
+
+def mat_to_pandas(matfile_str):
+    """read in struct mat file and return pandas dataframe
+    """
+    from scipy.io import loadmat
+    mat = loadmat(matfile_str)
+
+    restruct = {k:v for k, v in mat.items() if k[0] != '_'}
+    struct_data=restruct["D"]
+
+    data_dict = {n: x[n][0, 0].flatten() for n in struct_data.dtype.names}
+
+    idx=np.arange(len(data_dict[data_dict.keys()[0]]))
+    datadf = pd.DataFrame(data_dict, index=idx)
+
+    return datadf

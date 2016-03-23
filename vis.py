@@ -14,8 +14,7 @@ import prettyplotlib as pl
 from numpy import cumsum as cs
 from numpy import append as app
 
-sns.set(font='Helvetica', style='white', rc={
-        'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
+sns.set(font='Helvetica', style='white', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
 
 cdict = colors.get_cpals('all')
 rpal = cdict['rpal']
@@ -485,6 +484,32 @@ def build_decision_axis(onset, bound, ssd=np.arange(200, 450, 50), tb=650):
         ax.set_yticks([])
     sns.despine(top=True, right=True, bottom=True, left=True)
 
+    return f, axes
+
+def build_multi_axis(p, nresp=4, tb=1500):
+    bound = p['a']
+    onset = p['tr']
+    if hasattr(bound, '__iter__'):
+        bound = bound[0]
+        onset = onset[0]
+    # init figure, axes, properties
+    f, axes = plt.subplots(nresp, 1, figsize=(6, 10), sharex=True, sharey=True)
+    f.subplots_adjust(hspace=.1, top=.99, bottom=.05)
+    w = tb + 40
+    h = bound
+    start = onset - 80
+    # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
+    for i, ax in enumerate(axes):
+        plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
+        ax.hlines(y=h, xmin=start, xmax=w, color='k')
+        ax.hlines(y=0, xmin=start, xmax=w, color='k')
+        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='-', alpha=.5)
+        ax.vlines(x=start + 2, ymin=0, ymax=h, color='k')
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+    sns.despine(top=True, right=True, bottom=True, left=True)
     return f, axes
 
 

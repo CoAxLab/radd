@@ -7,6 +7,7 @@ from numpy.random import sample as rs
 from numpy import hstack as hs
 from numpy import newaxis as na
 from scipy.stats.mstats import mquantiles as mq
+import random
 
 resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
 ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
@@ -56,7 +57,6 @@ def simulate_learning(p, pc_map={'vd': ['vd_e', 'vd_u', 'vd_l'], 'vi': ['vi_e', 
 
     rts, vd, vi = [], [], []
     for i in xrange(ntot):
-
         Pd, Pi, Tex = update_execution(p)
         direct = np.where((rs((nc, Tex.max())).T < Pd), dx, -dx).T
         indirect = np.where((rs((nc, Tex.max())).T < Pi), dx, -dx).T
@@ -81,6 +81,7 @@ def simulate_learning(p, pc_map={'vd': ['vd_e', 'vd_u', 'vd_l'], 'vi': ['vi_e', 
     vd = np.asarray(vd)
     vi = np.asarray(vi)
     rts = np.asarray(rts)
+
 
 def simulate_multi_resp(p, pc_map={'vd': ['vd_e', 'vd_u', 'vd_l'], 'vi': ['vi_e', 'vi_u', 'vi_l']}, nc=3, nresp=4, lr=array([.4, .3]), nssd=5, dt=.001, si=.1, ntot=1000, tb=.3):
 
@@ -130,6 +131,14 @@ def qlearn_wdi_exploration(p, stim=[['a', 'b'], ['c', 'd'], ['e', 'f']], preward
     p['vi'] = [.4, .4]
     plist = [deepcopy(p) for i in xrange(len(stim))]
     plist = [vectorize_params(p, pc_map, 2) for p in plist]
+
+    stim_ids=''.join(np.asarray(stim).flatten().tolist())
+    qdict = {sid: [.01] for sid in stim_ids}
+    #ru = {sid: deepcopy(prior) for sid in stim_ids}
+    stim_history = {sid: [0, 0] for sid in stim_ids}
+    qdict = {sid: [.01] for sid in stim_ids}
+    di_qvals= {sid: {'vd':[.9], 'vi':[.4]} for sid in stim_ids}
+    exdict = {sid: [] for sid in stim_ids}
 
     rand_stim = sum([sorted(range(len(stim)), key=lambda k: random.random())
                      for i in xrange(ntrials)], [])
@@ -243,3 +252,37 @@ def analyze_execution(execution, p):
         return np.nan, p
 
     return rt.argmin(), p
+
+
+def softmax(w, t=1.0):
+    """Calculate the softmax of a list of numbers w.
+    Author: Jeremy M. Stober, edits by MartinThoma
+
+    Parameters
+    ----------
+    w : list of numbers
+    t : float
+
+    Return
+    ------
+    a list of the same length as w of non-negative numbers
+    """
+
+    e = np.exp(numpy.array(w) / t)
+    dist = e / np.sum(e)
+    return dist
+
+
+def igt_scores(choices):
+
+    A=len(choices[choices==0])
+    B=len(choices[choices==1])
+    C=len(choices[choices==2])
+    D=len(choices[choices==3])
+
+    # payoff (P) score
+    P = C+D - A+B
+    # sensitivity (Q) score
+    Q = B+D - A+C
+
+    return P, Q

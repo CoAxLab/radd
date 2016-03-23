@@ -21,6 +21,7 @@ RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
 prop = lambda n, k: factorial(n)/(factorial(k) * factorial(n-k))
 likelihood = lambda fact, prior, n, k: (fact*prior**k) * (1-prior)**(n-k)
 
+
 class Attractor(object):
 
     def __init__(self, rmax=40, b=35, g=15):
