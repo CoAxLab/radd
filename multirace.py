@@ -4,11 +4,11 @@ import numpy as np
 from numpy import array
 from numpy.random import sample as rs
 from numpy import newaxis as na
-
+import pandas as pd
 
 temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
 updateQ = lambda q, winner, r, A: q[winner][-1] + A*(r - q[winner][-1])
-boltzmann_choiceP = lambda q, winner, losers, B: np.exp(B*q[winner][-1])/np.sum([np.exp(B*q[l][-1]) for l in losers])
+boltzmann_choiceP = lambda q, name, B: np.exp(B*q[name][-1])/np.sum([np.exp(B*q[k][-1]) for k in q.keys()])
 
 
 def vectorize_params(p, pc_map, nresp=4):
@@ -34,7 +34,7 @@ def rew_func(rprob):
         return 0
 
 
-def run_trials(p, cards, nblocks=1, si=.1, alpha_pos=.06, alpha_neg=.06):
+def run_trials(p, cards, nblocks=1, si=.1, a_pos=.06, a_neg=.06, beta=5):
     """simulate series of trials with learning
     Arguments:
         p (dict): parameter dictionary
@@ -46,21 +46,31 @@ def run_trials(p, cards, nblocks=1, si=.1, alpha_pos=.06, alpha_neg=.06):
         qdict (dict): sequence of Q-value updates for each alt
     """
 
-    trials_n = np.asarray([cards.index]*nblocks).flatten()
+    trials = cards.append([cards]*(nblocks-1)).reset_index()
+    trials.rename(columns={'index':'t'}, inplace=True)
+    ntrials=len(trials)
     choices, all_traces = [], []
-    names = cards.columns
+    names = np.sort(cards.columns.values)
     rts={k:[] for k in names}
     qdict={k:[0] for k in names}
+    choice_prob={k:[.25] for k in names}
 
-    for i in trials_n:
-        vals = cards.iloc[i, :].values
+    vdhist = pd.DataFrame(data=np.zeros((ntrials, len(names))), columns=names, index=np.arange(ntrials))
+    vihist = vdhist.copy()
+
+    for i in xrange(ntrials):
+        vals = trials.iloc[i, 1:].values
         winner=np.nan
         while np.isnan(winner):
             execution = simulate_race(p, si=si)
-            winner, rt, traces, p, qdict = analyze_multiresponse(execution, p, qdict=qdict, vals=vals, names=names, alpha_pos=alpha_pos, alpha_neg=alpha_neg)
+            winner, rt, traces, p, qdict, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, vals=vals, names=names, a_pos=a_pos, a_neg=a_neg, beta=beta, choice_prob=choice_prob)
+
+        vdhist.iloc[i, :] = p['vd']
+        vihist.iloc[i, :] = p['vi']
         choice_name = names[winner]
-        choices.append(winner); rts[choice_name].append(rt[winner]); all_traces.append(traces);
-    return choices, rts, all_traces, qdict
+        choices.append(winner); rts[choice_name].append(rt[winner]); all_traces.append(traces)
+
+    return choices, rts, all_traces, qdict, choice_prob, vdhist, vihist
 
 
 def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_a', 'vi_b', 'vi_c', 'vi_d']}, dt=.001, si=.1, tb=2.5):
@@ -82,7 +92,7 @@ def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_
     return execution
 
 
-def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], alpha_pos=.06, alpha_neg=.06,  dt=.001):
+def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_pos=.06, a_neg=.06,  dt=.001, beta=5, choice_prob={}):
     """analyze multi-race execution processes"""
 
     nsteps_to_rt = np.argmax((execution.T>=p['a']).T, axis=1)
@@ -92,9 +102,9 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], alpha_pos=.
     rts[rts==p['tr'][0]]=999
     if np.all(rts==999):
         # if no response occurs, increase exponential bias
-        #p['xb']=p['xb']*1.01
-        #p['a']=p['a']*.99
-        return np.nan, rts, execution, p, qdict
+        # p['xb']=p['xb']*1.01
+        # p['a']=p['a']*.99
+        return np.nan, rts, execution, p, qdict, choice_prob
 
     # get accumulator with fastest RT (winner) in each cond
     winner = np.argmin(rts)
@@ -106,37 +116,57 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], alpha_pos=.
     traces = [execution[i, :nsteps_to_rt[winner]] for i in xrange(len(rts))]
 
     reward = vals[winner]
-    qval = qdict[names[winner]][-1]
-    # check valence of RPE
-    if reward>=qval:
-        rpe=1
-        alpha = alpha_pos
-    else:
-        alpha = alpha_neg
-        rpe=-1
+    winner_name = names[winner]
+    loser_names = names[names!=winner_name]
 
     # update action value
-    q_update = qval + alpha * (reward - qval)
-    qdict[names[winner]].append(q_update)
-    # update direct & indirect drift-rates
-    p = reweight_drift(p, winner, reward, alpha, rpe)
+    qval = qdict[names[winner]][-1]
+    if reward>=qval:
+        alpha=a_pos
+    else:
+        alpha=a_neg
 
-    return winner, rts, traces, p, qdict
+    Qt = updateQ(qdict, winner_name, reward, alpha)
+    qdict[winner_name].append(Qt)
+    for lname in loser_names:
+        qdict[lname].append(qdict[lname][-1])
+
+    for alt_i, name in enumerate(names):
+        cp_old = choice_prob[name][-1]
+        # update choice probability using boltzmann eq. w/ inv. temp beta
+        cp_new = boltzmann_choiceP(qdict, name, beta)
+        choice_prob[name].append(cp_new)
+        # calc. change in choice probability for alt_i
+        cp_delta = cp_new - cp_old
+        # update direct & indirect drift-rates with cp_delta
+        p = reweight_drift(p, alt_i, cp_delta, a_pos, a_neg)
 
 
-def reweight_drift(p, winner, reward, alpha, rpe):
+    return winner, rts, traces, p, qdict, choice_prob
+
+
+def reweight_drift(p, alt_i, cp_delta, a_pos, a_neg):
     """ update direct & indirect drift-rates for multirace winner """
 
-    d0 = p['vd'][winner]
-    i0 = p['vi'][winner]
-    if rpe>0:
-        # update direct drift-rate for choice(t)
-        p['vd'][winner] = p['vd'][winner]*(1+alpha) #d0 + (reward-d0)*alpha
-    else:
-        # update indirect drift-rate for choice(t)
-        p['vi'][winner] = p['vi'][winner]*(1+alpha) #i0 + (abs(reward)-i0)*alpha
-    return p
+    vd_exp = p['vd'][alt_i]
+    vi_exp = p['vi'][alt_i]
 
+    p['vi'][alt_i] = vd_exp + (vd_exp*a_pos * cp_delta)
+    p['vi'][alt_i] = vi_exp + (vi_exp*a_neg * -cp_delta)
+
+    #if cp_delta>=0:
+        # update drift-rate (increase vd, decrease vi)
+    #    vd_new = vd_exp + (a_pos * cp_delta)
+    #    vi_new = vi_exp - ((a_neg * .5) * cp_delta)
+    #else:
+        # update drift-rate (increase vi, decrease vd)
+    #    vi_new = vi_exp + (a_neg * np.abs(cp_delta))
+    #    vd_new = vd_exp - ((a_pos * .5) * np.abs(cp_delta))
+
+    #p['vd'][alt_i] = vd_new
+    #p['vi'][alt_i] = vi_new
+
+    return p
 
 def igt_scores(choices):
 

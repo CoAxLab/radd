@@ -38,22 +38,24 @@ class Model(RADDCore):
                 form when fitting models with 'x' included in <kind> attr
     """
 
-    def __init__(self, data=pd.DataFrame, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, pro_ss=False, dynamic='hyp', tol=1.e-10, split=50, verbose=False, include_zero_rts=False, *args, **kws):
+    def __init__(self, data=pd.DataFrame, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, dynamic='hyp', tol=1.e-10, verbose=False, *args, **kws):
 
         self.data = data
         self.weighted = weighted
         self.verbose = verbose
 
-        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, pro_ss=pro_ss, split=split, dynamic=dynamic)
+        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, dynamic=dynamic)
 
-        self.prepare_fit()
+        self.__prepare_fit__()
 
 
     def make_optimizer(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='TNC', btol=1.e-3, maxiter=20):
         """ init Optimizer class as Model attr
         """
+
         fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, get_params=True)
-        bp = self.set_basinparams(btol=btol, interval=interval, niter=niter, maxiter=maxiter, method=method,                                  nsuccess=nsuccess, stepsize=stepsize, nrand_inits=nrand_inits, bdisp=bdisp, get_params=True)
+
+        bp = self.set_basinparams(btol=btol, interval=interval, niter=niter, maxiter=maxiter, method=method, nsuccess=nsuccess, stepsize=stepsize, nrand_inits=nrand_inits, bdisp=bdisp, get_params=True)
 
         if inits is None:
             inits = self.inits
@@ -125,7 +127,7 @@ class Model(RADDCore):
         return out
 
 
-    def prepare_fit(self):
+    def __prepare_fit__(self):
         """ performs model setup and initiates dataframes. Automatically run when Model object is initialized
             *   pc_map is a dict containing parameter names as keys with values
                     corresponding to the names given to that parameter in Parameters object

@@ -22,7 +22,7 @@ class RADDCore(object):
     TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', split=50, include_zero_rts=False, *args, **kws):
+    def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', *args, **kws):
 
         self.data = data
         self.kind = kind
@@ -34,26 +34,12 @@ class RADDCore(object):
         if 'pro' in self.kind:
             self.nudge_dir = 'up'
             self.data_style = 'pro'
-            if depends_on is None:
-                depends_on = {'v': 'pGo'}
             self.ssd = np.array([.450])
-            if tb == None:
-                tb = .555
-            self.split = split
-            if isinstance(self.split, int):
-                self.nrt_cond = 2
-            elif isinstance(self.split, list):
-                self.nrt_cond = len(self.split)
-
             self.pGo = sorted(self.data.pGo.unique())
-            self.include_zero_rts = include_zero_rts
+
         else:
             self.nudge_dir = 'down'
             self.data_style = 're'
-            if tb == None:
-                tb = .65
-            if depends_on is None:
-                depends_on = {'v': 'Cond'}
             ssd = data[data.ttype == "stop"].ssd.unique()
             self.pGo = len(data[data.ttype == 'go']) / len(data)
             self.delays = sorted(ssd.astype(np.int))
@@ -65,20 +51,18 @@ class RADDCore(object):
         self.labels = np.sort(data[self.cond].unique())
         self.ncond = len(self.labels)
 
-        # index to split pro. rts during fit
-        # if split!=None (is set during prep in
-        # analyze.__make_proRT_conds__())
-        self.rt_cix = None
         # Get timebound
         if tb != None:
             self.tb = tb
         else:
             self.tb = data[data.response == 1].rt.max()
+
         # PARAMETER INITIALIZATION
         if inits is None:
             self.__get_default_inits__()
         else:
             self.inits = inits
+
         self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
 
         # DEFINE ITERABLES
@@ -98,7 +82,7 @@ class RADDCore(object):
                           'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond': self.ncond,
                           'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
                           'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
-                          'rt_cix': self.rt_cix, 'data_style': self.data_style, 'labels': self.labels}
+                          'data_style': self.data_style, 'labels': self.labels}
         if get_params:
             return self.fitparams
 
@@ -341,7 +325,7 @@ class RADDCore(object):
 
         nc = self.ncond
         cond = self.cond
-        nssd = self.nssd
+        nssd = len(self.ssd)
         if self.data_style == 're':
             rprob = self.data.groupby(['ttype', 'Cond']).mean()['response']
             qwts = analyze.reactive_mj_quanterr(df=self.data, cond=cond)
@@ -365,6 +349,7 @@ class RADDCore(object):
             nogo = self.avg_wts[:nc].mean()
             quant = self.avg_wts[nc:].reshape(2, 5).mean(axis=0)
             self.flat_wts = np.hstack([nogo, quant])
+
         self.avg_wts, self.flat_wts = analyze.ensure_numerical_wts(self.avg_wts, self.flat_wts)
 
 

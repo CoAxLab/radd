@@ -310,46 +310,6 @@ class Simulator(object):
         return [DVg, DVs]
 
 
-    def simulate_interactive(self, p, analyze=True):
-        """ simulates a version of the interactive race model in which
-        the stop signal directly inhibits the go process after a given delay
-        SSD + SSO (ss onset) (see simulate_dpm() for I/O details)
-        """
-        nc = self.ncond
-        ntot = self.ntot
-        dx = self.dx
-        nss = self.nss
-        nssd = self.nssd
-        ssd = self.ssd
-        nssd_i = int(nss / nssd)
-
-        p = self.vectorize_params(p)
-        # nt is the maximum n of timepoints np.max(hs([Tg, Ts]))
-        Pg, Tg, Ps, Ts, nt = self.__update_interactive_params__(p)
-        gomoments = np.where((rs((nc, ntot, nt)).T < Pg), dx, -dx).T
-        ssmoments = np.where(rs((nc, nssd, nssd_i, nt)) < Ps, dx, -dx)
-
-        diff = Tg[:, na] - Ts
-        # fill ssmoments[:time to go onset] with zeros for all SSD
-        null = [[ssmoments[ci, ssdi, :, :diff[ci, ssdi]].fill(0) for ssdi in range(nssd)] for ci in range(nc)]
-        # fill gomoments[:time to go onset] with zeros
-        null = [[gomoments[ci, :nss, :(nt - Tg[ci])].fill(0)] for ci in range(nc)]
-
-        # accumulate gomoments/ssmoments
-        DVg = self.xtb[:, na] * np.cumsum(gomoments, axis=2)
-        DVs = np.cumsum(ssmoments, axis=3)
-
-        # extract ss trials from full set of go processes and subtract DVs
-        ssDVg = DVg[:, :nss, :].reshape(nc, nssd, nssd_i, nt)
-        # ss cancels go process here
-        ssDVg = ssDVg - DVs
-        # DVg is now only No ss Go Trials
-        DVg = DVg[:, nss:, :]
-        if analyze:
-            return self.analyze_interactive(DVg, ssDVg, p)
-        return [DVg, ssDVg]
-
-
     def analyze_reactive(self, DVg, DVs, p):
         """ get rt and accuracy of go and stop process for simulated
         conditions generated from simulate_dpm
@@ -396,35 +356,6 @@ class Simulator(object):
         # Get response and stop accuracy information
         gacc = 1 - np.mean(np.where(rt < tb, 1, 0), axis=1)
         return hs([gacc, qrt])
-
-
-    def analyze_interactive(self, DVg, ssDVg, p):
-        """ get rt and accuracy of go and stop process for simulated
-        conditions generated from simulate_dpm
-        """
-        nss = self.nss
-        prob = self.prob
-        ssd = self.ssd
-        tb = self.tb
-        ncond = self.ncond
-        nssd = self.nssd
-        nss_di = int(nss / nssd)
-        sscancel = ssd + p['sso']
-        # Go process (No SS Trials)
-        gdec = self.resp_up(DVg, p['a'])
-        gort = self.RT(p['tr'], gdec)
-        # Go process SS Trials
-        ssgdec = self.ss_resp_up(ssDVg, p['a'])
-        ssgdec = ssgdec.reshape(ncond, nssd * nss_di)
-        ss_gort = self.RT(p['tr'], ssgdec).reshape(ncond, nssd, nss_di)
-        # ssGo and Go rt quantiles
-        eq = self.RTQ(zip(ss_gort, [tb] * ncond))
-        gq = self.RTQ(zip(gort, [tb] * ncond))
-        gacc = np.nanmean(np.where(gort < tb, 1, 0), axis=1)
-        sacc = np.where(ss_gort < sscancel[:, na], 0, 1).mean(axis=2)
-
-        return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(ncond)])
-
 
     def mean_pgo_rts(self, p, return_vals=True):
         """ Simulate proactive model and calculate mean RTs

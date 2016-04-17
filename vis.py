@@ -10,7 +10,6 @@ import seaborn as sns
 from radd import analyze
 from radd.tools import colors, messages
 from scipy.stats.mstats import mquantiles as mq
-import prettyplotlib as pl
 from numpy import cumsum as cs
 from numpy import append as app
 
@@ -28,11 +27,11 @@ slate = cdict['slate']
 
 def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None):
     dont_label = False
-    sns.set_context('notebook', font_scale=1.8)
+    sns.set_context('notebook', font_scale=1.7)
     if len(lines[0]) == 6:
         kind == 'pro'
     if ax is None:
-        f, ax = plt.subplots(1, figsize=(5.5, 5))
+        f, ax = plt.subplots(1, figsize=(5.5, 6))
     if colors is None:
         colors = slate(len(lines))
     if labels is None:
@@ -43,13 +42,13 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
     lines = [(line) if type(line) == list else line for line in lines]
     pse = []
-    if kind == '':
+    if kind == 're':
         x = array([400, 350, 300, 250, 200], dtype='float')
         xtls = x.copy()[::-1]
         xsim = np.linspace(15, 50, 10000)
         yylabel = 'P(Stop)'
         scale_factor = 100
-        xxlabel = 'SSD'
+        xxlabel = 'SSD (ms)'
         xxlim = (18, 42)
         markers = False
     else:
@@ -81,9 +80,10 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
         idx = (np.abs(pxp - pstop)).argmin()
         pse.append(xp[idx] / scale_factor)
         # Plot the results
-        if i == 0 and yerr != []:
-            ax.errorbar(x, y[i], yerr=yerr[i], color=colors[i], marker='o', elinewidth=2, ecolor='k')
-            ax.errorbar(x, y, yerr=yerr, color=color, ecolor=color, capsize=0, lw=0, elinewidth=3)
+        if yerr != []:
+            ax.errorbar(x, yi, yerr=yerr[i], color=colors[i], lw=0, marker='o', elinewidth=2, ecolor=colors[i])
+            ax.plot(xp, pxp, linestyle=linestyles[i], lw=1.5, color=colors[i], label=labels[i])
+            #ax.errorbar(xp, pxp, yerr=yerr, color=color, ecolor=color, capsize=0, lw=0, elinewidth=3)
         if markers:
             a = mclinealpha[i]
             ax.plot(xp, pxp, linestyle=linestyles[i], lw=2.5, color=color, label=labels[i], alpha=a)
@@ -486,18 +486,19 @@ def build_decision_axis(onset, bound, ssd=np.arange(200, 450, 50), tb=650):
 
     return f, axes
 
-def build_multi_axis(p, nresp=4, tb=1500):
+def build_multi_axis(p, nresp=4, tb=1000):
     bound = p['a']
     onset = p['tr']
     if hasattr(bound, '__iter__'):
         bound = bound[0]
         onset = onset[0]
     # init figure, axes, properties
-    f, axes = plt.subplots(nresp, 1, figsize=(6, 10), sharex=True, sharey=True)
+    f, axes = plt.subplots(2, 2, figsize=(10, 5), sharex=True, sharey=True)
     f.subplots_adjust(hspace=.1, top=.99, bottom=.05)
     w = tb + 40
     h = bound
     start = onset - 80
+    axes=axes.flatten()
     # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
     for i, ax in enumerate(axes):
         plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
