@@ -101,9 +101,9 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_pos=.06, 
     # set non responses to 999
     rts[rts==p['tr'][0]]=999
     if np.all(rts==999):
-        # if no response occurs, increase exponential bias
-        # p['xb']=p['xb']*1.01
-        # p['a']=p['a']*.99
+        # if no response occurs, increase exponential bias (up to 3.0)
+        if p['xb'] <= 3.0:
+            p['xb']=p['xb']*1.005
         return np.nan, rts, execution, p, qdict, choice_prob
 
     # get accumulator with fastest RT (winner) in each cond
@@ -148,23 +148,8 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_pos=.06, 
 def reweight_drift(p, alt_i, cp_delta, a_pos, a_neg):
     """ update direct & indirect drift-rates for multirace winner """
 
-    vd_exp = p['vd'][alt_i]
-    vi_exp = p['vi'][alt_i]
-
-    p['vi'][alt_i] = vd_exp + (vd_exp*a_pos * cp_delta)
-    p['vi'][alt_i] = vi_exp + (vi_exp*a_neg * -cp_delta)
-
-    #if cp_delta>=0:
-        # update drift-rate (increase vd, decrease vi)
-    #    vd_new = vd_exp + (a_pos * cp_delta)
-    #    vi_new = vi_exp - ((a_neg * .5) * cp_delta)
-    #else:
-        # update drift-rate (increase vi, decrease vd)
-    #    vi_new = vi_exp + (a_neg * np.abs(cp_delta))
-    #    vd_new = vd_exp - ((a_pos * .5) * np.abs(cp_delta))
-
-    #p['vd'][alt_i] = vd_new
-    #p['vi'][alt_i] = vi_new
+    p['vi'][alt_i] = p['vd'][alt_i] + (vd_exp*a_pos * cp_delta)
+    p['vi'][alt_i] = p['vi'][alt_i] + (vi_exp*a_neg * -cp_delta)
 
     return p
 
@@ -180,3 +165,31 @@ def igt_scores(choices):
     Q = (B+D) - (A+C)
 
     return P, Q
+
+
+def plot_traces_rts(p, all_traces, rts):
+
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    from mpl_toolkits.axes_grid1 import make_axes_locatable
+    from radd import vis
+
+    f, axes = vis.build_multi_axis(p, tb=1000)
+    clrs = sns.color_palette('muted', 5)
+
+    for i in xrange(len(all_traces)):
+        for ii, ax in enumerate(axes.flatten()):
+            x=np.arange(len(all_traces[i][ii]))
+            ax.plot(x, all_traces[i][ii], color=clrs[ii], alpha=.51)
+
+    for i, ax in enumerate(axes.flatten()):
+        divider = make_axes_locatable(ax)
+        axx = divider.append_axes("top", size=.7, pad=0.01, sharex=ax)
+        for spine in ['top', 'left', 'bottom', 'right']:
+            axx.spines[spine].set_visible(False)
+        axx.set_xticklabels([])
+        axx.set_yticklabels([])
+
+        k = np.sort(rts.keys())[i]
+        rt_dist_k = np.asarray(rts[k])*1000-200
+        sns.distplot(rt_dist_k, ax=axx, label=k, color=clrs[i])
