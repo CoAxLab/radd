@@ -22,26 +22,25 @@ class RADDCore(object):
     TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', *args, **kws):
+    def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', hyp_effect_dir=None, data_style='pro', *args, **kws):
 
         self.data = data
         self.kind = kind
         self.fit_on = fit_on
         self.dynamic = dynamic
         self.fit_whole_model = fit_whole_model
+        self.hyp_effect_dir = hyp_effect_dir
+        self.data_style = data_style
 
         # BASIC MODEL STRUCTURE (kind)
         if 'pro' in self.kind:
-            self.nudge_dir = 'up'
-            self.data_style = 'pro'
             self.ssd = np.array([.450])
             self.pGo = sorted(self.data.pGo.unique())
 
         else:
-            self.nudge_dir = 'down'
             self.data_style = 're'
             ssd = data[data.ttype == "stop"].ssd.unique()
-            self.pGo = len(data[data.ttype == 'go']) / len(data)
+            self.pGo = data[data.ttype == 'go'].size / len(data)
             self.delays = sorted(ssd.astype(np.int))
             self.ssd = array(self.delays) * .001
 
@@ -76,13 +75,14 @@ class RADDCore(object):
 
         if not hasattr(self, 'fitparams'):
             self.fitparams = {}
-        self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev,
-                          'disp': disp, 'tol': tol, 'niter': niter, 'nudge_dir': self.nudge_dir,
-                          'prob': prob, 'tb': self.tb, 'ssd': self.ssd, 'flat_y': self.flat_y,
-                          'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond': self.ncond,
-                          'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
-                          'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
-                          'data_style': self.data_style, 'labels': self.labels}
+        self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev, 'disp': disp,
+        'tol': tol, 'niter': niter, 'hyp_effect_dir': self.hyp_effect_dir,
+        'prob': prob, 'tb': self.tb, 'ssd': self.ssd, 'flat_y': self.flat_y,
+        'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond': self.ncond,
+        'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
+        'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
+        'data_style': self.data_style, 'labels': self.labels}
+
         if get_params:
             return self.fitparams
 
@@ -193,7 +193,7 @@ class RADDCore(object):
         nudge params so not all initialized at same val
         """
 
-        if self.fitparams['nudge_dir'] == 'up':
+        if self.fitparams['hyp_effect_dir'] == 'up':
             lim = [np.min(lim), np.max(lim)]
         else:
             lim = [np.max(lim), np.min(lim)]

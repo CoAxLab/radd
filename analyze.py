@@ -11,7 +11,6 @@ from scipy.stats.mstats_extras import mjci
 from scipy import optimize
 import functools
 
-
 def assess_fit(finfo):
     """ calculate fit statistics
     """
@@ -380,6 +379,9 @@ def weight_by_simulated_variance(opt, p, nsims=200):
 
 
 def get_intersection(iter1, iter2):
+    """ get the intersection of two iterables ("items in-common")
+    """
+
     intersect_set = set(iter1).intersection(set(iter2))
     return ([i for i in intersect_set])
 

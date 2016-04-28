@@ -14,37 +14,41 @@ class Model(RADDCore):
     Many of the naming conventions as well as the logic behind constructing parameter
     dependencies on task condition are taken from HDDM (http://ski.clps.brown.edu/hddm_docs/)
     ::Arguments::
-          data (pandas DF):
-                data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
-                <Condition Name> declared in depends_on values
-          kind (str):
-                declares model type ['dpm', 'irace', 'pro']
-                append 'x' to front of model name to include a dynamic
-                bias signal in model
-          inits (dict):
-                dictionary of parameters (v, a, tr, ssv, z) used to initialize model
-          depends_on (dict):
-                set parameter dependencies on task conditions
-                (ex. depends_on={'v': 'Condition'})
-          fit_on (str):
-                set if model fits 'average', 'subjects', 'bootstrap' data
-          fit_whole_model (bool):
-                fit model holding all fixed except depends_on keys
-                or fit model with all free before fitting depends_on keys
-          tb (float):
-                timeboundary: time alloted in task for making a response
-          dynamic (str):
-                set dynamic bias signal to follow an exponential or hyperbolic
-                form when fitting models with 'x' included in <kind> attr
+        data (pandas DF):
+            data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
+            <Condition Name> declared in depends_on values
+        kind (str):
+            declares model type ['dpm', 'irace', 'pro']
+            append 'x' to front of model name to include a dynamic
+            bias signal in model
+        inits (dict):
+            dictionary of parameters (v, a, tr, ssv, z) used to initialize model
+        depends_on (dict):
+            set parameter dependencies on task conditions
+            (ex. depends_on={'v': 'Condition'})
+        fit_on (str):
+            set if model fits 'average', 'subjects', 'bootstrap' data
+        fit_whole_model (bool):
+            fit model holding all fixed except depends_on keys
+            or fit model with all free before fitting depends_on keys
+        tb (float):
+            timeboundary: time alloted in task for making a response
+        dynamic (str):
+            set dynamic bias signal to follow an exponential or hyperbolic
+            form when fitting models with 'x' included in <kind> attr
+        hyp_effect_dir (str):
+            up or down: apriori hypothesized relationship between key:value pairs
+            in depends_on dict
+
     """
 
-    def __init__(self, data=pd.DataFrame, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, dynamic='hyp', tol=1.e-10, verbose=False, *args, **kws):
+    def __init__(self, data=pd.DataFrame, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, dynamic='hyp', tol=1.e-10, verbose=False, data_style='pro', hyp_effect_dir=None, *args, **kws):
 
         self.data = data
         self.weighted = weighted
         self.verbose = verbose
 
-        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, dynamic=dynamic)
+        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, dynamic=dynamic, data_style=data_style, hyp_effect_dir=hyp_effect_dir)
 
         self.__prepare_fit__()
 

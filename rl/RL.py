@@ -9,15 +9,29 @@ from scipy.stats import sem
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-class Agent(object):
+class Environment(object):
 
-    def __init__(self, ap=.1, an=.1, b=5, cards=None, niter=10):
+    def __init__(self, cards=None, nblocks=2):
+        self.cards = cards
+        self.nblocks = nblocks
+        self.set_environment()
+
+    def set_environment(self):
+        self.trials = np.array([self.cards.index.values]*self.nblocks).flatten()
+        self.ntrials = len(self.trials)
+        self.nalt = len(self.cards.iloc[1:].columns)
+        self.names = np.sort(self.cards.columns.values)
+
+
+class Agent(Environment):
+
+    def __init__(self, ap=.1, an=.1, b=5, cards=None, niter=10, nblocks=2):
 
         self.updateQ = lambda q, winner, r, A: q[winner][-1] + A*(r - q[winner][-1])
         self.updateP = lambda q, name, b: np.exp(b*q[name][-1])/np.sum([np.exp(b*q[k][-1]) for k in q.keys()])
 
-        if cards is not None:
-            self.set_environment(cards)
+        super(Agent, self).__init__(cards=cards, nblocks=nblocks)
+
         if any(np.size(v)>1 for v in [ap, an, b]):
             self.track_params(niter=niter, ap=ap, an=an, b=b)
         else:
@@ -31,7 +45,7 @@ class Agent(object):
         self.choices = []
 
 
-    def track_params(self, niter=10, ap=.1, an=.1, b=5, ):
+    def track_params(self, niter=10, ap=.1, an=.1, b=5):
 
         blks = np.arange(niter)
         param_names = ['ap', 'an', 'b']
@@ -65,17 +79,6 @@ class Agent(object):
             self.blocksdf.loc[i, 'Q'] = Q
 
 
-    def set_environment(self, cards, nblocks=2):
-
-        self.cards = cards
-        self.nblocks = nblocks
-        self.trials = np.array([cards.index.values]*nblocks).flatten()
-        self.ntrials = len(self.trials)
-
-        self.nalt = len(cards.iloc[1:].columns)
-        self.names = np.sort(cards.columns.values)
-
-
     def simulate_task(self, return_scores=False):
 
         self.qdict={k:[0] for k in self.names}
@@ -98,14 +101,12 @@ class Agent(object):
                 alpha=self.an
 
             Qup = q + (alpha * rpe)
-
             self.qdict[wname].append(Qup)
             self.choice_prob[wname].append(self.updateP(self.qdict, wname, self.b))
 
             for loser in self.names[self.names!=wname]:
                 self.qdict[loser].append(self.qdict[loser][-1])
                 self.choice_prob[loser].append(self.updateP(self.qdict, loser, self.b))
-
             self.choices.append(winner)
 
         if return_scores:
@@ -146,28 +147,8 @@ class Agent(object):
 
         a3.legend()
         a4.legend()
-        
+
         for i, ax in enumerate(axes.flatten()):
             ax.set_title(titles[i])
 
         f.subplots_adjust(hspace=.35)
-
-
-class Environment(object):
-
-    def __init__(self, feedback=None):
-
-        self.feedback = feedback
-
-    def set_environment(self, cards, nblocks=2):
-
-        self.cards = cards
-        self.nblocks = nblocks
-        self.trials = np.array([cards.index.values]*nblocks).flatten()
-        self.ntrials = len(self.trials)
-
-        self.nalt = len(cards.iloc[1:].columns)
-        self.names = np.sort(cards.columns.values)
-
-        self.qdict={k:[0] for k in self.names}
-        self.choice_prob={k:[1./self.nalt] for k in self.names}

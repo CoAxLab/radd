@@ -5,11 +5,47 @@ from numpy import array
 from numpy.random import sample as rs
 from numpy import newaxis as na
 import pandas as pd
+from radd import vis
+from copy import deepcopy
 
 temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
 updateQ = lambda q, winner, r, A: q[winner][-1] + A*(r - q[winner][-1])
-boltzmann_choiceP = lambda q, name, B: np.exp(B*q[name][-1])/np.sum([np.exp(B*q[k][-1]) for k in q.keys()])
+softmax_update = lambda q, name, B: np.exp(B*q[name][-1])/np.sum([np.exp(B*q[k][-1]) for k in q.keys()])
 
+def run_full_sims(p, env=pd.DataFrame, alphas_go=[], alphas_no='same', betas=[], nblocks=2, nagents=100, si=.01):
+
+    agents=np.arange(nagents)
+    trials = np.arange(1, (len(env)*nblocks)+1)
+    agent_list = []
+    i=0
+    if alphas_no=='same':
+        alphas_no=deepcopy(alphas_go)
+    alphas = zip(alphas_go, alphas_no)
+
+    for bgroup in xrange(betas.size):
+        beta = betas[bgroup]
+        for agroup in xrange(len(alphas)):
+            a_go, a_no = alphas[agroup]
+            for agent_i in agents:
+                pcopy=deepcopy(p)
+                sim_out = run_trials(pcopy, env, nblocks=nblocks, si=si, a_go=a_go, a_no=a_no, beta=beta)
+                choices, rts, all_traces, qdict_go, qdict_no, choicep, vd_all, vi_all = sim_out
+
+                format_dict = {'agent':agent_i, 'trial':trials, 'a_go':a_go, 'a_no':a_no,
+                'choices':choices, 'rts':rts, 'group': i, 'agroup': agroup, 'bgroup': bgroup,
+                'qdict_go':qdict_go, 'qdict_no':qdict_no, 'qdict': qdict, 'choicep':choicep,
+                'vd_all':vd_all, 'vi_all':vi_all, 'beta':beta}
+
+                format_dict_updated = analyzr.analyze_learning_dynamics(format_dict)
+                igtdf, agdf = analyzr.format_dataframes(format_dict_updated)
+                agent_list.append([agdf, igtdf])
+
+            i+=1
+
+    trial_df = pd.concat([ag[0] for ag in agent_list]).groupby(['group', 'trial']).mean().reset_index()
+    igt_df = pd.concat([ag[1] for ag in agent_list], axis=1).T.groupby('group').mean().reset_index()
+
+    return [trial_df, igt_df]
 
 def vectorize_params(p, pc_map, nresp=4):
     pvc = ['a', 'tr', 'vd', 'vi', 'xb']
@@ -34,7 +70,7 @@ def rew_func(rprob):
         return 0
 
 
-def run_trials(p, cards, nblocks=1, si=.1, a_pos=.06, a_neg=.06, beta=5):
+def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
     """simulate series of trials with learning
     Arguments:
         p (dict): parameter dictionary
@@ -53,6 +89,8 @@ def run_trials(p, cards, nblocks=1, si=.1, a_pos=.06, a_neg=.06, beta=5):
     names = np.sort(cards.columns.values)
     rts={k:[] for k in names}
     qdict={k:[0] for k in names}
+    qdict_go={k:[100] for k in names}
+    qdict_no={k:[100] for k in names}
     choice_prob={k:[.25] for k in names}
 
     vdhist = pd.DataFrame(data=np.zeros((ntrials, len(names))), columns=names, index=np.arange(ntrials))
@@ -63,17 +101,17 @@ def run_trials(p, cards, nblocks=1, si=.1, a_pos=.06, a_neg=.06, beta=5):
         winner=np.nan
         while np.isnan(winner):
             execution = simulate_race(p, si=si)
-            winner, rt, traces, p, qdict, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, vals=vals, names=names, a_pos=a_pos, a_neg=a_neg, beta=beta, choice_prob=choice_prob)
+            winner, rt, traces, p, qdict, qdict_go, qdict_no, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, qdict_go=qdict_go, qdict_no=qdict_no, vals=vals, names=names, a_go=a_go, a_no=a_no, beta=beta, choice_prob=choice_prob)
 
         vdhist.iloc[i, :] = p['vd']
         vihist.iloc[i, :] = p['vi']
         choice_name = names[winner]
         choices.append(winner); rts[choice_name].append(rt[winner]); all_traces.append(traces)
 
-    return choices, rts, all_traces, qdict, choice_prob, vdhist, vihist
+    return choices, rts, all_traces, qdict, qdict_go, qdict_no, choice_prob, vdhist, vihist
 
 
-def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_a', 'vi_b', 'vi_c', 'vi_d']}, dt=.001, si=.1, tb=2.5):
+def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_a', 'vi_b', 'vi_c', 'vi_d']}, dt=.001, si=.01, tb=2.5):
 
     nresp = len(pc_map.values()[0])
     p = vectorize_params(p, pc_map=pc_map, nresp=nresp)
@@ -92,7 +130,7 @@ def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_
     return execution
 
 
-def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_pos=.06, a_neg=.06,  dt=.001, beta=5, choice_prob={}):
+def analyze_multiresponse(execution, p, qdict={}, qdict_go={}, qdict_no={}, vals=[], names=[], a_go=.06, a_no=.06,  dt=.001, beta=5, choice_prob={}):
     """analyze multi-race execution processes"""
 
     nsteps_to_rt = np.argmax((execution.T>=p['a']).T, axis=1)
@@ -102,9 +140,9 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_pos=.06, 
     rts[rts==p['tr'][0]]=999
     if np.all(rts==999):
         # if no response occurs, increase exponential bias (up to 3.0)
-        if p['xb'] <= 3.0:
+        if np.mean(p['xb']) <= 3.0:
             p['xb']=p['xb']*1.005
-        return np.nan, rts, execution, p, qdict, choice_prob
+        return np.nan, rts, execution, p, qdict, qdict_go, qdict_no, choice_prob
 
     # get accumulator with fastest RT (winner) in each cond
     winner = np.argmin(rts)
@@ -122,74 +160,45 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_pos=.06, 
     # update action value
     qval = qdict[names[winner]][-1]
     if reward>=qval:
-        alpha=a_pos
+        alpha=a_go
     else:
-        alpha=a_neg
+        alpha=a_no
 
     Qt = updateQ(qdict, winner_name, reward, alpha)
+    #Q_Go_t = qdict_go[winner_name][-1] + a_go * (r - qdict_go[winner_name][-1])
+    #Q_No_t = qdict_no[winner_name][-1] + a_no * -(r - qdict_no[winner_name][-1])
+
     qdict[winner_name].append(Qt)
+    #qdict_go[winner_name].append(Q_Go_t)
+    #qdict_no[winner_name].append(Q_No_t)
+
     for lname in loser_names:
         qdict[lname].append(qdict[lname][-1])
+        #qdict_go[lname].append(qdict_go[lname][-1])
+        #qdict_no[lname].append(qdict_no[lname][-1])
 
+    #bound_expected = deepcopy(np.sum(p['vi']))
     for alt_i, name in enumerate(names):
         cp_old = choice_prob[name][-1]
         # update choice probability using boltzmann eq. w/ inv. temp beta
-        cp_new = boltzmann_choiceP(qdict, name, beta)
+        cp_new = softmax_update(qdict, name, beta)
         choice_prob[name].append(cp_new)
         # calc. change in choice probability for alt_i
-        cp_delta = cp_new - cp_old
+        delta_prob = cp_new - cp_old
         # update direct & indirect drift-rates with cp_delta
-        p = reweight_drift(p, alt_i, cp_delta, a_pos, a_neg)
+        p = reweight_drift(p, alt_i, delta_prob, a_go, a_no)
+    #p['a'] = array([a_no*(bound_expected-np.sum(p['vi']))]*p['a'].size)
+
+    return winner, rts, traces, p, qdict, qdict_go, qdict_no, choice_prob
 
 
-    return winner, rts, traces, p, qdict, choice_prob
-
-
-def reweight_drift(p, alt_i, cp_delta, a_pos, a_neg):
+def reweight_drift(p, alt_i, delta_prob, a_go, a_no):
     """ update direct & indirect drift-rates for multirace winner """
 
-    p['vi'][alt_i] = p['vd'][alt_i] + (vd_exp*a_pos * cp_delta)
-    p['vi'][alt_i] = p['vi'][alt_i] + (vi_exp*a_neg * -cp_delta)
+    vd_exp = p['vd'][alt_i]
+    vi_exp = p['vi'][alt_i]
+
+    p['vd'][alt_i] = vd_exp + (delta_prob*a_go)
+    p['vi'][alt_i] = vi_exp + (-delta_prob*a_no)
 
     return p
-
-def igt_scores(choices):
-
-    A=len(choices[choices==0])
-    B=len(choices[choices==1])
-    C=len(choices[choices==2])
-    D=len(choices[choices==3])
-    # payoff (P) score
-    P = (C+D) - (A+B)
-    # sensitivity (Q) score
-    Q = (B+D) - (A+C)
-
-    return P, Q
-
-
-def plot_traces_rts(p, all_traces, rts):
-
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    from mpl_toolkits.axes_grid1 import make_axes_locatable
-    from radd import vis
-
-    f, axes = vis.build_multi_axis(p, tb=1000)
-    clrs = sns.color_palette('muted', 5)
-
-    for i in xrange(len(all_traces)):
-        for ii, ax in enumerate(axes.flatten()):
-            x=np.arange(len(all_traces[i][ii]))
-            ax.plot(x, all_traces[i][ii], color=clrs[ii], alpha=.51)
-
-    for i, ax in enumerate(axes.flatten()):
-        divider = make_axes_locatable(ax)
-        axx = divider.append_axes("top", size=.7, pad=0.01, sharex=ax)
-        for spine in ['top', 'left', 'bottom', 'right']:
-            axx.spines[spine].set_visible(False)
-        axx.set_xticklabels([])
-        axx.set_yticklabels([])
-
-        k = np.sort(rts.keys())[i]
-        rt_dist_k = np.asarray(rts[k])*1000-200
-        sns.distplot(rt_dist_k, ax=axx, label=k, color=clrs[i])
