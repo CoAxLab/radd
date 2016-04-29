@@ -31,19 +31,13 @@ def analyze_learning_dynamics(fd):
     vdiff_all = vd_all - vi_all
     qdict = fd['qdict']
 
-    q_go = fd['qdict_go']
-    q_no = fd['qdict_no']
-
     choice_vec = [np.sort(qdict.keys())[i] for i in choices]
     fd['choice']=choice_vec
     rts_copy = deepcopy(fd['rts'])
     fd['rt'] = [rts_copy[choice].pop(0) for i, choice in enumerate(choice_vec)]
     qcopy = deepcopy(qdict)
-    qgo_copy = deepcopy(q_go)
-    qno_copy = deepcopy(q_no)
     fd['qval'] = [qcopy[choice].pop(0) for choice in choice_vec]
-    fd['q_go'] = [qgo_copy[choice].pop(0) for choice in choice_vec]
-    fd['q_no'] = [qno_copy[choice].pop(0) for choice in choice_vec]
+
     fd['vd'] = [vd_all.loc[i, choice] for choice in choice_vec]
     fd['vi'] = [vi_all.loc[i, choice] for choice in choice_vec]
     fd['vdiff'] = [vdiff_all.loc[i, choice] for choice in choice_vec]
@@ -52,6 +46,14 @@ def analyze_learning_dynamics(fd):
     vsub = vdiff_all['a'].values + vdiff_all['b'].values
     fd['v_opt_diff'] = vopt - vsub
 
+
+    #q_go = fd['qdict_go']
+    #q_no = fd['qdict_no']
+    #qgo_copy = deepcopy(q_go)
+    #qno_copy = deepcopy(q_no)
+    #fd['q_go'] = [qgo_copy[choice].pop(0) for choice in choice_vec]
+    #fd['q_no'] = [qno_copy[choice].pop(0) for choice in choice_vec]
+
     return fd
 
 
@@ -59,8 +61,8 @@ def format_dataframes(fd):
 
     from collections import OrderedDict
 
-    agdf_cols = ['agent', 'trial', 'agroup', 'bgroup', 'group', 'qval', 'q_go', 'q_no', 'vd', 'vi', 'vdiff',
-                 'v_opt_diff', 'choice', 'rt', 'a_go', 'a_no', 'beta']
+    agdf_cols = ['agent', 'trial', 'agroup', 'bgroup', 'group', 'qval', 'vd', 'vi', 'vdiff',
+                 'v_opt_diff', 'choice', 'rt', 'a_go', 'a_no', 'beta'] #'q_go', 'q_no',
     agdf = pd.DataFrame(OrderedDict((col, fd[col]) for col in agdf_cols))
 
     igtdf_cols=['agent', 'bgroup', 'agroup', 'group', 'a_go', 'a_no', 'beta', 'P', 'Q']

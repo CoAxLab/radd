@@ -18,7 +18,7 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
 
     rtkeys = np.sort(rts.keys())
     rt_dists = [np.asarray(rts[k])*1e3-(np.mean(p['tr'])*1e3) for k in rtkeys]
-    tb = np.ceil(np.max([np.max(rti) for rti in rt_dists]))+100
+    tb = np.ceil(np.max([np.max(rti) if len(rti)>0 else 0 for rti in rt_dists]))+100
 
     sns.set(style='white', font_scale=1.2)
     f, axes = vis.build_multi_axis(p, tb=tb)
@@ -38,7 +38,8 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
             axx.spines[spine].set_visible(False)
         axx.set_xticklabels([])
         axx.set_yticklabels([])
-
+        if len(rt_dists[i])<=1:
+            continue
         sns.distplot(rt_dists[i], ax=axx, label=k, color=clrs[i])
         text_str='$\mu_{%s}=%.fms$'%(names[i], np.mean(rt_dists[i]))
         ax.text(x[0]-50, np.mean(p['a'])-.06, text_str, fontsize=15)

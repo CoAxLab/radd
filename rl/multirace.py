@@ -5,7 +5,7 @@ from numpy import array
 from numpy.random import sample as rs
 from numpy import newaxis as na
 import pandas as pd
-from radd import vis
+from radd.rl import visr, analyzer
 from copy import deepcopy
 
 temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
@@ -29,15 +29,15 @@ def run_full_sims(p, env=pd.DataFrame, alphas_go=[], alphas_no='same', betas=[],
             for agent_i in agents:
                 pcopy=deepcopy(p)
                 sim_out = run_trials(pcopy, env, nblocks=nblocks, si=si, a_go=a_go, a_no=a_no, beta=beta)
-                choices, rts, all_traces, qdict_go, qdict_no, choicep, vd_all, vi_all = sim_out
+                choices, rts, all_traces, qdict, qdict_go, qdict_no, choicep, vd_all, vi_all = sim_out
 
                 format_dict = {'agent':agent_i, 'trial':trials, 'a_go':a_go, 'a_no':a_no,
                 'choices':choices, 'rts':rts, 'group': i, 'agroup': agroup, 'bgroup': bgroup,
                 'qdict_go':qdict_go, 'qdict_no':qdict_no, 'qdict': qdict, 'choicep':choicep,
                 'vd_all':vd_all, 'vi_all':vi_all, 'beta':beta}
 
-                format_dict_updated = analyzr.analyze_learning_dynamics(format_dict)
-                igtdf, agdf = analyzr.format_dataframes(format_dict_updated)
+                format_dict_updated = analyzer.analyze_learning_dynamics(format_dict)
+                igtdf, agdf = analyzer.format_dataframes(format_dict_updated)
                 agent_list.append([agdf, igtdf])
 
             i+=1
@@ -99,10 +99,13 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
     for i in xrange(ntrials):
         vals = trials.iloc[i, 1:].values
         winner=np.nan
-        while np.isnan(winner):
+        iquit=0
+        while np.isnan(winner) and iquit<50:
             execution = simulate_race(p, si=si)
             winner, rt, traces, p, qdict, qdict_go, qdict_no, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, qdict_go=qdict_go, qdict_no=qdict_no, vals=vals, names=names, a_go=a_go, a_no=a_no, beta=beta, choice_prob=choice_prob)
-
+            iquit+=1
+            if np.isnan(np.mean(p['xb'])):
+                iquit=50
         vdhist.iloc[i, :] = p['vd']
         vihist.iloc[i, :] = p['vi']
         choice_name = names[winner]
@@ -117,15 +120,18 @@ def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_
     p = vectorize_params(p, pc_map=pc_map, nresp=nresp)
 
     dx=np.sqrt(si*dt)
-    Pd = 0.5*(1 + p['vd']*dx/si)
-    Pi = 0.5*(1 + p['vi']*dx/si)
+
+    Pe = 0.5*(1 + (p['vd']-p['vi'])*dx/si)
+
+    #Pd = 0.5*(1 + p['vd']*dx/si)
+    #Pi = 0.5*(1 + p['vi']*dx/si)
 
     Tex = np.ceil((tb-p['tr'])/dt).astype(int)
     xtb = temporal_dynamics(p, np.cumsum([dt]*Tex.max()))
-
-    direct = np.where((rs((nresp, Tex.max())).T < Pd),dx,-dx).T
-    indirect = np.where((rs((nresp, Tex.max())).T < Pi),dx,-dx).T
-    execution = xtb[0] * np.cumsum(direct-indirect, axis=1)
+    execution = xtb[0] * np.cumsum(np.where((rs((nresp, Tex.max())).T < Pe),dx,-dx).T, axis=1)
+    #direct = np.where((rs((nresp, Tex.max())).T < Pd),dx,-dx).T
+    #indirect = np.where((rs((nresp, Tex.max())).T < Pi),dx,-dx).T
+    #execution = xtb[0] * np.cumsum(direct-indirect, axis=1)
 
     return execution
 
