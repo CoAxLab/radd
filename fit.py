@@ -6,8 +6,8 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd import models, theta
-from radd.tools.messages import logger
+from radd import models
+from radd.tools.messages import logger, theta
 from lmfit import Parameters, minimize, fit_report
 from radd.CORE import RADDCore
 from scipy.optimize import basinhopping
@@ -28,7 +28,7 @@ class Optimizer(RADDCore):
     Handles fitting routines for models of average, individual subject, and bootstrapped data
     """
 
-    def __init__(self, dframes=None, fitparams=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', basinparams=None, *args, **kws):
+    def __init__(self, dframes=None, fitparams=None, kind='xdpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', basinparams=None, *args, **kws):
 
         self.multiopt = multiopt
         self.fit_on = fit_on
@@ -151,10 +151,10 @@ class Optimizer(RADDCore):
         """ initialize model with niter randomly generated parameter sets
         and perform global minimization using basinhopping algorithm
         ::Arguments::
-              p (dict):
-                    parameter dictionary
+            p (dict):
+                parameter dictionary
         ::Returns::
-              parameter set with the best fit
+            parameter set with the best fit
         """
 
         bp = self.basinparams
@@ -189,9 +189,9 @@ class Optimizer(RADDCore):
     def basinhopping_full(self, p, is_flat=True):
         """ uses fmin_tnc in combination with basinhopping to perform bounded global
          minimization of multivariate model
-
-         is_flat (bool <True>):
-              if true, optimize all params in p
+        ::Arguments::
+            is_flat (bool <True>):
+              if True, optimize all params in p
         """
 
         fp = self.fitparams
@@ -201,17 +201,15 @@ class Optimizer(RADDCore):
             basin_keys = p.keys()
             xp = dict(deepcopy(p))
             basin_params = theta.all_params_to_scalar(xp)
-            ncond = 1
+            nlevels = 1
         else:
             basin_keys = self.pc_map.keys()
-            ncond = len(self.pc_map.values()[0])
+            nlevels = len(self.pc_map.values()[0])
             basin_params = deepcopy(p)
 
         self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys, is_flat=is_flat)
-        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, ncond=ncond)
-
+        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, nlevels=nlevels)
         x = np.hstack(np.hstack([basin_params[pk] for pk in basin_keys])).tolist()
-
         bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
         mkwargs = {"method": bp['method'], "bounds": bounds, 'tol': bp['tol'], 'options': {'xtol': bp['tol'], 'ftol': bp['tol'], 'maxiter': bp['maxiter']}}
 
@@ -220,8 +218,8 @@ class Optimizer(RADDCore):
 
         xopt = out.x
         funcmin = out.fun
-        if ncond > 1:
-            xopt = array([xopt]).reshape(len(basin_keys), ncond)
+        if nlevels > 1:
+            xopt = array([xopt]).reshape(len(basin_keys), nlevels)
         for i, k in enumerate(basin_keys):
             p[k] = xopt[i]
         return p, funcmin
@@ -249,14 +247,14 @@ class Optimizer(RADDCore):
         self.simulator.__prep_global__(basin_params=p, basin_keys=pkeys, is_flat=True)
         # make list of init values for all keys in pc_map,
         # for all conditions in depends_on.values()
-        vals = [[p[pk][i] for pk in pkeys] for i in range(fp['ncond'])]
+        vals = [[p[pk][i] for pk in pkeys] for i in range(fp['nlevels'])]
 
         for i, x in enumerate(vals):
             self.simulator.__update__(is_flat=True, y=self.bdata[i], wts=self.bwts[i])
             out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], minimizer_kwargs=mkwargs, interval=bp['interval'], niter=niter, niter_success=nsuccess, disp=bp['disp'])
             xbasin.append(out.x)
         for i, pk in enumerate(pkeys):
-            p[pk] = array([xbasin[ci][i] for ci in range(fp['ncond'])])
+            p[pk] = array([xbasin[ci][i] for ci in range(fp['nlevels'])])
         return p
 
 
@@ -311,7 +309,7 @@ class Optimizer(RADDCore):
     def prep_indx(self, dframes):
 
         nq = len(self.fitparams['prob'])
-        nc = self.fitparams['ncond']
+        nl = self.fitparams['nlevels']
         self.fits = dframes['fits']
         self.fitinfo = dframes['fitinfo']
         self.indx_list = dframes['observed'].index
@@ -321,12 +319,13 @@ class Optimizer(RADDCore):
         if self.data_style == 're':
             self.get_flaty = lambda x: x.mean(axis=0)
         elif self.data_style == 'pro':
-            self.get_flaty = lambda x: np.hstack([x[:nc].mean(), x[nc:].reshape(2, nq).mean(axis=0)])
+            self.get_flaty = lambda x: np.hstack([x[:nl].mean(), x[nl:].reshape(2, nq).mean(axis=0)])
+
 
     def __indx_optimize__(self, save=True, savepth='./'):
 
         ri = 0
-        nc = self.ncond
+        nl = self.nlevels
         nquant = len(self.fitparams['prob'])
         pcols = self.fitinfo.columns
 
@@ -334,16 +333,15 @@ class Optimizer(RADDCore):
             self.y = y
             self.fit_on = getid(i)
             self.flat_y = self.get_flaty(y)
+
             # optimize params iterating over subjects/bootstraps
             yhat, finfo, popt = self.__opt_routine__()
-
             self.fitinfo.iloc[i] = pd.Series({pc: finfo[pc] for pc in pcols})
-            if self.data_style == 're':
-                self.fits.iloc[ri:ri+nc, :] = yhat.reshape(nc, len(self.fits.columns))
-                ri += nc
-            elif self.data_style == 'pro':
-                self.fits.iloc[i] = yhat
+            self.fits.iloc[ri:ri+nl, :] = yhat.reshape(nl, len(self.fits.columns))
+            ri += nl
+
             if save:
                 self.fits.to_csv(savepth + "fits.csv")
                 self.fitinfo.to_csv(savepth + "fitinfo.csv")
+
         self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())

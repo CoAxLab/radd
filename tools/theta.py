@@ -4,9 +4,9 @@ import pandas as pd
 import numpy as np
 from scipy.io import loadmat
 import os
-import re
+from copy import deepcopy
 from numpy import array
-from scipy.stats.distributions import norm, gamma
+from scipy.stats.distributions import norm, gamma, uniform
 from lmfit import Parameters
 
 
@@ -25,8 +25,13 @@ def random_inits(pkeys, ninits=1, kind='dpm'):
 
     if isinstance(pkeys, dict):
         pkeys = pkeys.keys()
+
     bnd = get_bounds(kind=kind)
     params = {pk: init_distributions(pk, bnd[pk], nrvs=ninits, kind=kind) for pk in pkeys}
+
+    if 'vd' in params.keys():
+        params['vi'] = params['vi']*params['vd']
+
     return params
 
 
@@ -86,10 +91,11 @@ def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scal
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
     """
-    sigma_defaults = {'a': .25, 'tr': .1, 'v': .25,
-                      'ssv': .15, 'z': .05, 'xb': .25, 'sso': .01}
-    mu_defaults = {'a': .25, 'tr': .29, 'v': 1,
-                   'ssv': -1, 'z': .1, 'xb': 1, 'sso': .15}
+    mu_defaults = {'a': .3, 'tr': .29, 'v': 1., 'vi': .15, 'vd': 1.,
+                   'ssv': -1, 'z': .1, 'xb': 1.5, 'sso': .15}
+    sigma_defaults = {'a': .15, 'tr': .1, 'v': .15, 'vi': .70, 'vd':.15,
+                      'ssv': .15, 'z': .05, 'xb': .5, 'sso': .01}
+
 
     if pkey == 'si':
         return .01
@@ -101,9 +107,13 @@ def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scal
     if scale is None:
         scale = sigma_defaults[pkey]
 
+
     # init and freeze dist shape
-    if pkey in ['tr', 'v', 'ssv', 'z', 'xb', 'sso']:
+    if pkey in ['tr', 'v', 'vd', 'ssv', 'z', 'xb', 'sso']:
         dist = norm(loc, scale)
+    elif pkey in ['vi']:
+        # vi_perc ~ U(.05, .95) --> vi = vi_perc*vd
+        dist = uniform(loc, scale)
     elif pkey in ['a', 'tr']:
         dist = gamma(1, loc, scale)
 
@@ -120,14 +130,14 @@ def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scal
     return rvinits
 
 
-def get_bounds(kind='dpm', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5), si=(.001, .2), sso=(.01, .3)):
+def get_bounds(kind='dpm', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.5, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .95)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
 
     if 'irace' in kind or 'iact' in kind:
         ssv = (abs(ssv[1]), abs(ssv[0]))
-    bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv,
+    bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'vd':vd, 'vi':vi,
               'z': z, 'xb': xb, 'si': si, 'sso': sso}
     return bounds
 

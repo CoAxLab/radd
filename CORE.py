@@ -5,10 +5,8 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd import analyze, theta
 from scipy.stats.mstats import mquantiles as mq
-from radd.tools.messages import saygo
-
+from radd.tools import theta, analyze, dfhandler
 
 class RADDCore(object):
 
@@ -16,13 +14,13 @@ class RADDCore(object):
     of Model & Optimizer objects. Not meant to be used directly.
 
     Contains methods for building dataframes, generating observed data vectors
-    that are entered into cost function during fitting, calculating summary measures
-    and weight matrix for weighting residuals during optimization.
+    that are entered into cost function during fitting as well as calculating
+    summary measures and weight matrix for weighting residuals during optimization.
 
     TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=None, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', hyp_effect_dir=None, data_style='pro', *args, **kws):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on=None, niter=50,  fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', hyp_effect_dir=None, percentiles=([.1, .3, .5, .7, .9]), *args, **kws):
 
         self.data = data
         self.kind = kind
@@ -30,25 +28,28 @@ class RADDCore(object):
         self.dynamic = dynamic
         self.fit_whole_model = fit_whole_model
         self.hyp_effect_dir = hyp_effect_dir
-        self.data_style = data_style
-
-        # BASIC MODEL STRUCTURE (kind)
-        if 'pro' in self.kind:
-            self.ssd = np.array([.450])
-            self.pGo = sorted(self.data.pGo.unique())
-
-        else:
-            self.data_style = 're'
-            ssd = data[data.ttype == "stop"].ssd.unique()
-            self.pGo = data[data.ttype == 'go'].size / len(data)
-            self.delays = sorted(ssd.astype(np.int))
-            self.ssd = array(self.delays) * .001
+        self.percentiles = percentiles
 
         # CONDITIONAL PARAMETERS
         self.depends_on = depends_on
-        self.cond = self.depends_on.values()[0]
-        self.labels = np.sort(data[self.cond].unique())
-        self.ncond = len(self.labels)
+        self.conds = depends_on.values()
+        self.nconds = len(self.conds)
+        self.levels = [np.sort(data[cond].unique()) for cond in self.conds]
+        self.nlevels = np.sum([len(lvls) for lvls in self.levels])
+
+        # DEFINE ITERABLES
+        if self.fit_on == 'bootstrap':
+            self.idx = range(niter)
+        else:
+            self.idx = list(data.idx.unique())
+        self.nidx = len(self.idx)
+
+        # BASIC MODEL STRUCTURE (kind)
+        if 'ssd' in data.columns:
+            self.delays = np.sort(data.ssd.unique().astype(np.int))
+            self.delays = self.delays[self.delays!=1000]
+            self.pGo = data[data.ttype == 'go'].shape[0] / data.shape[0]
+            self.ssd = self.delays * .001
 
         # Get timebound
         if tb != None:
@@ -62,26 +63,44 @@ class RADDCore(object):
         else:
             self.inits = inits
 
-        self.__check_inits__(fit_noise=fit_noise, pro_ss=pro_ss)
+        self.handler = dfhandler.DataHandler(self)
 
-        # DEFINE ITERABLES
-        if self.fit_on == 'bootstrap':
-            self.indx = range(niter)
+
+    def __make_dataframes__(self):
+        """ wrapper for dfhandler.DataHandler.make_dataframes
+        """
+        self.handler.make_dataframes()
+        # Group dataframe (nsubjects*nconds*nlevels x ndatapoints)
+        self.observedDF = self.handler.observedDF.copy()
+        # list (nsubjects long) of data arrays (nconds*nlevels x ndatapoints) to fit
+        self.observed = self.handler.observed
+        # list of flattened data arrays (averaged across conditions)
+        self.observed_flat = self.handler.observed_flat
+
+        self.datdf = self.handler.datdf
+        self.dfvals = self.handler.dfvals
+
+        # dataframe with same dim as observeddf for storing model predictions
+        self.fits = self.handler.fits
+        # dataframe with same dim as observeddf for storing fit info
+        self.fitinfo = self.handler.fitinfo
+
+
+    def __get_wts__(self, weight_presponse=True):
+        """ wrapper for analyze functions used to calculate
+        weights used in cost function
+        """
+        if self.fit_on == 'subjects':
+            self.cost_wts, self.flat_cost_wts = analyze.get_subject_cost_weights(self, weight_presponse=weight_presponse)
         else:
-            self.indx = list(data.idx.unique())
+            self.cost_wts, self.flat_cost_wts = analyze.get_group_cost_weights(self)
 
 
-    def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, prob=np.array([.1, .3, .5, .7, .9]), get_params=False, **kwgs):
+    def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, percentiles=np.array([.1, .3, .5, .7, .9]), params=False, get_params=False, **kwgs):
 
         if not hasattr(self, 'fitparams'):
             self.fitparams = {}
-        self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev, 'disp': disp,
-        'tol': tol, 'niter': niter, 'hyp_effect_dir': self.hyp_effect_dir,
-        'prob': prob, 'tb': self.tb, 'ssd': self.ssd, 'flat_y': self.flat_y,
-        'avg_y': self.avg_y, 'avg_wts': self.avg_wts, 'ncond': self.ncond,
-        'pGo': self.pGo, 'flat_wts': self.flat_wts, 'depends_on': self.depends_on,
-        'dynamic': self.dynamic, 'fit_whole_model': self.fit_whole_model,
-        'data_style': self.data_style, 'labels': self.labels}
+        self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev, 'disp': disp, 'tol': tol, 'niter': niter}
 
         if get_params:
             return self.fitparams
@@ -92,64 +111,28 @@ class RADDCore(object):
         if not hasattr(self, 'basinparams'):
             self.basinparams = {}
 
-        self.basinparams = {'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize, 'nsuccess': nsuccess, 'method': 'TNC', 'tol': btol, 'maxiter': maxiter, 'disp': bdisp}
+        self.basinparams = {'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize, 'nsuccess': nsuccess, 'method': method, 'tol': btol, 'maxiter': maxiter, 'disp': bdisp}
+
         if get_params:
             return self.basinparams
 
-
     def __extract_popt_fitinfo__(self, finfo=None):
-        """ takes optimized dict or DF of vectorized parameters and
-        returns dict with only depends_on.keys() containing vectorized vals.
-        Is accessed by fit.Optimizer objects after optimization routine.
-
-        ::Arguments::
-              finfo (dict/DF):
-                    finfo is dict if self.fit_on is 'average'
-                    and DF if self.fit_on is 'subjects' or 'bootstrap'
-                    contains optimized parameters
-        ::Returns::
-              popt (dict):
-                    dict with only depends_on.keys() containing
-                    vectorized vals
+        """ wrapper for DataHandler.extract_popt_fitinfo()
         """
-        if finfo is None:
-            try:
-                finfo = self.fitinfo.mean()
-            except Exception:
-                finfo = self.fitinfo
-        finfo = dict(deepcopy(finfo))
-        popt = dict(deepcopy(self.inits))
-        pc_map = self.pc_map
-        for pkey in popt.keys():
-            if pkey in self.depends_on.keys():
-                popt[pkey] = np.array([finfo[pc] for pc in pc_map[pkey]])
-                continue
-            popt[pkey] = finfo[pkey]
-
+        popt = self.handler.extract_popt_fitinfo(finfo=finfo)
         return popt
 
-
-    def rangl_data(self, data, kind='dpm', prob=np.array([.1, .3, .5, .7, .9])):
+    def rangl_data(self, data):
         """ wrapper for analyze.rangl_data
         """
-        rangled = analyze.rangl_data(data, data_style=self.data_style, kind=kind, prob=prob, tb=self.tb)
+        rangled = analyze.rangl_data(data, percentiles=self.percentiles, tb=self.tb)
         return rangled
-
 
     def resample_data(self, data):
         """ wrapper for analyze.resample_data
         """
         resampled = analyze.resample_data(data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
         return resampled
-
-
-    def rt_quantiles(self, data, split_col='HL', prob=np.array([.1, .3, .5, .7, .9])):
-        """ wrapper for analyze.rt_quantiles
-        """
-        if not hasattr(self, "prort_conds_prepared"):
-            self.__make_proRT_conds__()
-        rtq = analyze.rt_quantiles(data, include_zero_rts=self.include_zero_rts, split_col=split_col, prob=prob, nrt_cond=self.nrt_cond, tb=self.tb)
-        return rtq
 
 
     def assess_fit(self, finfo=None):
@@ -199,10 +182,8 @@ class RADDCore(object):
             lim = [np.max(lim), np.min(lim)]
 
         for pkey in p.keys():
-            bump = np.linspace(lim[0], lim[1], self.ncond)
+            bump = np.linspace(lim[0], lim[1], self.nlevels)
             if pkey in self.pc_map.keys():
-                if pkey in ['a', 'tr']:
-                    bump = bump[::-1]
                 p[pkey] = p[pkey] * bump
         return p
 
@@ -225,185 +206,26 @@ class RADDCore(object):
 
         return pbounds, params
 
-
-    def __make_dataframes__(self, qp_cols):
-        """ Generates the following dataframes and arrays:
-        ::Arguments::
-              qp_cols:
-                    header for observed/fits dataframes
-        ::Returns::
-              None (All dataframes and vectors are stored in dict and assigned
-              as <dframes> attr)
-        observed (DF):
-              Contains Prob and RT quant. for each subject
-              used to calc. cost fx weights
-        fits (DF):
-              empty DF shaped like observed DF, used to store simulated
-              predictions of the optimized model
-        fitinfo (DF):
-              stores all opt. parameter values and model fit statistics
-        dat (ndarray):
-              contains all subject/boot. y vectors entered into costfx
-        avg_y (ndarray):
-              average y vector for each condition entered into costfx
-        flat_y (1d array):
-              average y vector used to initialize parameters prior to fitting
-              conditional model. calculated collapsing across conditions
-        """
-
-        cond = self.cond
-        ncond = self.ncond
-        data = self.data
-        indx = self.indx
-        labels = self.labels
-
-        ic_grp = data.groupby(['idx', cond])
-        c_grp = data.groupby([cond])
-        i_grp = data.groupby(['idx'])
-
-        if self.fit_on == 'bootstrap':
-            self.dat = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in indx]).unstack()
-
-        if self.data_style == 're':
-            datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack().unstack()
-            indxx = pd.Series(indx * ncond, name='idx')
-            obs = pd.DataFrame(np.vstack(datdf.values), columns=qp_cols[1:], index=indxx)
-            obs.insert(0, qp_cols[0], np.sort(labels * len(indx)))
-
-            self.observed = obs.sort_index().reset_index()
-            self.avg_y = self.observed.groupby(cond).mean().values[:, 1:]
-            self.flat_y = self.observed.mean().values[1:]
-            axis0, axis2 = self.observed.loc[:, qp_cols[1]:].values.shape
-            dat = self.observed.loc[:, qp_cols[1]:].values.reshape(int(axis0 / ncond), ncond, axis2)
-            fits = pd.DataFrame(np.zeros((len(indxx), len(qp_cols))), columns=qp_cols, index=indxx)
-
-        elif self.data_style == 'pro':
-            datdf = ic_grp.apply(self.rangl_data, kind=self.kind).unstack()
-            rtdat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles).values), index=indx)
-            rtdat[rtdat < .1] = np.nan
-            rts_flat = pd.DataFrame(np.vstack(i_grp.apply(self.rt_quantiles, split_col=None).values), index=indx)
-            self.observed = pd.concat([datdf, rtdat], axis=1)
-            self.observed.columns = qp_cols
-            self.avg_y = self.observed.mean().values
-            self.flat_y = np.append(datdf.mean().mean(), rts_flat.mean())
-            dat = self.observed.values.reshape((len(indx), len(qp_cols)))
-            fits = pd.DataFrame(np.zeros_like(dat), columns=qp_cols, index=indx)
-
-        fitinfo = pd.DataFrame(columns=self.infolabels, index=indx)
-        self.dframes = {'data': self.data, 'flat_y': self.flat_y, 'avg_y': self.avg_y,                        'fitinfo': fitinfo, 'fits': fits, 'observed': self.observed, 'dat': dat}
-
-
     def __prep_basin_data__(self):
-
         fp = self.fitparams
-        if 'pro' in self.kind:
-            # regroup y vectors into conditions
-            wtsp = fp['avg_wts'].flatten()[:fp['ncond']].reshape(2, int(fp['ncond'] / 2))
-            nogo = self.avg_y.flatten()[:fp['ncond']].reshape(2, int(fp['ncond'] / 2))
-            rts = self.avg_y[fp['ncond']:].reshape(2, 5)
-            wtsq = fp['avg_wts'][fp['ncond']:].reshape(2, 5)
-
-            upper = [np.append(ng, rts[0]) for ng in nogo[0]]
-            lower = [np.append(ng, rts[1]) for ng in nogo[1]]
-            upperwts = [np.append(wtp, wtsq[0]) for wtp in wtsp[0]]
-            lowerwts = [np.append(wtp, wtsq[1]) for wtp in wtsp[1]]
-
-            cond_data = np.vstack([upper, lower])
-            cond_wts = np.vstack([upperwts, lowerwts])
-        else:
-            cond_data = self.avg_y
-            cond_wts = self.avg_wts
+        cond_data = self.avg_y
+        cond_wts = self.avg_wts
         return cond_data, cond_wts
-
-
-    def get_wts(self):
-        """ wtc: weights applied to correct rt quantiles in cost f(x)
-              * P(R | No SSD)j * sdj(.5Qj, ... .95Qj)
-        wte: weight applied to error rt quantiles in cost f(x)
-              * P(R | SSD) * sd(.5eQ, ... .95eQ)
-        """
-
-        nc = self.ncond
-        cond = self.cond
-        nssd = len(self.ssd)
-        if self.data_style == 're':
-            rprob = self.data.groupby(['ttype', 'Cond']).mean()['response']
-            qwts = analyze.reactive_mj_quanterr(df=self.data, cond=cond)
-            # multiply by prob. of response on cor. and err. trials
-            wtd_qwts = np.vstack(rprob.unstack().unstack().values) * qwts.reshape(nc * 2, 5)
-            wtd_qwts = wtd_qwts.reshape(nc, 10)
-
-            perr = self.observed.groupby(cond).std().iloc[:, 1:7].values
-            pwts = np.median(perr, axis=1)[:, None] / perr
-            self.avg_wts = np.array([np.append(pw, qw) for pw, qw in zip(pwts, wtd_qwts)]).flatten()
-            self.flat_wts = self.avg_wts.reshape(nc, 16).mean(axis=0)
-
-        elif self.data_style == 'pro':
-            upper = self.data[self.data['HL'] == 1].mean()['response']
-            lower = self.data[self.data['HL'] == 2].mean()['response']
-            qwts = analyze.proactive_mj_quanterr(df=self.data, split='HL', tb=self.tb)
-            wtqwts = np.hstack(np.array([upper, lower])[:, None] * qwts)
-            perr = self.observed.std()[:nc]
-            pwts = np.median(perr) / perr
-            self.avg_wts = np.hstack([pwts, wtqwts])
-            nogo = self.avg_wts[:nc].mean()
-            quant = self.avg_wts[nc:].reshape(2, 5).mean(axis=0)
-            self.flat_wts = np.hstack([nogo, quant])
-
-        self.avg_wts, self.flat_wts = analyze.ensure_numerical_wts(self.avg_wts, self.flat_wts)
-
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         self.data = analyze.remove_outliers(self.data, sd=sd, verbose=verbose)
 
-
-    def __get_header__(self, params=None, data_style='re', labels=[], prob=np.array([.1, .3, .5, .7, .9]), cond='Cond'):
-        if not hasattr(self, 'delays'):
-            self.delays = self.ssd
-        qp_cols = analyze.get_header(params=params, data_style=self.data_style, labels=self.labels, prob=prob, delays=self.delays, cond=cond)
-        if params is not None:
-            self.infolabels = qp_cols[1]
-        return qp_cols[0]
-
-
     def __get_default_inits__(self):
         self.inits = theta.get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
-
 
     def __get_optimized_params__(self, include_ss=False, fit_noise=False):
         params = theta.get_optimized_params(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
         return params
 
-
     def __check_inits__(self, inits=None, pro_ss=False, fit_noise=False):
         if inits is None:
             inits = dict(deepcopy(self.inits))
         self.inits = theta.check_inits(inits=inits, pdep=self.depends_on.keys(), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
-
-
-    def mean_pgo_rts(self, p={}, return_vals=True):
-        """ Simulate proactive model and calculate mean RTs
-        for all conditions rather than collapse across high and low
-        """
-        if not hasattr(self, 'simulator'):
-            self.make_simulator()
-        DVg = self.simulator.simulate_pro(p, analyze=False)
-        gdec = self.simulator.resp_up(DVg, p['a'])
-        rt = self.simulator.RT(p['tr'], gdec)
-
-        mu = np.nanmean(rt, axis=1)
-        ci = pd.DataFrame(rt.T).sem() * 1.96
-        std = pd.DataFrame(rt.T).std()
-
-        self.pgo_rts = {'mu': mu, 'ci': ci, 'std': std}
-        if return_vals:
-            return self.pgo_rts
-
-
-    def __make_proRT_conds__(self):
-        self.data, self.rt_cix = analyze.make_proRT_conds(self.data, self.split)
-        self.prort_conds_prepared = True
-
 
     def __rename_bad_cols__(self):
         self.data = analyze.rename_bad_cols(self.data)

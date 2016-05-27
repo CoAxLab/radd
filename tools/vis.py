@@ -7,8 +7,7 @@ from numpy import array
 from scipy import optimize
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd import analyze
-from radd.tools import colors, messages
+from radd.tools import colors, messages, analyze
 from scipy.stats.mstats import mquantiles as mq
 from numpy import cumsum as cs
 from numpy import append as app
@@ -25,11 +24,9 @@ cool = cdict['cool']
 slate = cdict['slate']
 
 
-def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None):
+def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None):
     dont_label = False
     sns.set_context('notebook', font_scale=1.7)
-    if len(lines[0]) == 6:
-        kind == 'pro'
     if ax is None:
         f, ax = plt.subplots(1, figsize=(5.5, 6))
     if colors is None:
@@ -42,30 +39,24 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
 
     lines = [(line) if type(line) == list else line for line in lines]
     pse = []
-    if kind == 're':
-        x = array([400, 350, 300, 250, 200], dtype='float')
-        xtls = x.copy()[::-1]
-        xsim = np.linspace(15, 50, 10000)
-        yylabel = 'P(Stop)'
-        scale_factor = 100
-        xxlabel = 'SSD (ms)'
-        xxlim = (18, 42)
-        markers = False
-    else:
-        x = array([100, 80, 60, 40, 20, 0], dtype='float')
-        xtls = x.copy()[::-1]
-        xsim = np.linspace(-5, 11, 10000)
-        xxlim = (-1, 10.5)
-        yylabel = 'P(NoGo)'
-        scale_factor = 100
-        xxlabel = 'P(Go)'
-        mclinealpha = [.6, .8] * len(lines)
-        # if mc is not None:
-    markers = False
-    mclinealpha = [.7, 1] * len(lines)  # datamc=heat(len(x))
-    # mc=heat(len(x))
+    scl = 100
 
-    x = analyze.res(-x, lower=x[-1] / 10, upper=x[0] / 10)
+    if x is None:
+        x = np.arange(len(lines[0]), dtype='float')[::-1]*50
+        #x = array([450, 400, 350, 300, 250, 200], dtype='float')
+
+    xtls = x.copy()
+    xsim = np.linspace(x.min(), x.max(), 10000)
+    yylabel = 'P(Stop)'
+
+    xxlabel = 'SSD (ms)'
+    xxlim = (xsim[0]-2, xsim[-1]+2)
+    markers = True
+    mclinealpha = [.7, 1] * len(lines)
+
+    x = analyze.res(-x, lower=x[-1], upper=x[0])
+    xxlim = (x[0]-2, x[-1]+2)
+    print(x)
     for i, yi in enumerate(lines):
         if i == 0:
             color = 'k'
@@ -75,18 +66,17 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
         p_guess = (np.mean(x), np.mean(y), .5, .5)
         p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=5000, ftol=1.e-20)
         x0, y0, c, k = p
-        xp = xsim
-        pxp = analyze.sigmoid(p, xp)
+        pxp = analyze.sigmoid(p, xsim)
         idx = (np.abs(pxp - pstop)).argmin()
-        pse.append(xp[idx] / scale_factor)
+        pse.append(xsim[idx])
         # Plot the results
         if yerr != []:
             ax.errorbar(x, yi, yerr=yerr[i], color=colors[i], lw=0, marker='o', elinewidth=2, ecolor=colors[i])
-            ax.plot(xp, pxp, linestyle=linestyles[i], lw=1.5, color=colors[i], label=labels[i])
+            ax.plot(xsim, pxp, linestyle=linestyles[i], lw=1.5, color=colors[i], label=labels[i])
             #ax.errorbar(xp, pxp, yerr=yerr, color=color, ecolor=color, capsize=0, lw=0, elinewidth=3)
         if markers:
             a = mclinealpha[i]
-            ax.plot(xp, pxp, linestyle=linestyles[i], lw=2.5, color=color, label=labels[i], alpha=a)
+            ax.plot(xsim, pxp, linestyle=linestyles[i], lw=2.5, color=color, label=labels[i], alpha=a)
             for ii in range(len(y)):
                 if i % 2 == 0:
                     ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color='k', markerfacecolor='none', mec='k', mew=1.5, alpha=.8)
@@ -94,12 +84,12 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
                     # color=mc[ii]
                     ax.plot(x[ii], y[ii], lw=0, marker='x', ms=7, color=color, mew=3, alpha=a)
         else:
-            ax.plot(xp, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
-        pse.append(xp[idx] / scale_factor)
+            ax.plot(xsim, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
+        pse.append(xsim[idx])
 
-    plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.01, 1.05), yticks=[0, 1])
+    plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.01, 1.05), yticks=np.arange(0,1.2,.2))#[0,  1])
     ax.set_xticklabels([int(xt) for xt in xtls])
-    ax.set_yticklabels([0.0, 1.0])
+    ax.set_yticklabels(np.arange(0,1.2,.2))#[0.0, 1.0])
     ax.set_xlabel(xxlabel)
     ax.set_ylabel(yylabel)
 

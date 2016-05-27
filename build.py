@@ -4,8 +4,8 @@ from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd.tools.messages import saygo
-from radd import fit, models, analyze
+from radd import fit, models
+from radd.tools import analyze, messages
 from radd.CORE import RADDCore
 
 class Model(RADDCore):
@@ -42,16 +42,15 @@ class Model(RADDCore):
 
     """
 
-    def __init__(self, data=pd.DataFrame, kind='dpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, dynamic='hyp', tol=1.e-10, verbose=False, data_style='pro', hyp_effect_dir=None, *args, **kws):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, dynamic='hyp', tol=1.e-10, percentiles=np.array([.1, .3, .5, .7, .9]), verbose=False, hyp_effect_dir=None, *args, **kws):
 
         self.data = data
         self.weighted = weighted
         self.verbose = verbose
 
-        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, dynamic=dynamic, data_style=data_style, hyp_effect_dir=hyp_effect_dir)
+        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, dynamic=dynamic, hyp_effect_dir=hyp_effect_dir, percentiles=percentiles)
 
         self.__prepare_fit__()
-
 
     def make_optimizer(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='TNC', btol=1.e-3, maxiter=20):
         """ init Optimizer class as Model attr
@@ -152,32 +151,28 @@ class Model(RADDCore):
             |---> p['v'] = array([V1, V2]) -------> [OUT]
         """
 
-        if not isinstance(self.labels[0], str):
-            ints = sorted([int(l * 100) for l in self.labels])
-            self.labels = [str(intl) for intl in ints]
-        else:
-            self.labels = sorted(self.labels)
-
-        params = sorted(self.inits.keys())
+        params = np.sort(self.inits.keys()).tolist()
         cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
         self.pc_map = {}
-        for d in self.depends_on.keys():
-            params.remove(d)
-            self.pc_map[d] = ['_'.join([d, l]) for l in self.labels]
-            params.extend(self.pc_map[d])
 
-        qp_cols = self.__get_header__(params, cond=self.cond)
+        for cond_i in xrange(self.nconds):
+            for d in self.depends_on.keys():
+                params.remove(d)
+                self.pc_map[d] = ['_'.join([d, l]) for l in self.levels[cond_i]]
+                params.extend(self.pc_map[d])
+
         # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
-        self.__make_dataframes__(qp_cols)
+        self.__make_dataframes__()
         # CALCULATE WEIGHTS FOR COST FX
         if self.weighted:
-            self.get_wts()
+            self.__get_wts__()
         else:
             # MAKE PSEUDO WEIGHTS
-            self.flat_wts = np.ones_like(self.flat_y.flatten())
-            self.avg_wts = np.ones_like(self.avg_y.flatten())
+            self.flat_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
+            self.avg_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
+
         if self.verbose:
-            self.is_prepared = saygo(depends_on=self.depends_on, labels=self.labels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
+            self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
         else:
             self.prepared = True
 

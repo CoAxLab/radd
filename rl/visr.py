@@ -11,7 +11,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from radd import vis
 from copy import deepcopy
 import matplotlib as mpl
-
+from IPython.display import display, Latex
 
 
 def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
@@ -23,8 +23,6 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
     sns.set(style='white', font_scale=1.2)
     f, axes = vis.build_multi_axis(p, tb=tb)
     clrs = sns.color_palette('muted', 5)
-
-
 
     for i in xrange(len(all_traces)):
         for ii, ax in enumerate(axes.flatten()):
@@ -46,12 +44,11 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
 
 
 def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)',
-    'Change in P(card)'], plot_traces=False, p=None, tb=1000):
+    'Change in P(card)', '$v^G_t$', '$v^N_t$'], plot_traces=False, p=None, tb=1000):
 
     sns.set_palette('muted')
-    f, axes = plt.subplots(2, 2, figsize=(14,10))
-    a1, a2, a3, a4 = axes.flatten()
-
+    f, axes = plt.subplots(3, 2, figsize=(14,16))
+    a1, a2, a3, a4, a5, a6 = axes.flatten()
     choices, rts, all_traces, qdict, choicep, vdhist, vihist = outcomes
 
     names = np.sort(qdict.keys())
@@ -67,10 +64,15 @@ def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Car
 
     for i, n in enumerate(names):
         a3.plot(np.array(qdict[n])*100, label=name_labels[i])
-        #a4.plot(choicep[n], label=name_labels[i])
-        a4.plot(vdhist[n]-vihist[n])
+        a4.plot(choicep[n], label=name_labels[i])
+        a5.plot(vdhist[n], label=name_labels[i])
+        a6.plot(vihist[n], label=name_labels[i])
+
     a3.legend(loc=0)
     a4.legend(loc=0)
+    a5.legend(loc=0)
+    a6.legend(loc=0)
+
     f.subplots_adjust(hspace=.35, wspace=.4)
 
     for i, ax in enumerate(axes.flatten()):
@@ -95,6 +97,7 @@ def get_avg_slope_trace(traces, nalt=4):
 
     return rise, run, slopes
 
+
 def gen_mappable(vals_to_map, cm='rainbow'):
 
     ncolors = len(vals_to_map)
@@ -111,36 +114,57 @@ def gen_mappable(vals_to_map, cm='rainbow'):
     return scalar_mappable, vmin, vmax
 
 
-def plot_reactivity_payoff(trialsdf, igtdf, cm='rainbow', save=False, savestr='reactivity_strategy_payoff'):
+def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', cm2='Blues', save=False, pq='P'):
 
+    ago=trialsdf.a_go.unique()[0]
+    ano=trialsdf.a_no.unique()[0]
+
+    if pq=='P':
+        measure = 'Payoff ("P")'
+    else:
+        measure = 'Sensitivity ("Q")'
     n = trialsdf.bgroup.unique().size
     betas = trialsdf.beta.unique()
     sm, vmin, vmax = gen_mappable(vals_to_map=betas, cm=cm)
-
+    #sm2, vmin2, vmax2 = gen_mappable(vals_to_map=betas, cm=cm2)
     f, axes = plt.subplots(2,2, figsize=(14, 10))
     ax1, ax2, ax3, ax4 = axes.flatten()
 
-    for grp, grpdf in trialsdf.groupby('bgroup'):
-        colr = sm.to_rgba(betas[int(grp)])
-        #ax1.plot(grpdf.vd.values-grpdf.vi.values,color=sm.to_rgba(bvals[int(grp)]))
-        ax1.plot(grpdf.vdiff.values, color=colr)
-        ax2.plot(grpdf.v_opt_diff.values, color=colr)
-        sns.despine()
+    # for grp, grpdf in trialsdf.groupby('bgroup'):
+    #     print grp
+    #     colr = sm.to_rgba(betas[int(grp)-1])
+    #     #colr2 = sm2.to_rgba(betas[i])
+    #     #ax1.plot(grpdf.vd.values-grpdf.vi.values,color=sm.to_rgba(bvals[int(grp)]))
+    #     ax1.plot(grpdf.vdiff.values, color=colr)
+    #     ax2.plot(grpdf.v_opt_diff.values, color=colr)
+    #     #ax2.plot(grpdf.v_imp_diff.values, color=colr2)
+    #     sns.despine()
 
-    divider = make_axes_locatable(ax2)
+    divider = make_axes_locatable(ax1)
     cax = divider.append_axes("right", size="5%", pad=0.2)
     cb = plt.colorbar(sm, cax)
     sm.colorbar.set_ticks([vmin, vmax])
     cax.set_yticklabels([vmin, vmax])
 
-    pvals_by_group = igtdf.groupby('bgroup').mean().loc[:, 'P'].values
+    # divider = make_axes_locatable(ax2)
+    # cax2 = divider.append_axes("right", size="5%", pad=0.2)
+    # cb2 = plt.colorbar(sm2, cax2)
+    # sm2.colorbar.set_ticks([vmin2, vmax2])
+    # cax2.set_yticklabels([vmin2, vmax2])
+
+    pvals_by_group = igtdf.groupby('bgroup').mean().loc[:, pq].values
+    #qvals_by_group = igtdf.groupby('bgroup').mean().loc[:, 'Q'].values
     reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('bgroup')])
     strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('bgroup')])
 
     for i in range(n):
         colr = sm.to_rgba(betas[i])
+        #colr2 = sm2.to_rgba(betas[i])
         ax3.scatter(pvals_by_group[i], reactivity[i], color=colr, s=30)
         ax4.scatter(pvals_by_group[i], strategy[i], color=colr, s=30)
+
+        #ax3.scatter(qvals_by_group[i], reactivity[i], color=colr2, s=30)
+        #ax4.scatter(qvals_by_group[i], strategy[i], color=colr2, s=30)
 
     ax1.set_title('$\Delta_{card} = V_{D}(t)-V_{I}(t)$', fontsize=19)
     ax2.set_title('$\Delta_{OS} = (\Delta_C + \Delta_D) - (\Delta_A + \Delta_B)$', fontsize=19)
@@ -153,7 +177,7 @@ def plot_reactivity_payoff(trialsdf, igtdf, cm='rainbow', save=False, savestr='r
     for ax in [ax1, ax2]:
         ax.set_xlabel('Trials', fontsize=22)
     for ax in [ax3, ax4]:
-        ax.set_xlabel('Payoff', fontsize=22)
+        ax.set_xlabel(measure, fontsize=22)
     f.subplots_adjust(wspace=.4, hspace=.3)
     if save:
-        f.savefig('.'.join([savestr, 'png']), dpi=400)
+        f.savefig('.'.join(['reactivity_strategy_', measure, 'png']), dpi=400)

@@ -12,7 +12,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 from radd import build, vis
 from radd.tools.colors import get_cpals
-from radd.theta import get_xbias_theta
+from radd.tools.theta import get_xbias_theta
 from radd.tools.messages import describe_model
 from radd.models import Simulator
 

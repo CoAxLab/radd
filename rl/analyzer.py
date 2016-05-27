@@ -44,8 +44,11 @@ def analyze_learning_dynamics(fd):
 
     vopt = vdiff_all['c'].values + vdiff_all['d'].values
     vsub = vdiff_all['a'].values + vdiff_all['b'].values
-    fd['v_opt_diff'] = vopt - vsub
 
+    vimp = vdiff_all['b'].values + vdiff_all['d'].values
+    vnon = vdiff_all['a'].values + vdiff_all['c'].values
+    fd['v_opt_diff'] = vopt - vsub
+    fd['v_imp_diff'] = vimp - vnon
 
     #q_go = fd['qdict_go']
     #q_no = fd['qdict_no']
@@ -62,7 +65,7 @@ def format_dataframes(fd):
     from collections import OrderedDict
 
     agdf_cols = ['agent', 'trial', 'agroup', 'bgroup', 'group', 'qval', 'vd', 'vi', 'vdiff',
-                 'v_opt_diff', 'choice', 'rt', 'a_go', 'a_no', 'beta'] #'q_go', 'q_no',
+                 'v_opt_diff', 'v_imp_diff', 'choice', 'rt', 'a_go', 'a_no', 'adiff', 'beta'] #'q_go', 'q_no',
     agdf = pd.DataFrame(OrderedDict((col, fd[col]) for col in agdf_cols))
 
     igtdf_cols=['agent', 'bgroup', 'agroup', 'group', 'a_go', 'a_no', 'beta', 'P', 'Q']
