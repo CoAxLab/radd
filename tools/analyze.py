@@ -90,7 +90,7 @@ def get_subject_cost_weights(model, weight_presponse=True):
     idx_qwts = quantdf.loc[:, quant_cols].values.reshape(nidx*2, nsplits*nquant)
 
     if weight_presponse:
-        idx_delays, idx_pwts = get_count_pwts(model.data, var='ssd', conds=model.conds)
+        idx_pwts = get_count_pwts(model.data, var='ssd', conds=model.conds)
     else:
         idx_pwts = [np.ones(idat.size - 2*nquant) for idat in dfvals]
 
@@ -112,26 +112,22 @@ def get_count_pwts(df, var='ssd', conds=['Cond']):
     """
 
     columns = np.hstack(['idx', conds]).tolist()
-    df[var] = pd.to_numeric(df[var])
-
-    # get counts across levels except for last (correct Go//SSD==1000)
-    format_level_counts = lambda d1: d1.reset_index()[[var,'response']].T.values[:, :-1]
-    get_level_counts = lambda d0: format_level_counts(d0.groupby(var).count())
-
-    level_counts = [get_level_counts(cdf) for c, cdf in df.groupby(columns)]
-    levels = [lc[0] for lc in level_counts]
-    counts = [lc[1] for lc in level_counts]
 
     if var=='ssd':
-        # get the actual ssd values for each subject to use in model simulations
-        idx_var_levels = [delays*.001 for delays in levels]
+        df = df[df.ttype=='stop'].copy()
+
+    get_level_counts = lambda d0: format_level_counts(d0.groupby(var).count())
+    format_level_counts = lambda d1: d1.reset_index()['response'].values
+
+    # get counts across levels except for last (correct Go//SSD==1000)
+    counts = [get_level_counts(cdf) for c, cdf in df.groupby(columns)]
 
     # calculate count ratio for all values
     idx_var_wts = [np.median(cts)/cts for cts in counts]
     # append 1 to front of each vector for weight of correct P(Go|No_SS)
     idx_var_pwts = [np.append(1., iwts) for iwts in idx_var_wts]
 
-    return idx_var_levels, idx_var_pwts
+    return idx_var_pwts
 
 
 def mj_quanterr(df, conds=['Cond'], percentiles=array([.1, .3, .5, .7, .9]), as_ratio=True):

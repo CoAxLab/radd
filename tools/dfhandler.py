@@ -2,12 +2,7 @@
 from __future__ import division
 import pandas as pd
 import numpy as np
-import re
 from numpy import array
-from scipy.stats.mstats import mquantiles as mq
-from scipy.stats.mstats_extras import mjci
-from scipy import optimize
-import functools
 
 class DataHandler(object):
 
@@ -69,7 +64,7 @@ class DataHandler(object):
 
         data = self.data
 
-        idx = self.idx
+        idx_list = self.idx
         nidx = self.nidx
         conds = self.conds
         nconds = self.nconds
@@ -83,50 +78,67 @@ class DataHandler(object):
         self.__get_headers__(params)
         self.make_observed_groupDFs()
 
+        self.avg_y = self.observedDF.groupby(conds).mean().loc[:, 'acc':].values
+        self.flat_y = self.observedDF.mean().loc['acc':].values
+
         if self.fit_on=='subjects':
-            self.observed = [np.array(self.datdf[i : i+nsplits].values) for i in range(0, nrows, nsplits)]
-            self.observed_flat = [idxdata.mean(axis=0) for idxdata in self.observed]
+            idxdf = lambda idx: self.observedDF[self.observedDF['idx']==idx]
+            self.observed = [idxdf(idx).dropna(axis=1).loc[:, 'acc':].values for idx in idx_list]
+            self.observed_flat = [idxdf(idx).dropna(axis=1).mean()['acc':].values for idx in idx_list]
 
         elif self.fit_on == 'bootstrap':
             i_grp = data.groupby(['idx'])
-            self.observed = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in idx]).unstack()
+            self.observed = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in idx_list]).unstack()
 
         elif self.fit_on=='average':
-            self.observed = [self.observedDF.groupby(conds).mean().values[:, 1:]]
-            self.observed_flat = [self.observedDF.mean().values[1:]]
-
-        self.avg_y = self.observedDF.groupby(conds).mean().values[:, 1:]
-        self.flat_y = self.observedDF.mean().values[1:]
+            self.observed = [self.avg_y]
+            self.observed_flat = [self.flat_y]
 
 
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
         """
-
+        data = self.data
         nperc = self.percentiles.size
-        qp_cols = self.qp_cols
-        qcols = qp_cols[-nperc*2:]
+        all_qp_cols = self.all_qp_cols
+        idx_qp_cols = self.idx_qp_cols
+
         nrows = self.nidx * self.nlevels * self.nconds
-        ncols = len(qp_cols)
+        ncols = len(all_qp_cols)
 
         idx_conds = np.hstack(['idx', self.conds]).tolist()
         ic_grp = self.data.groupby(idx_conds)
+        i_grp = self.data.groupby('idx')
 
         self.datdf = ic_grp.apply(self.model.rangl_data).unstack().unstack().sortlevel(1)
         self.dfvals = [self.datdf.values[i].astype(float) for i in xrange(nrows)]
 
-        # get idx-specific column headers (in case not all ssd's shared)
-        idx_cols = [['acc']+np.sort(df[df.ttype=='stop'].ssd.unique()).tolist()+qcols for _, df in ic_grp]
-
-        self.observedDF = pd.DataFrame(np.zeros((nrows, ncols))*np.nan, columns=qp_cols)
+        self.observedDF = pd.DataFrame(np.zeros((nrows, ncols))*np.nan, columns=all_qp_cols)
         self.observedDF.loc[:, idx_conds] = self.datdf.reset_index()[idx_conds].values
 
         for rowi in xrange(nrows):
-            self.observedDF.loc[rowi, idx_cols[rowi]] = self.dfvals[rowi]
+            self.observedDF.loc[rowi, idx_qp_cols[rowi]] = self.dfvals[rowi]
 
         # GENERATE DF FOR FIT RESULTS
-        self.fits = pd.DataFrame(np.zeros((nrows, ncols)), columns=qp_cols, index=self.observedDF.index)
+        self.fits = pd.DataFrame(np.zeros((nrows, ncols)), columns=all_qp_cols, index=self.observedDF.index)
         self.fitinfo = pd.DataFrame(columns=self.infolabels, index=self.observedDF.index)
+
+    def get_ssds(self):
+        """ set model attr "ssd" as list of np.arrays
+        ssds to use when simulating data during optimization
+        """
+        idx_conds = np.hstack(['idx', self.conds]).tolist()
+        stopdf = self.data[self.data.ttype=='stop']
+        ic_stopdf = stopdf.groupby(idx_conds)
+
+        self.idx_ssd_ids = [np.sort(df.ssd.unique().astype(int)).tolist() for _,df in ic_stopdf]
+        self.all_ssd_ids = np.sort(stopdf.ssd.unique().astype(np.int))
+
+        if self.fit_on == 'subjects':
+            self.model.ssd = [np.asarray(ixssd)*.001 for ixssd in self.idx_ssd_ids]
+        else:
+            self.model.ssd = [self.all_ssd_ids * .001]
+
 
 
     def bin_idx_ssd(self):
@@ -228,18 +240,23 @@ class DataHandler(object):
     def __get_headers__(self, params=None, percentiles=np.array([.1, .3, .5, .7, .9])):
 
         conds = self.conds
+        nrows = self.nidx * self.nlevels * self.nconds
         idx_conds_acc = np.hstack(['idx', conds, 'acc']).tolist()
 
         cq = ['c' + str(int(n * 100)) for n in percentiles]
         eq = ['e' + str(int(n * 100)) for n in percentiles]
+        qcols = cq + eq
 
-        if hasattr(self, 'delays'):
-            delays = self.model.delays.tolist()
-            idx_conds_acc = idx_conds_acc + delays
+        if 'ssd' in self.data.columns:
+            self.get_ssds()
+            self.idx_qp_cols = [['acc'] + idx_ssds + qcols for idx_ssds in self.idx_ssd_ids]
+            self.all_qp_cols = idx_conds_acc + self.all_ssd_ids.tolist() + qcols
+        else:
+            self.model.ssd = None
+            self.idx_qp_cols = [np.hstack(['acc', qcols]).tolist()]*nrows
+            self.all_qp_cols = idx_conds_acc + qcols
 
-        self.qp_cols = idx_conds_acc + cq + eq
-
-        if params is not None:
+        if params:
             info = ['nfev', 'nvary', 'df', 'chi',
                     'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
             self.infolabels = params + info
@@ -293,24 +310,3 @@ class DataHandler(object):
             popt[pkey] = finfo[pkey]
 
         return popt
-
-
-def mat_to_pandas(matfile_str):
-    """read in struct mat file and return pandas dataframe
-    """
-    from scipy.io import loadmat
-    mat = loadmat(matfile_str)
-
-    restruct = {k:v for k, v in mat.items() if k[0] != '_'}
-    if 'D' in restruct.keys():
-        struct_data = restruct["D"]
-        data_dict = {n: struct_data[n][0, 0].flatten() for n in struct_data.dtype.names}
-    else:
-        mat = restruct
-        data_dict = {k: np.hstack(mat[k]) if len(mat[k])>0 else mat[k] for k in np.sort(mat.keys())}
-
-    #data_dict = {k: np.hstack(mat[k]) if len(mat[k])>0 else mat[k] for k in np.sort(mat.keys())}
-    idx=np.arange(len(data_dict[data_dict.keys()[0]]))
-    datadf = pd.DataFrame(data_dict, index=idx)
-
-    return datadf

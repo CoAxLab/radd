@@ -1,20 +1,18 @@
 #!/usr/local/bin/env python
 from __future__ import division
-import os
-import time
 from copy import deepcopy
 import numpy as np
 import pandas as pd
 from numpy import array
-from radd import models
-from radd.tools.messages import logger, theta
-from lmfit import Parameters, minimize, fit_report
+from radd.tools import messages, theta
+from radd.models import Simulator
+from lmfit import minimize, fit_report
 from radd.CORE import RADDCore
 from scipy.optimize import basinhopping
 
 
-class Optimizer(RADDCore):
-    """ Optimizer class acts as interface between Model and Simulator (see fit.py) objects.
+class Optimizer(object):
+    """ Optimizer class acts as interface between Model and Simulator objects.
     Structures fitting routines so that Models are first optimized with the full set of
     parameters free, data collapsing across conditions.
 
@@ -28,123 +26,21 @@ class Optimizer(RADDCore):
     Handles fitting routines for models of average, individual subject, and bootstrapped data
     """
 
-    def __init__(self, dframes=None, fitparams=None, kind='xdpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_whole_model=True, method='nelder', pc_map=None, wts=None, multiopt=True, global_method='basinhopping', basinparams=None, *args, **kws):
+    def __init__(self, fitparams=None, basinparams=None, inits=None, kind='xdpm', depends_on=None, niter=50, fit_whole_model=True, pc_map=None, multiopt=True, *args, **kws):
 
+        self.inits=inits
         self.multiopt = multiopt
-        self.fit_on = fit_on
-        self.data = dframes['data']
         self.fitparams = fitparams
-        self.labels = self.fitparams['labels']
         self.basinparams = basinparams
-        self.global_method = global_method
         self.kind = kind
-        self.dynamic = self.fitparams['dynamic']
-        if fit_on in ['subjects', 'bootstrap']:
-            self.prep_indx(dframes)
-        self.method = method
-        self.avg_y = self.fitparams['avg_y'].flatten()
-        self.avg_wts = self.fitparams['avg_wts']
-        self.flat_y = self.fitparams['flat_y']
-        self.flat_wts = self.fitparams['flat_wts']
+
         self.pc_map = pc_map
         self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
         self.pvc = deepcopy(['a', 'tr', 'v', 'xb'])
-
-        super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
+        # super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
 
         # initate simulator object of model being optimized
-        self.simulator = models.Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
-
-
-    def optimize_model(self, save=True, savepth='./'):
-
-        # make sure inits only contains subsets of these params
-        pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
-        pfit = list(set(self.inits.keys()).intersection(pnames))
-        self.inits = {pk: self.inits[pk] for pk in pfit}
-
-        if self.fit_on == 'average':
-            self.yhat, self.fitinfo, self.popt = self.__opt_routine__()
-        elif self.fit_on in ['subjects', 'bootstrap']:
-            self.__indx_optimize__(save=save, savepth=savepth)
-
-        return self.yhat, self.fitinfo, self.popt
-
-
-    def optimize_flat(self, p0=None, y=None, random_init=True):
-        """ optimizes flat model to data collapsing across all conditions
-
-        ::Arguments::
-        <OPTIONAL>
-              random_init (bool <False>):
-                    if True performs random initializaiton by sampling from parameter distributions and uses basinhopping alg. to find global minimum before entering stage 1 simplex
-              p0 (dict):
-                    parameter dictionary to initalize model, if None uses init params
-                    passed by Model object
-              y (ndarray):
-                    data to be fit; must be same shape as flat_wts vector
-
-        """
-
-        if p0 is None:
-            # p0: (Initials/Global Minimum)
-            p0 = dict(deepcopy(self.inits))
-        if y is None:
-            y = self.flat_y
-
-        if random_init and self.multiopt:
-            # hop_around --> basinhopping_full
-            p0 = self.hop_around(p0)
-
-        # p1: STAGE 1 (Initial Simplex)
-        yh1, finfo1, p1 = self.gradient_descent(y=y, wts=self.flat_wts, inits=p0, is_flat=True)
-        self.flat_finfo = finfo1
-        return yh1, finfo1, p1
-
-
-    def optimize_conditional(self, p=None, y=None, precond=True):
-        """ optimizes full model to all conditions in data
-
-        ::Arguments::
-        <OPTIONAL>
-              precond (bool <True>):
-                    if True performs pre-conditionalizes params (p)  using
-                    basinhopping alg. to find global minimum for each condition
-                    before entering final simplex
-              p (dict):
-                    parameter dictionary, if None uses default init params passed by Model object
-              y (ndarray):
-                    data to be fit; must be same shape as avg_wts vector
-        """
-
-        if p is None:
-            p = dict(deepcopy(self.inits))
-        if y is None:
-            y = self.avg_y
-
-        # STAGE 2: (Nudge/BasinHopping)
-        p2 = self.__nudge_params__(p)
-        if precond and self.multiopt:
-            # pretune conditional parameters (1/time)
-            p2 = self.single_basin(p2)
-
-        # STAGE 3: (Final Simplex)
-        yhat, finfo, popt = self.gradient_descent(y=y, wts=self.avg_wts, inits=p2, is_flat=False)
-
-        return yhat, finfo, popt
-
-
-    def __opt_routine__(self):
-        """ main function for running optimization routine through all phases
-        (flat optimization, pre-tuning with basinhopping alg., final simplex)
-        """
-
-        # p0: (Initials/Global) &  p1: STAGE 1 (Initial Simplex)
-        flat_yh, flat_fi, flat_p = self.optimize_flat()
-        # STAGE 2 (Nudge/BasinHopping) & STAGE 3 (Final Simplex)
-        yhat, finfo, popt = self.optimize_conditional(p=flat_p)
-
-        return yhat, finfo, popt
+        # self.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
 
 
     def hop_around(self, p):
@@ -179,10 +75,12 @@ class Optimizer(RADDCore):
         self.basins_popt = xpopt
         if ix_min == 0:
             self.basin_decision = "using default inits: fmin=%.9f" % xfmin[0]
+            print(self.basin_decision)
             return P0X
         else:
             self.basin_decision = "found global miniumum new: fmin=%.9f; norig=%9f)" % (fmin, xfmin[0])
             self.global_inits = dict(deepcopy(new_inits))
+            print(self.basin_decision)
         return new_inits
 
 
@@ -208,7 +106,7 @@ class Optimizer(RADDCore):
             basin_params = deepcopy(p)
 
         self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys, is_flat=is_flat)
-        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, kind=self.kind, nlevels=nlevels)
+        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, nlevels=nlevels, kind=self.kind)
         x = np.hstack(np.hstack([basin_params[pk] for pk in basin_keys])).tolist()
         bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
         mkwargs = {"method": bp['method'], "bounds": bounds, 'tol': bp['tol'], 'options': {'xtol': bp['tol'], 'ftol': bp['tol'], 'maxiter': bp['maxiter']}}
@@ -255,6 +153,7 @@ class Optimizer(RADDCore):
             xbasin.append(out.x)
         for i, pk in enumerate(pkeys):
             p[pk] = array([xbasin[ci][i] for ci in range(fp['nlevels'])])
+
         return p
 
 
@@ -267,26 +166,21 @@ class Optimizer(RADDCore):
             self.make_simulator()
 
         fp = self.fitparams
-        if y is None:
-            if is_flat:
-                y = self.flat_y
-                wts = self.flat_wts
-            else:
-                y = self.avg_y
-                wts = self.avg_wts
+
         if inits is None:
             inits = dict(deepcopy(self.inits))
 
-        self.simulator.__update__(y=y.flatten(), wts=wts.flatten(), is_flat=is_flat)
+        self.simulator.__update__(is_flat=is_flat)
         opt_kws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev']}
 
         # GEN PARAMS OBJ & OPTIMIZE THETA
         lmParams = theta.loadParameters(inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
-        optmod = minimize(self.simulator.__cost_fx__, lmParams, method='nelder', options=opt_kws)
+        optmod = minimize(self.simulator.__cost_fx__, lmParams, method=fp['method'], options=opt_kws)
 
         # gen dict of opt. params
         finfo = dict(deepcopy(optmod.params.valuesdict()))
         popt = dict(deepcopy(finfo))
+        y = self.simulator.y
         yhat = np.mean([self.simulator.sim_fx(popt) for i in xrange(100)], axis=0)
         wts = self.simulator.wts
 
@@ -298,50 +192,11 @@ class Optimizer(RADDCore):
         finfo['nvary'] = len(optmod.var_names)
         finfo = self.assess_fit(finfo)
 
+        print(finfo['cnvrg'])
+
         popt = theta.all_params_to_scalar(popt, exclude=self.pc_map.keys())
-        log_arrays = {'y': self.simulator.y, 'yhat': yhat, 'wts': wts}
+        log_arrays = {'y': y, 'yhat': yhat, 'wts': wts}
         param_report = fit_report(optmod.params)
-        logger(param_report=param_report, finfo=finfo, pdict=popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic, pc_map=self.pc_map)
+        messages.logger(param_report=param_report, finfo=finfo, pdict=popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=fp['fit_on'], dynamic=fp['dynamic'], pc_map=self.pc_map)
 
         return yhat, finfo, popt
-
-
-    def prep_indx(self, dframes):
-
-        nq = len(self.fitparams['prob'])
-        nl = self.fitparams['nlevels']
-        self.fits = dframes['fits']
-        self.fitinfo = dframes['fitinfo']
-        self.indx_list = dframes['observed'].index
-        self.dat = dframes['dat']
-        self.get_id = lambda x: ''.join(['Idx ', str(self.indx_list[x])])
-
-        if self.data_style == 're':
-            self.get_flaty = lambda x: x.mean(axis=0)
-        elif self.data_style == 'pro':
-            self.get_flaty = lambda x: np.hstack([x[:nl].mean(), x[nl:].reshape(2, nq).mean(axis=0)])
-
-
-    def __indx_optimize__(self, save=True, savepth='./'):
-
-        ri = 0
-        nl = self.nlevels
-        nquant = len(self.fitparams['prob'])
-        pcols = self.fitinfo.columns
-
-        for i, y in enumerate(self.dat):
-            self.y = y
-            self.fit_on = getid(i)
-            self.flat_y = self.get_flaty(y)
-
-            # optimize params iterating over subjects/bootstraps
-            yhat, finfo, popt = self.__opt_routine__()
-            self.fitinfo.iloc[i] = pd.Series({pc: finfo[pc] for pc in pcols})
-            self.fits.iloc[ri:ri+nl, :] = yhat.reshape(nl, len(self.fits.columns))
-            ri += nl
-
-            if save:
-                self.fits.to_csv(savepth + "fits.csv")
-                self.fitinfo.to_csv(savepth + "fitinfo.csv")
-
-        self.popt = self.__extract_popt_fitinfo__(self, self.fitinfo.mean())

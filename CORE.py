@@ -44,13 +44,6 @@ class RADDCore(object):
             self.idx = list(data.idx.unique())
         self.nidx = len(self.idx)
 
-        # BASIC MODEL STRUCTURE (kind)
-        if 'ssd' in data.columns:
-            self.delays = np.sort(data.ssd.unique().astype(np.int))
-            self.delays = self.delays[self.delays!=1000]
-            self.pGo = data[data.ttype == 'go'].shape[0] / data.shape[0]
-            self.ssd = self.delays * .001
-
         # Get timebound
         if tb != None:
             self.tb = tb
@@ -64,6 +57,55 @@ class RADDCore(object):
             self.inits = inits
 
         self.handler = dfhandler.DataHandler(self)
+
+
+    def __prepare_fit__(self):
+        """ performs model setup and initiates dataframes. Automatically run when Model object is initialized
+            *   pc_map is a dict containing parameter names as keys with values
+                    corresponding to the names given to that parameter in Parameters object
+                    (see optmize.Optimizer).
+            *   Parameters (p[pkey]=pval) that are constant across conditions are broadcast as [pval]*n.
+                    Conditional parameters are treated as arrays with distinct values [V1, V2...Vn], one for
+                    each condition.
+
+            pc_map (dict):    keys: conditional parameter names (i.e. 'v')
+                              values: keys + condition names ('v_bsl, v_pnl')
+
+            |<--- PARAMETERS OBJECT [LMFIT] <-------- [IN]
+            |
+            |---> p = {'v_bsl': V1, 'v_pnl': V2...} --->|
+                                                        |
+            |<--- pc_map = {'v':['v_bsl', 'v_pnl']} <---|
+            |
+            |---> p['v'] = array([V1, V2]) -------> [OUT]
+        """
+
+        params = np.sort(self.inits.keys()).tolist()
+        cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
+        self.pc_map = {}
+
+        for cond_i in xrange(self.nconds):
+            for d in self.depends_on.keys():
+                params.remove(d)
+                self.pc_map[d] = ['_'.join([d, l]) for l in self.levels[cond_i]]
+                params.extend(self.pc_map[d])
+
+        # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
+        self.__make_dataframes__()
+        # CALCULATE WEIGHTS FOR COST FX
+        if self.weighted:
+            self.__get_wts__()
+        else:
+            # MAKE PSEUDO WEIGHTS
+            self.flat_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
+            self.avg_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
+
+        if self.verbose:
+            self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
+        else:
+            self.prepared = True
+
+        self.set_fitparams()
 
 
     def __make_dataframes__(self):
@@ -96,11 +138,20 @@ class RADDCore(object):
             self.cost_wts, self.flat_cost_wts = analyze.get_group_cost_weights(self)
 
 
-    def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, percentiles=np.array([.1, .3, .5, .7, .9]), params=False, get_params=False, **kwgs):
+    def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, get_params=False, method='nelder', **kwrgs):
 
         if not hasattr(self, 'fitparams'):
-            self.fitparams = {}
-        self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev, 'disp': disp, 'tol': tol, 'niter': niter}
+            # fill with provided/or default values for initial set
+            self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev, 'disp': disp, 'tol': tol, 'niter': niter, 'method': method, 'idx': 0, 'percentiles': self.percentiles, 'dynamic':self.dynamic, 'nlevels': self.nlevels, 'tb': self.tb, 'fit_on': self.fit_on, 'depends_on': self.depends_on}
+
+        else:
+            # only fill with kwgs (i.e. subject id's, subject specific content)
+            for kw_arg, kw_val in kwrgs.items():
+                self.fitparams[kw_arg] = kw_val
+
+        if hasattr(self, 'ssd'):
+            self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
+            self.fitparams['nssd'] = self.fitparams['ssd'].size
 
         if get_params:
             return self.fitparams
@@ -110,9 +161,7 @@ class RADDCore(object):
 
         if not hasattr(self, 'basinparams'):
             self.basinparams = {}
-
         self.basinparams = {'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize, 'nsuccess': nsuccess, 'method': method, 'tol': btol, 'maxiter': maxiter, 'disp': bdisp}
-
         if get_params:
             return self.basinparams
 
@@ -207,9 +256,8 @@ class RADDCore(object):
         return pbounds, params
 
     def __prep_basin_data__(self):
-        fp = self.fitparams
-        cond_data = self.avg_y
-        cond_wts = self.avg_wts
+        cond_data = self.fitparams['y']
+        cond_wts = self.fitparams['wts']
         return cond_data, cond_wts
 
     def __remove_outliers__(self, sd=1.5, verbose=False):

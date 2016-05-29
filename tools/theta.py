@@ -142,13 +142,13 @@ def get_bounds(kind='dpm', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.0
     return bounds
 
 
-def format_basinhopping_bounds(basin_keys, ncond, kind='dpm'):
+def format_basinhopping_bounds(basin_keys, nlevels, kind='dpm'):
 
     allbounds = get_bounds(kind=kind)
     xmin, xmax = [], []
     for pk in basin_keys:
-        xmin.append([allbounds[pk][0]] * ncond)
-        xmax.append([allbounds[pk][1]] * ncond)
+        xmin.append([allbounds[pk][0]] * nlevels)
+        xmax.append([allbounds[pk][1]] * nlevels)
     xmin = np.hstack(xmin).tolist()
     xmax = np.hstack(xmax).tolist()
     return xmin, xmax

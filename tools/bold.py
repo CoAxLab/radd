@@ -10,7 +10,8 @@ from numpy import concatenate as concat
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from radd import build, vis
+from radd import build
+from radd.tools import vis
 from radd.tools.colors import get_cpals
 from radd.tools.theta import get_xbias_theta
 from radd.tools.messages import describe_model
