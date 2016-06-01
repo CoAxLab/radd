@@ -130,7 +130,7 @@ def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scal
     return rvinits
 
 
-def get_bounds(kind='dpm', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.5, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .95)):
+def get_bounds(kind='dpm', a=(.1, .9), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .95)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
@@ -142,9 +142,9 @@ def get_bounds(kind='dpm', tb=None, a=(.1, .8), tr=(.1, .54), v=(.1, 5.0), z=(.0
     return bounds
 
 
-def format_basinhopping_bounds(basin_keys, nlevels, kind='dpm'):
+def format_basinhopping_bounds(basin_keys, nlevels=1):
 
-    allbounds = get_bounds(kind=kind)
+    allbounds = get_bounds()
     xmin, xmax = [], []
     for pk in basin_keys:
         xmin.append([allbounds[pk][0]] * nlevels)
@@ -153,6 +153,14 @@ def format_basinhopping_bounds(basin_keys, nlevels, kind='dpm'):
     xmax = np.hstack(xmax).tolist()
     return xmin, xmax
 
+def get_stepsize_scalars(keys):
+
+    scalar_dict = {'a': .5, 'tr': .1, 'v': 2., 'vi': 2., 'vd': 2.,
+                   'ssv': 2., 'z': .1, 'xb': 1.5, 'sso': .1}
+
+    stepsize_scalars = np.array([scalar_dict[k] for k in keys])
+
+    return stepsize_scalars
 
 def get_default_inits(kind='dpm', dynamic='hyp', depends_on={}):
     """ if user does not provide inits dict when initializing Model instance,

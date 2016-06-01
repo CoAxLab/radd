@@ -5,10 +5,51 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd.tools import messages, theta
+from radd.tools.analyze import assess_fit
 from radd.models import Simulator
 from lmfit import minimize, fit_report
 from radd.CORE import RADDCore
 from scipy.optimize import basinhopping
+from numpy.random import uniform
+
+
+class BasinBounds(object):
+    """ sets conditions for step acceptance during
+    basinhopping optimization routine
+    Arguments:
+        xmin (list): lower boundaries for each parameter
+        xmax (list): upper boundaries for each parameter
+    """
+    def __init__(self, xmin, xmax):
+        self.xmin = np.array(xmin)
+        self.xmax = np.array(xmax)
+
+    def __call__(self, **kwargs):
+        x = kwargs["x_new"]
+        tmin = bool(np.all(x >= self.xmin))
+        tmax = bool(np.all(x <= self.xmax))
+        return tmin and tmax
+
+
+class HopStep(object):
+    """ scale stepsize of basinhopping optimization according to
+    individual parameters ranges (smaller steps for more sensitive params).
+    See theta.get_stepsize_scalars() for parameter <--> scalar mapping.
+
+    Arguments:
+        keys (list): list of parameter names
+        stepsize (list): initial stepsize
+    """
+    def __init__(self, keys, stepsize=0.05):
+        self.stepsize_scalars = theta.get_stepsize_scalars(keys)
+        self.stepsize = stepsize
+        self.n = len(keys)
+
+    def __call__(self, x):
+        s = self.stepsize
+        ss = self.stepsize_scalars
+        x = np.array([x[i] + uniform(-ss[i]*s, ss[i]*s) for i in xrange(self.n)])
+        return x
 
 
 class Optimizer(object):
@@ -26,10 +67,9 @@ class Optimizer(object):
     Handles fitting routines for models of average, individual subject, and bootstrapped data
     """
 
-    def __init__(self, fitparams=None, basinparams=None, inits=None, kind='xdpm', depends_on=None, niter=50, fit_whole_model=True, pc_map=None, multiopt=True, *args, **kws):
+    def __init__(self, fitparams=None, basinparams=None, inits=None, kind='xdpm', depends_on=None, pc_map=None):
 
         self.inits=inits
-        self.multiopt = multiopt
         self.fitparams = fitparams
         self.basinparams = basinparams
         self.kind = kind
@@ -37,11 +77,19 @@ class Optimizer(object):
         self.pc_map = pc_map
         self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
         self.pvc = deepcopy(['a', 'tr', 'v', 'xb'])
-        # super(Optimizer, self).__init__(kind=kind, data=self.data, fit_on=fit_on, depends_on=depends_on, inits=inits, fit_whole_model=fit_whole_model, niter=niter)
 
-        # initate simulator object of model being optimized
-        # self.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
+    def get_best_inits(self, getn, pkeys, ntotal_samples=500):
 
+        rinits = theta.random_inits(pkeys, ninits=ntotal_samples, kind=self.kind)
+        all_inits = [{pk: rinits[pk][i] for pk in pkeys} for i in xrange(ntotal_samples)]
+
+        fmin_all = [self.simulator.__cost_fx__(inits_i) for inits_i in all_inits]
+        fmin_series = pd.Series(fmin_all)
+
+        best_inits_index = fmin_series.sort_values().index[:getn]
+        best_inits = [all_inits[i] for i in best_inits_index]
+
+        return best_inits
 
     def hop_around(self, p):
         """ initialize model with niter randomly generated parameter sets
@@ -54,37 +102,41 @@ class Optimizer(object):
         """
 
         bp = self.basinparams
+        pkeys = np.sort(p.keys())
 
-        P0X = dict(deepcopy(p))
-        pkeys = p.keys()
-        rinits = theta.random_inits(pkeys, ninits=bp['nrand_inits'], kind=self.kind)
+        # sample random inits and select best of
+        best_inits = self.get_best_inits(getn=bp['nrand_inits'], pkeys=pkeys)
+
+        # get cost fmin for default inits
+        p0 = dict(deepcopy(p))
+        p_init = dict(deepcopy(p))
+        fmin0 = self.simulator.__cost_fx__(p_init)
+
         xpopt, xfmin = [], []
-        for i in range(bp['nrand_inits']):
-            if i == 0:
-                params = dict(deepcopy(p))
-            else:
-                params = {pkey: rinits[pkey][i] for pkey in pkeys}
-            popt, fmin = self.basinhopping_full(p=params, is_flat=True)
+        for params in best_inits:
+            popt, fmin = self.basinhopping_all_params(p=params, is_flat=True)
             xpopt.append(popt)
             xfmin.append(fmin)
 
+        # get the global basin and
+        # corresponding parameter estimates
         ix_min = np.argmin(xfmin)
-        new_inits = xpopt[ix_min]
-        fmin = xfmin[ix_min]
-        self.basins = xfmin
-        self.basins_popt = xpopt
-        if ix_min == 0:
-            self.basin_decision = "using default inits: fmin=%.9f" % xfmin[0]
-            print(self.basin_decision)
-            return P0X
+        popt_best = xpopt[ix_min]
+        fmin_best = xfmin[ix_min]
+
+        # compare global basin (fmin_best) to
+        # fmin using default inits (fmin0)
+        if fmin_best >= fmin0:
+            basin_decision = "USING DEFAULT INITS: fmin_inits=%.9f, next_best=%.9f" % (fmin0, fmin_best)
+            print(basin_decision)
+            return p0
         else:
-            self.basin_decision = "found global miniumum new: fmin=%.9f; norig=%9f)" % (fmin, xfmin[0])
-            self.global_inits = dict(deepcopy(new_inits))
-            print(self.basin_decision)
-        return new_inits
+            basin_decision = "NEW GLOBAL MINIMUM: fmin_new=%.9f; fmin_inits=%9f)" % (fmin_best, fmin0)
+            print(basin_decision)
+            return popt_best
 
 
-    def basinhopping_full(self, p, is_flat=True):
+    def basinhopping_all_params(self, p, is_flat=True):
         """ uses fmin_tnc in combination with basinhopping to perform bounded global
          minimization of multivariate model
         ::Arguments::
@@ -96,23 +148,32 @@ class Optimizer(object):
         bp = self.basinparams
 
         if is_flat:
-            basin_keys = p.keys()
+            basin_keys = np.sort(p.keys())
             xp = dict(deepcopy(p))
             basin_params = theta.all_params_to_scalar(xp)
             nlevels = 1
         else:
-            basin_keys = self.pc_map.keys()
-            nlevels = len(self.pc_map.values()[0])
+            basin_keys = np.sort(self.pc_map.keys())
+            nlevels = fp['y'].ndim
             basin_params = deepcopy(p)
 
-        self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys, is_flat=is_flat)
-        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, nlevels=nlevels, kind=self.kind)
+        self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys)
+
+        # make list of init values for all pkeys included in fit
         x = np.hstack(np.hstack([basin_params[pk] for pk in basin_keys])).tolist()
-        bounds = map((lambda x: tuple([x[0], x[1]])), zip(xmin, xmax))
-        mkwargs = {"method": bp['method'], "bounds": bounds, 'tol': bp['tol'], 'options': {'xtol': bp['tol'], 'ftol': bp['tol'], 'maxiter': bp['maxiter']}}
+        # define parameter boundaries for all params in pc_map.keys()
+        # to be used by local smoothing function (Default: TNC)
+        xmin, xmax = theta.format_basinhopping_bounds(basin_keys, nlevels=nlevels)
+        bounds = map((lambda xlim: tuple([xlim[0], xlim[1]])), zip(xmin, xmax))
+        mkwargs = {"method": bp['method'], "bounds": bounds, 'tol': bp['tol'],
+            'options': {'xtol': bp['tol'], 'ftol': bp['tol'], 'maxiter': bp['maxiter']}}
+
+        # define custom take_step and accept_test functions
+        custom_step = HopStep(basin_keys, stepsize=bp['stepsize'])
+        accept_step = BasinBounds(xmin, xmax)
 
         # run basinhopping on simulator.basinhopping_minimizer func
-        out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], niter_success=bp['nsuccess'], minimizer_kwargs=mkwargs, niter=bp['niter'], interval=bp['interval'], disp=bp['disp'])
+        out = basinhopping(self.simulator.basinhopping_minimizer, x, minimizer_kwargs=mkwargs, take_step=custom_step, accept_test=accept_step, stepsize=bp['stepsize'], niter_success=bp['niter_success'], niter=bp['niter'], interval=bp['interval'], disp=bp['disp'])
 
         xopt = out.x
         funcmin = out.fun
@@ -123,41 +184,58 @@ class Optimizer(object):
         return p, funcmin
 
 
-    def single_basin(self, p, niter=100, nsuccess=40):
+    def single_basin(self, p):
         """ uses basinhopping and fmin_tnc to pre-optimize init cond parameters
         to individual conditions to prevent terminating in local minima
         """
 
-        fp = self.fitparams
+        fitparams = dict(deepcopy(self.fitparams))
         bp = self.basinparams
-        xbasin = []
-        pkeys = self.pc_map.keys()
-        allbounds = theta.get_bounds()
-        bounds = [allbounds[pk] for pk in pkeys]
+        # basin_keys = parameters in depends_on
+        # --> simulator.basin_keys = ['v']
+        basin_keys = np.sort(self.pc_map.keys())
 
-        if not hasattr(self, 'bdata'):
-            self.bdata, self.bwts = self.__prep_basin_data__()
-        if not np.all([hasattr(p[pk], '__iter__') for pk in pkeys]):
-            p = self.__nudge_params__(p)
+        bdata = deepcopy(fitparams['y'])
+        bwts = deepcopy(fitparams['wts'])
+        nlevels = bdata.ndim
 
-        p = theta.all_params_to_scalar(p, exclude=pkeys)
-        mkwargs = {"method": bp['method'], 'bounds': [allbounds[pk] for pk in pkeys]}
-        self.simulator.__prep_global__(basin_params=p, basin_keys=pkeys, is_flat=True)
+        # ensure all constant parameters are a single scalar
+        # sets p = {constant parameters: constant_init_vals}
+        p = theta.all_params_to_scalar(p, exclude=basin_keys)
+
+        # define parameter boundaries for all params in pc_map.keys()
+        # to be used by local smoothing function (Default: TNC)
+        xmin, xmax = theta.format_basinhopping_bounds(basin_keys)
+        bounds = map((lambda xlim: tuple([xlim[0], xlim[1]])), zip(xmin, xmax))
+        mkwargs = {"method": bp['method'], 'bounds': bounds}
+
         # make list of init values for all keys in pc_map,
         # for all conditions in depends_on.values()
-        vals = [[p[pk][i] for pk in pkeys] for i in range(fp['nlevels'])]
+        xvals = [[p[pk][i] for pk in basin_keys] for i in range(nlevels)]
+        self.simulator.__prep_global__(basin_params=p, basin_keys=basin_keys)
 
-        for i, x in enumerate(vals):
-            self.simulator.__update__(is_flat=True, y=self.bdata[i], wts=self.bwts[i])
-            out = basinhopping(self.simulator.basinhopping_minimizer, x, stepsize=bp['stepsize'], minimizer_kwargs=mkwargs, interval=bp['interval'], niter=niter, niter_success=nsuccess, disp=bp['disp'])
-            xbasin.append(out.x)
-        for i, pk in enumerate(pkeys):
-            p[pk] = array([xbasin[ci][i] for ci in range(fp['nlevels'])])
+        xbasin = []
+        for i, x in enumerate(xvals):
+            # set fitparams['y'] to y for condition level_i
+            fitparams['y'] = bdata[i]
+            fitparams['wts'] = bwts[i]
+            self.simulator.__update__(fitparams=fitparams)
+
+            # define custom take_step and accept_test functions
+            custom_step = HopStep(basin_keys, stepsize=bp['stepsize'])
+            accept_step = BasinBounds(xmin, xmax)
+
+            # run basinhopping algorithm
+            out = basinhopping(self.simulator.basinhopping_minimizer, x, niter=100, niter_success=40, minimizer_kwargs=mkwargs, take_step=custom_step, accept_test=accept_step, interval=bp['interval'], disp=bp['disp'], stepsize=bp['stepsize'])
+            xbasin.append(deepcopy(out.x))
+
+        for i, key in enumerate(basin_keys):
+            p[key] = array([xbasin[ci][i] for ci in range(nlevels)])
 
         return p
 
 
-    def gradient_descent(self, y=None, wts=None, inits={}, is_flat=True):
+    def gradient_descent(self, inits=None, is_flat=True):
         """ Optimizes parameters following specified parameter
         dependencies on task conditions (i.e. depends_on={param: cond})
         """
@@ -170,12 +248,15 @@ class Optimizer(object):
         if inits is None:
             inits = dict(deepcopy(self.inits))
 
-        self.simulator.__update__(is_flat=is_flat)
-        opt_kws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev']}
+        opt_kws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxiter': fp['maxiter'], 'maxfev': fp['maxfev']}
 
         # GEN PARAMS OBJ & OPTIMIZE THETA
         lmParams = theta.loadParameters(inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
         optmod = minimize(self.simulator.__cost_fx__, lmParams, method=fp['method'], options=opt_kws)
+
+        # just to have for testing and accessing output
+        # if it fails
+        self.optmod = deepcopy(optmod)
 
         # gen dict of opt. params
         finfo = dict(deepcopy(optmod.params.valuesdict()))
@@ -187,10 +268,10 @@ class Optimizer(object):
         # ASSUMING THE weighted SSE is CALC BY COSTFX
         finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
         finfo['ndata'] = len(yhat)
-        finfo['cnvrg'] = optmod.pop('success')
-        finfo['nfev'] = optmod.pop('nfev')
+        finfo['cnvrg'] = optmod.success
+        finfo['nfev'] = optmod.nfev
         finfo['nvary'] = len(optmod.var_names)
-        finfo = self.assess_fit(finfo)
+        finfo = assess_fit(finfo)
 
         print(finfo['cnvrg'])
 

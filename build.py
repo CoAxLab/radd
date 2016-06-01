@@ -42,26 +42,22 @@ class Model(RADDCore):
             in depends_on dict
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, niter=50, fit_noise=False, fit_whole_model=True, tb=None, weighted=True, dynamic='hyp', tol=1.e-10, percentiles=np.array([.1, .3, .5, .7, .9]), verbose=False, hyp_effect_dir=None, *args, **kws):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, tb=None, weighted=True, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), verbose=False, hyp_effect_dir=None):
 
-        self.data = data
-        self.weighted = weighted
-        self.verbose = verbose
-
-        super(Model, self).__init__(data=self.data, inits=inits, fit_on=fit_on, depends_on=depends_on, niter=niter, fit_whole_model=fit_whole_model, kind=kind, tb=tb, fit_noise=fit_noise, dynamic=dynamic, hyp_effect_dir=hyp_effect_dir, percentiles=percentiles)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, tb=tb, dynamic=dynamic, hyp_effect_dir=hyp_effect_dir, percentiles=percentiles, weighted=weighted, verbose=verbose)
 
         self.__prepare_fit__()
 
 
 
-    def make_optimizer(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='nelder', bmethod='TNC', btol=1.e-3, maxiter=20):
+    def make_optimizer(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, maxiter=500, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.06, niter_success=20, method='nelder', bmethod='TNC', btol=1.e-3):
         """ init Optimizer class as Model attr
         """
 
         self.multiopt = multiopt
 
-        fp = self.set_fitparams(tol=tol, maxfev=maxfev, ntrials=ntrials, niter=niter, disp=disp, get_params=True, method=method)
-        bp = self.set_basinparams(btol=btol, interval=interval, niter=niter, maxiter=maxiter, method=bmethod, nsuccess=nsuccess, stepsize=stepsize, nrand_inits=nrand_inits, bdisp=bdisp, get_params=True)
+        fp = self.set_fitparams(method=method, tol=tol, maxfev=maxfev, maxiter=maxiter, ntrials=ntrials, niter=niter, disp=disp, get_params=True)
+        bp = self.set_basinparams(method=bmethod, tol=btol, interval=interval, niter=niter, maxiter=maxiter, niter_success=niter_success, stepsize=stepsize, nrand_inits=nrand_inits, disp=bdisp, get_params=True)
 
         if inits is None:
             inits = self.inits
@@ -71,12 +67,15 @@ class Model(RADDCore):
         self.opt = Optimizer(fitparams=fp, basinparams=bp, kind=self.kind, inits=inits, depends_on=self.depends_on, pc_map=self.pc_map)
 
 
-    def optimize(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.05, nsuccess=20, method='nelder', bmethod='TNC', btol=1.e-3, maxiter=20, fit_flat=True):
+    def optimize(self, inits=None, ntrials=10000, tol=1.e-5, maxfev=5000, maxiter=500, disp=True, bdisp=False, multiopt=True, nrand_inits=2, niter=40, interval=10, stepsize=.06, niter_success=20, method='nelder', bmethod='TNC', btol=1.e-3, fit_flat=True, fit_cond=True):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
 
-        self.make_optimizer(inits=inits, ntrials=ntrials, tol=tol, maxfev=maxfev, disp=disp, bdisp=bdisp, nrand_inits=nrand_inits, niter=niter, method=method, multiopt=multiopt, btol=btol, interval=interval, stepsize=stepsize, nsuccess=nsuccess, maxiter=maxiter)
+        if not inits:
+            inits = self.inits
+
+        self.make_optimizer(inits=inits, ntrials=ntrials, tol=tol, maxfev=maxfev, maxiter=maxiter, disp=disp, bdisp=bdisp, nrand_inits=nrand_inits, niter=niter, method=method, multiopt=multiopt, btol=btol, interval=interval, stepsize=stepsize, niter_success=niter_success)
 
         # make sure inits only contains subsets of these params
         pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
@@ -91,29 +90,29 @@ class Model(RADDCore):
             if fit_flat:
                 flat_y = self.observed_flat[idx]
                 flat_wts = self.flat_cost_wts[idx]
-                fp_flat = self.set_fitparams(idx=idx, y=flat_y, wts=flat_wts, nlevels=1, get_params=True)
+                fp_flat = self.set_fitparams(idx=idx, y=flat_y, wts=flat_wts, get_params=True)
                 yhat_flat, finfo_flat, popt_flat = self.optimize_flat(fp_flat, p=p_flat)
+
                 self.yhat_flat_list.append(yhat_flat)
                 self.finfo_flat_list.append(finfo_flat)
                 self.popt_flat_list.append(dict(deepcopy(popt_flat)))
 
-                pflat = dict(deepcopy(popt_flat))
+                p_flat = dict(deepcopy(popt_flat))
 
-            y = self.observed[idx]
-            wts = self.cost_wts[idx]
-            nlevels = self.fitparams['nlevels']
-            fp_cond = self.set_fitparams(idx=idx, y=y, wts=wts, nlevels=nlevels, get_params=True)
-            yhat, finfo, popt = self.optimize_conditional(fp_cond, p=popt_flat)
-            #self.update_optimizer_fitparams(idx, is_flat=True)
+            if fit_cond:
+                y = self.observed[idx]
+                wts = self.cost_wts[idx]
+                fp_cond = self.set_fitparams(idx=idx, y=y, wts=wts, get_params=True)
+                yhat, finfo, popt = self.optimize_conditional(fp_cond, p=p_flat)
 
-            # optimize params iterating over subjects/bootstraps
-            self.yhat_list.append(deepcopy(yhat))
-            self.finfo_list.append(deepcopy(finfo))
-            self.popt_list.append(dict(deepcopy(popt)))
-
+                # optimize params iterating over subjects/bootstraps
+                self.yhat_list.append(deepcopy(yhat))
+                self.finfo_list.append(deepcopy(finfo))
+                self.popt_list.append(dict(deepcopy(popt)))
 
 
-    def optimize_flat(self, fitparams, p=None, random_init=True):
+
+    def optimize_flat(self, fitparams, p):
         """ optimizes flat model to data collapsing across all conditions
 
         ::Arguments::
@@ -129,19 +128,17 @@ class Model(RADDCore):
         self.simulator = Simulator(fitparams=fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
         self.opt.simulator = self.simulator
 
-        if random_init and self.multiopt:
+        if self.multiopt:
             # hop_around --> basinhopping_full
             p = self.opt.hop_around(p)
-        elif p is None:
-            # p0: (Initials/Global Minimum)
-            p = dict(deepcopy(self.inits))
+            print('Finished Hopping Around')
 
         # p1: STAGE 1 (Initial Simplex)
         yhat_flat, finfo_flat, popt_flat = self.opt.gradient_descent(inits=p, is_flat=True)
         return yhat_flat, finfo_flat, popt_flat
 
 
-    def optimize_conditional(self, fitparams, p=None, precond=True):
+    def optimize_conditional(self, fitparams, p):
         """ optimizes full model to all conditions in data
 
         ::Arguments::
@@ -156,36 +153,42 @@ class Model(RADDCore):
                     data to be fit; must be same shape as avg_wts vector
         """
 
-        if p is None:
-            p = dict(deepcopy(self.inits))
+        # make a copy of fitparams so conditional y, wts can be
+        # re-set after basinhopping (which sets fp['y']=fp['y'][level]
+        # for each level in depends_on cond
+        fitparams_cond = dict(deepcopy(fitparams))
 
-        self.simulator = Simulator(fitparams=fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
+        self.simulator = Simulator(fitparams=fitparams, inits=p, kind=self.kind, pc_map=self.pc_map)
         self.opt.simulator = self.simulator
 
         # STAGE 2: (Nudge/BasinHopping)
         p2 = self.__nudge_params__(p)
-        if precond and self.multiopt:
+        if self.multiopt:
             # pretune conditional parameters (1/time)
             p2 = self.opt.single_basin(p2)
+            # restore conditional y and wts
+            self.simulator.__update__(fitparams_cond)
+            self.opt.simulator.__update__(fitparams_cond)
 
         # STAGE 3: (Final Simplex)
         yhat, finfo, popt = self.opt.gradient_descent(inits=p2, is_flat=False)
         return yhat, finfo, popt
 
 
-    def make_simulator(self, p=None, idx=0, is_flat=True):
+    def make_simulator(self, fitparams, p=None, idx=0):
         """ initializes Simulator object as Model attr
         using popt or inits if model is not optimized
         """
 
-        fp = dict(deepcopy(self.fitparams))
+        fitparams = dict(deepcopy(fitparams))
+
         if p is None:
             if hasattr(self, 'popt'):
                 p = self.popt
             else:
                 p = self.inits
 
-        self.simulator = Simulator(fitparams=fp, kind=self.kind, inits=p, pc_map=self.pc_map)
+        self.simulator = Simulator(fitparams=fitparams, kind=self.kind, inits=p, pc_map=self.pc_map)
 
 
     def simulate(self, p=None, analyze=True, return_traces=False):

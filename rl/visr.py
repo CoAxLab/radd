@@ -114,31 +114,25 @@ def gen_mappable(vals_to_map, cm='rainbow'):
     return scalar_mappable, vmin, vmax
 
 
-def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', cm2='Blues', save=False, pq='P'):
-
-    ago=trialsdf.a_go.unique()[0]
-    ano=trialsdf.a_no.unique()[0]
+def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
 
     if pq=='P':
         measure = 'Payoff ("P")'
     else:
         measure = 'Sensitivity ("Q")'
-    n = trialsdf.bgroup.unique().size
-    betas = trialsdf.beta.unique()
-    sm, vmin, vmax = gen_mappable(vals_to_map=betas, cm=cm)
-    #sm2, vmin2, vmax2 = gen_mappable(vals_to_map=betas, cm=cm2)
+
+    n = trialsdf.agroup.unique().size
+    a_go = trialsdf.a_go.unique()
+    sm, vmin, vmax = gen_mappable(vals_to_map=a_go, cm=cm)
+
     f, axes = plt.subplots(2,2, figsize=(14, 10))
     ax1, ax2, ax3, ax4 = axes.flatten()
 
-    # for grp, grpdf in trialsdf.groupby('bgroup'):
-    #     print grp
-    #     colr = sm.to_rgba(betas[int(grp)-1])
-    #     #colr2 = sm2.to_rgba(betas[i])
-    #     #ax1.plot(grpdf.vd.values-grpdf.vi.values,color=sm.to_rgba(bvals[int(grp)]))
-    #     ax1.plot(grpdf.vdiff.values, color=colr)
-    #     ax2.plot(grpdf.v_opt_diff.values, color=colr)
-    #     #ax2.plot(grpdf.v_imp_diff.values, color=colr2)
-    #     sns.despine()
+    for grp, grpdf in trialsdf.groupby('agroup'):
+        colr = sm.to_rgba(a_go[int(grp)-1])
+        ax1.plot(grpdf.vdiff.values, color=colr)
+        ax2.plot(grpdf.v_opt_diff.values, color=colr)
+        sns.despine()
 
     divider = make_axes_locatable(ax1)
     cax = divider.append_axes("right", size="5%", pad=0.2)
@@ -146,25 +140,14 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', cm2='Blues', save=Fa
     sm.colorbar.set_ticks([vmin, vmax])
     cax.set_yticklabels([vmin, vmax])
 
-    # divider = make_axes_locatable(ax2)
-    # cax2 = divider.append_axes("right", size="5%", pad=0.2)
-    # cb2 = plt.colorbar(sm2, cax2)
-    # sm2.colorbar.set_ticks([vmin2, vmax2])
-    # cax2.set_yticklabels([vmin2, vmax2])
-
-    pvals_by_group = igtdf.groupby('bgroup').mean().loc[:, pq].values
-    #qvals_by_group = igtdf.groupby('bgroup').mean().loc[:, 'Q'].values
-    reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('bgroup')])
-    strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('bgroup')])
+    pvals_by_group = igtdf.groupby('agroup').mean().loc[:, pq].values
+    reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('agroup')])
+    strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('agroup')])
 
     for i in range(n):
-        colr = sm.to_rgba(betas[i])
-        #colr2 = sm2.to_rgba(betas[i])
+        colr = sm.to_rgba(a_go[i])
         ax3.scatter(pvals_by_group[i], reactivity[i], color=colr, s=30)
         ax4.scatter(pvals_by_group[i], strategy[i], color=colr, s=30)
-
-        #ax3.scatter(qvals_by_group[i], reactivity[i], color=colr2, s=30)
-        #ax4.scatter(qvals_by_group[i], strategy[i], color=colr2, s=30)
 
     ax1.set_title('$\Delta_{card} = V_{D}(t)-V_{I}(t)$', fontsize=19)
     ax2.set_title('$\Delta_{OS} = (\Delta_C + \Delta_D) - (\Delta_A + \Delta_B)$', fontsize=19)

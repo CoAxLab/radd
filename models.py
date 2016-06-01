@@ -18,11 +18,12 @@ class Simulator(object):
           for multiple conditions.
     """
 
-    def __init__(self, fitparams=None, inits=None, pc_map=None, kind='dpm', dt=.001, si=.01):
+    def __init__(self, fitparams=None, inits=None, pc_map=None, kind='dpm', dt=.001, si=.01, base=0):
 
         self.dt = dt
         self.si = si
         self.dx = np.sqrt(self.si * self.dt)
+        self.base = base
 
         self.inits = inits
         self.kind = kind
@@ -33,7 +34,7 @@ class Simulator(object):
         self.__init_analyze_functions__()
 
 
-    def __update__(self, is_flat=False, y=None, wts=None, fitparams=None):
+    def __update__(self, fitparams=None):
 
         if fitparams:
             fp = dict(deepcopy(fitparams))
@@ -41,38 +42,32 @@ class Simulator(object):
         else:
             fp = dict(deepcopy(self.fitparams))
 
+        self.nlevels = self.fitparams['y'].ndim
+        self.y = self.fitparams['y'].flatten()
+        self.wts = self.fitparams['wts'].flatten()
+
         self.tb = fp['tb']
         self.ntot = fp['ntrials']
         self.percentiles = fp['percentiles']
         self.dynamic = fp['dynamic']
+
         if 'ssd' in fp.keys():
             self.ssd = fp['ssd']
             self.nssd = fp['nssd']
             self.nss = int((.5 * self.ntot) / self.nssd)
-        self.base = 0
 
-        self.is_flat = is_flat
-
-        if self.is_flat:
-            self.pvc = deepcopy(['a', 'tr', 'v', 'xb'])
-            self.nlevels = 1
-        else:
-            self.pvc = ['a', 'tr', 'v', 'xb']
+        self.pvc = ['a', 'tr', 'v', 'xb']
+        if self.nlevels>1:
             map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
-            self.nlevels = fp['nlevels']
-        if y:
-            self.y = y.flatten()
-            self.wts = wts.flatten()
-        else:
-            self.y = self.fitparams['y'].flatten()
-            self.wts = self.fitparams['wts'].flatten()
 
 
-    def __prep_global__(self, basin_params={}, basin_keys=[], is_flat=False):
-
+    def __prep_global__(self, basin_params={}, basin_keys=[]):
+        # set
         self.basin_keys = basin_keys
+        # set all constant parameters in
+        # basin_params object (not available
+        # to basinhopping minimizer)
         self.basin_params = basin_params
-        self.__update__(is_flat=is_flat)
         self.chunk = lambda x, n: [array(x[i:i + n]) for i in xrange(0, len(x), n)]
 
 
@@ -163,14 +158,15 @@ class Simulator(object):
         for i, pk in enumerate(self.basin_keys):
             p[pk] = px[i]
 
-        if np.any(p['tr'] >= self.tb):
-            return 1.e5
+        #if np.any(p['tr'] >= self.tb):
+        #    return 1.e5
 
         yhat = self.sim_fx(p)
-        cost = np.sum((self.wts * (yhat - self.y)**2))
-        if hasattr(cost, '__iter__'):
-            return cost[0]
-        return cost
+        #if hasattr(cost, '__iter__'):
+        #    return cost[0]
+        #return cost
+        return np.sum(self.wts * (yhat - self.y)**2)
+
 
 
     def __cost_fx__(self, theta):

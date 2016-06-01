@@ -20,15 +20,16 @@ class RADDCore(object):
     TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on=None, niter=50,  fit_whole_model=True, tb=None, fit_noise=False, pro_ss=False, dynamic='hyp', hyp_effect_dir=None, percentiles=([.1, .3, .5, .7, .9]), *args, **kws):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, tb=None, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), hyp_effect_dir=None, weighted=True, verbose=False):
 
         self.data = data
         self.kind = kind
         self.fit_on = fit_on
         self.dynamic = dynamic
-        self.fit_whole_model = fit_whole_model
+        self.weighted = weighted
         self.hyp_effect_dir = hyp_effect_dir
         self.percentiles = percentiles
+        self.verbose=verbose
 
         # CONDITIONAL PARAMETERS
         self.depends_on = depends_on
@@ -98,7 +99,7 @@ class RADDCore(object):
         else:
             # MAKE PSEUDO WEIGHTS
             self.flat_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
-            self.avg_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
+            self.cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
 
         if self.verbose:
             self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
@@ -106,6 +107,8 @@ class RADDCore(object):
             self.prepared = True
 
         self.set_fitparams()
+        self.set_basinparams()
+
 
 
     def __make_dataframes__(self):
@@ -138,18 +141,24 @@ class RADDCore(object):
             self.cost_wts, self.flat_cost_wts = analyze.get_group_cost_weights(self)
 
 
-    def set_fitparams(self, ntrials=10000, tol=1.e-5, maxfev=5000, niter=500, disp=True, get_params=False, method='nelder', **kwrgs):
-
+    def set_fitparams(self, get_params=False, **kwargs):
+        """ dictionary of fit parameters, passed to Optimizer/Simulator objects
+        """
         if not hasattr(self, 'fitparams'):
-            # fill with provided/or default values for initial set
-            self.fitparams = {'ntrials': ntrials, 'maxfev': maxfev, 'disp': disp, 'tol': tol, 'niter': niter, 'method': method, 'idx': 0, 'percentiles': self.percentiles, 'dynamic':self.dynamic, 'nlevels': self.nlevels, 'tb': self.tb, 'fit_on': self.fit_on, 'depends_on': self.depends_on}
+            # initialize with default values and first arrays in observed_flat, flat_cost_wts
+            self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True, 'tol': 1.e-5,
+                'method': 'nelder', 'niter': 500, 'tb': self.tb, 'percentiles': self.percentiles,
+                'dynamic': self.dynamic, 'fit_on': self.fit_on, 'depends_on': self.depends_on}
+            self.fitparams['idx'] = 0
+            self.fitparams['y'] = self.observed_flat[0]
+            self.fitparams['wts'] = self.flat_cost_wts[0]
 
         else:
-            # only fill with kwgs (i.e. subject id's, subject specific content)
-            for kw_arg, kw_val in kwrgs.items():
+            # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
+            for kw_arg, kw_val in kwargs.items():
                 self.fitparams[kw_arg] = kw_val
 
-        if hasattr(self, 'ssd'):
+        if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
             self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
             self.fitparams['nssd'] = self.fitparams['ssd'].size
 
@@ -157,11 +166,16 @@ class RADDCore(object):
             return self.fitparams
 
 
-    def set_basinparams(self, nrand_inits=2, interval=10, niter=40, stepsize=.05, nsuccess=20, is_flat=True, method='TNC', btol=1.e-3, maxiter=20, get_params=False, bdisp=False):
+    def set_basinparams(self, get_params=False, **kwargs):
+        """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
 
+        """
         if not hasattr(self, 'basinparams'):
-            self.basinparams = {}
-        self.basinparams = {'nrand_inits': nrand_inits, 'interval': interval, 'niter': niter, 'stepsize': stepsize, 'nsuccess': nsuccess, 'method': method, 'tol': btol, 'maxiter': maxiter, 'disp': bdisp}
+            self.basinparams = {'nrand_inits': 2, 'interval': 10, 'niter': 40, 'stepsize': .05, 'niter_success': 20, 'method': 'TNC', 'tol': 1.e-3, 'maxiter': 20, 'disp': False}
+        else:
+            # fill with kwargs for the upcoming fit
+            for kw_arg, kw_val in kwargs.items():
+                self.basinparams[kw_arg] = kw_val
         if get_params:
             return self.basinparams
 
@@ -225,7 +239,7 @@ class RADDCore(object):
         nudge params so not all initialized at same val
         """
 
-        if self.fitparams['hyp_effect_dir'] == 'up':
+        if self.hyp_effect_dir == 'up':
             lim = [np.min(lim), np.max(lim)]
         else:
             lim = [np.max(lim), np.min(lim)]
@@ -254,11 +268,6 @@ class RADDCore(object):
         params = tuple([inits[pk] for pk in pfit])
 
         return pbounds, params
-
-    def __prep_basin_data__(self):
-        cond_data = self.fitparams['y']
-        cond_wts = self.fitparams['wts']
-        return cond_data, cond_wts
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         self.data = analyze.remove_outliers(self.data, sd=sd, verbose=verbose)

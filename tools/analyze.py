@@ -49,13 +49,14 @@ def get_group_cost_weights(model):
     nsplits = model.nlevels * model.nconds
     nquant = model.percentiles.size
     quant_cols = np.asarray(model.percentiles*100).astype(int)
-    if hasattr(model, 'delays'):
-        p_cols = np.hstack(['acc', model.delays.tolist()])
+
+    if hasattr(model, 'ssd'):
+        p_cols = p_cols = ['acc'] + model.handler.all_ssd_ids.tolist()
     else:
         p_cols = 'acc'
 
     # use martinz-jarett method to estimate quantile errs
-    quantdf = analyze.mj_quanterr(df=model.data, conds=model.conds, percentiles=percentiles)
+    quantdf = mj_quanterr(df=model.data, conds=model.conds, percentiles=model.percentiles)
     perr = model.observedDF.groupby(model.conds).agg(np.nanstd).loc[:, p_cols]
     counts = model.observedDF.groupby(model.conds).count().loc[:, p_cols]
     p_wt_bycount = perr.values * (1./counts.values)
@@ -70,6 +71,7 @@ def get_group_cost_weights(model):
     avg_wts, flat_wts = ensure_numerical_wts(avg_wts, flat_wts)
 
     return [avg_wts], [flat_wts]
+    
 
 def get_subject_cost_weights(model, weight_presponse=True):
     """ calculate weights using observed variability

@@ -14,9 +14,6 @@ class DataHandler(object):
 
         self.kind = model.kind
         self.fit_on = model.fit_on
-        self.dynamic = model.dynamic
-        self.fit_whole_model = model.fit_whole_model
-        self.hyp_effect_dir = model.hyp_effect_dir
         self.percentiles = model.percentiles
 
         self.conds = model.conds
@@ -25,11 +22,6 @@ class DataHandler(object):
         self.nlevels = model.nlevels
         self.idx = model.idx
         self.nidx = model.nidx
-
-        if hasattr(self.model, 'delays'):
-            self.delays = model.delays
-            self.pGo = model.pGo
-            self.ssd = model.ssd
 
 
     def make_dataframes(self):
@@ -123,6 +115,7 @@ class DataHandler(object):
         self.fits = pd.DataFrame(np.zeros((nrows, ncols)), columns=all_qp_cols, index=self.observedDF.index)
         self.fitinfo = pd.DataFrame(columns=self.infolabels, index=self.observedDF.index)
 
+
     def get_ssds(self):
         """ set model attr "ssd" as list of np.arrays
         ssds to use when simulating data during optimization
@@ -138,7 +131,6 @@ class DataHandler(object):
             self.model.ssd = [np.asarray(ixssd)*.001 for ixssd in self.idx_ssd_ids]
         else:
             self.model.ssd = [self.all_ssd_ids * .001]
-
 
 
     def bin_idx_ssd(self):
