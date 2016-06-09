@@ -41,28 +41,29 @@ def rangl_data(data, data_style='re', tb=.555, percentiles=([.1, .3, .5, .7, .9]
     return np.hstack([gac, sacc, gq, eq])
 
 
-def get_group_cost_weights(model):
+def get_group_cost_weights(dfhandler, percentiles=np.array([.1, .3, .5, .7, .9]), nacc=2):
     """ calculate weights using observed variability
     across subjects (model.observedDF)
     """
 
-    nsplits = model.nlevels * model.nconds
-    nquant = model.percentiles.size
-    quant_cols = np.asarray(model.percentiles*100).astype(int)
+    nsplits = dfhandler.nlevels * dfhandler.nconds
+    nquant = percentiles.size
+    quant_cols = np.asarray(percentiles*100).astype(int)
+    conds = dfhandler.conds
+    groups = dfhandler.groups
+    data_cols = dfhandler.observedDF.loc[:, 'acc':].columns
+    p_cols = data_cols[:-nquant*nacc]
+    observedDF = dfhandler.observedDF.groupby(conds)
 
-    if hasattr(model, 'ssd'):
-        p_cols = p_cols = ['acc'] + model.handler.all_ssd_ids.tolist()
-    else:
-        p_cols = 'acc'
 
     # use martinz-jarett method to estimate quantile errs
-    quantdf = mj_quanterr(df=model.data, conds=model.conds, percentiles=model.percentiles)
-    perr = model.observedDF.groupby(model.conds).agg(np.nanstd).loc[:, p_cols]
-    counts = model.observedDF.groupby(model.conds).count().loc[:, p_cols]
+    quantdf = mj_quanterr(df=dfhandler.data, groups=groups, percentiles=percentiles)
+    perr = observedDF.agg(np.nanstd).loc[:, p_cols]
+    counts = observedDF.count().loc[:, p_cols]
     p_wt_bycount = perr.values * (1./counts.values)
     pwts_ratio = np.nanmedian(p_wt_bycount, axis=1)[:, None] / p_wt_bycount
 
-    groups = np.hstack([model.conds, 'ttype', 'acc']).tolist()
+    groups = np.hstack([conds, 'ttype', 'acc']).tolist()
     avg_qerr = np.hstack(quantdf.groupby(groups).mean().values).reshape(nsplits, nquant*2)
 
     avg_wts = np.array([np.append(pw, qw) for pw, qw in zip(pwts_ratio, avg_qerr)])
@@ -71,38 +72,39 @@ def get_group_cost_weights(model):
     avg_wts, flat_wts = ensure_numerical_wts(avg_wts, flat_wts)
 
     return [avg_wts], [flat_wts]
-    
 
-def get_subject_cost_weights(model, weight_presponse=True):
+
+def get_subject_cost_weights(dfhandler, weight_presponse=True, percentiles=np.array([.1, .3, .5, .7, .9]), nacc=2):
     """ calculate weights using observed variability
     within individual subjects
     """
-
-    dfvals = model.handler.dfvals
-    nlevels = model.nlevels
-    nconds = model.nconds
+    data = dfhandler.data
+    groups = dfhandler.groups
+    dfvals = dfhandler.dfvals
+    nlevels = dfhandler.nlevels
+    nconds = dfhandler.nconds
     nsplits = nlevels * nconds
-    nidx = model.nidx
+    nidx = dfhandler.data.idx.unique().size
     nrows = nidx * nconds * nlevels
-    nquant = model.percentiles.size
-    quant_cols = np.asarray(model.percentiles*100).astype(int)
+    nquant = percentiles.size
+    quant_cols = np.asarray(percentiles*100).astype(int)
 
     # use martinz-jarett method to estimate quantile errs
-    quantdf = mj_quanterr(df=model.data, conds=model.conds, percentiles=model.percentiles)
-    idx_qwts = quantdf.loc[:, quant_cols].values.reshape(nidx*2, nsplits*nquant)
+    quantdf = mj_quanterr(df=data, groups=groups, percentiles = percentiles)
+    idx_qwts = quantdf.loc[:, quant_cols].values.reshape(nidx*nacc, nsplits*nquant)
 
     if weight_presponse:
-        idx_pwts = get_count_pwts(model.data, var='ssd', conds=model.conds)
+        idx_pwts = get_count_pwts(data, var='ssd', groups=groups)
     else:
-        idx_pwts = [np.ones(idat.size - 2*nquant) for idat in dfvals]
+        idx_pwts = [np.ones(idat.size - nacc*nquant) for idat in dfvals]
 
     cost_wts = np.array([np.append(pw, qw) for pw, qw in zip(idx_pwts, idx_qwts)])
-    cost_wts = [np.vstack(cost_wts[i:i+nsplits]) for i in range(0, nrows, nsplits)]
+    cost_wts = [cost_wts[i:i+nsplits] for i in range(0, nrows, nsplits)]
     flat_cost_wts = [idx_cwts.mean(axis=0) for idx_cwts in cost_wts]
     return cost_wts, flat_cost_wts
 
 
-def get_count_pwts(df, var='ssd', conds=['Cond']):
+def get_count_pwts(df, var='ssd', groups=['idx']):
     """ count number of observed responses across levels of <var> and transform into
     ratios (np.median(counts_at_each_level) / counts_at_each_level) for weight subject-level
     p(response) values in cost function.
@@ -113,26 +115,25 @@ def get_count_pwts(df, var='ssd', conds=['Cond']):
         conds (list): depends_on.values()
     """
 
-    columns = np.hstack(['idx', conds]).tolist()
-
     if var=='ssd':
         df = df[df.ttype=='stop'].copy()
 
-    get_level_counts = lambda d0: format_level_counts(d0.groupby(var).count())
-    format_level_counts = lambda d1: d1.reset_index()['response'].values
+    def calc_pwts(df_i):
+        countdf = df_i.groupby(var).count()
+        # get counts across levels except for last (correct Go//SSD==1000)
+        lvl_counts = countdf.reset_index()['response'].values
+        # calculate count ratio for all values
+        varwts = np.median(lvl_counts)/lvl_counts
+        # append 1 to front as weight of correct P(Go|No_SS)
+        acc_var_wts = np.append(1., varwts)
+        return acc_var_wts
 
-    # get counts across levels except for last (correct Go//SSD==1000)
-    counts = [get_level_counts(cdf) for c, cdf in df.groupby(columns)]
-
-    # calculate count ratio for all values
-    idx_var_wts = [np.median(cts)/cts for cts in counts]
-    # append 1 to front of each vector for weight of correct P(Go|No_SS)
-    idx_var_pwts = [np.append(1., iwts) for iwts in idx_var_wts]
-
-    return idx_var_pwts
+    ic_grp = df.groupby(groups)
+    idx_pwts = [calc_pwts(cdf) for c, cdf in ic_grp]
+    return idx_pwts
 
 
-def mj_quanterr(df, conds=['Cond'], percentiles=array([.1, .3, .5, .7, .9]), as_ratio=True):
+def mj_quanterr(df, groups=['idx'], percentiles=array([.1, .3, .5, .7, .9]), as_ratio=True, nacc=2):
     """ calculates weight vectors for reactive RT quantiles by
     first estimating the SEM of RT quantiles for corr. and err. responses.
     (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
@@ -144,36 +145,66 @@ def mj_quanterr(df, conds=['Cond'], percentiles=array([.1, .3, .5, .7, .9]), as_
 
     # Martinz & Jarrett
     mjcix = lambda x: mjci(x.rt, prob=percentiles)
-    # sort by ttype first to ensure go(acc==1) before stop(acc==0)
-    groups = np.hstack(['idx', conds, 'ttype', 'acc']).tolist()
-    quant_cols = np.asarray(percentiles*100).astype(int)
-    ncond = np.sum([df[c].unique().size for c in conds])
+    if len(groups)>1:
+        conds = groups[1:]
+        nlevels = np.sum([df[c].unique().size for c in conds])
+    else:
+        nlevels = 1
     nidx = df.idx.unique().size
     nquant = percentiles.size
-    nacc = 2
+
+    # sort by ttype first to ensure go(acc==1) occurs before stop(acc==0)
+    groups = np.hstack([groups, 'ttype', 'acc']).tolist()
+    quant_cols = np.asarray(percentiles*100).astype(int)
+    nrows = nidx * nlevels * nacc
 
     godf = df.query('response==1')
     godf_grouped = godf.groupby(groups)
     categories = array([list(x) for x, xdf in godf_grouped])
 
-    qerr = np.vstack(godf_grouped.apply(mjcix).values)
-    if as_ratio:
-        # reshape [nidx   x   ncond * nquant * 2]
-        # calculate subject median across all conditions quantiles and accuracy
-        # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
-        # for conditions with greater number of observations (i.e., more acc==1 in godf)
-        idx_medians = np.nanmedian(np.hstack(qerr).reshape(nidx, ncond * nquant * nacc), axis=1)
-        # tile subject medians (ncond*2) and divide all vectors by same median value
-        qerr_med = np.vstack(np.hstack([np.tile(idxmed, ncond * nacc) for idxmed in idx_medians]))
-        qerr = qerr_med / qerr
+    # calculate quantile errors
+    quant_err = np.vstack(godf_grouped.apply(mjcix).values)
+    # reshape [nidx   x   ncond * nquant * 2]
+    idx_qerr = quant_err.reshape(nidx, nlevels * nquant * nacc)
 
-    catdf = pd.DataFrame(categories, columns=groups, index=np.arange(categories.shape[0]))
-    errdf = pd.DataFrame(qerr, columns=quant_cols, index=np.arange(len(qerr)))
+    # calculate subject median across all conditions quantiles and accuracy
+    # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
+    # for conditions with greater number of observations (i.e., more acc==1 in godf)
+    idx_medians = np.nanmedian(idx_qerr, axis=1)
 
-    dff = pd.concat([catdf, errdf], axis=1)
-    dff['acc'] = pd.to_numeric(dff['acc'])
-    dff_filled = dff.fillna({col:np.nanmean(dff[col]) for col in quant_cols})
-    return dff_filled
+    # tile subject medians (nlevels*2)
+    idx_tiled_medians = [np.tile(idxmed, nlevels * nacc) for idxmed in idx_medians]
+    idx_tiled_medians = np.vstack(np.hstack(idx_tiled_medians))
+
+    # divide idx median err value by quant_err vector
+    idx_qerr_ratio = idx_tiled_medians / quant_err
+
+    catdf = pd.DataFrame(categories, columns=groups, index=np.arange(nrows))
+    errdf = pd.DataFrame(idx_qerr_ratio, columns=quant_cols, index=np.arange(nrows))
+    quant_df = pd.concat([catdf, errdf], axis=1)
+
+    quant_df['acc'] = pd.to_numeric(quant_df['acc'])
+    quant_df_filled = quant_df.fillna({col: np.nanmean(quant_df[col]) for col in quant_cols})
+    return quant_df_filled
+
+
+
+def remove_outliers(data, sd=1.5, verbose=False):
+
+    df = data.copy()
+    ssdf = df[df.response == 0]
+    godf = df[df.response == 1]
+    bound = godf.rt.std() * sd
+    rmslow = godf[godf['rt'] < (godf.rt.mean() + bound)]
+    clean_go = rmslow[rmslow['rt'] > (godf.rt.mean() - bound)]
+
+    clean = pd.concat([clean_go, ssdf])
+    if verbose:
+        pct_removed = len(clean) * 1. / len(df)
+        print("len(df): %i\nbound: %s \nlen(cleaned): %i\npercent removed: %.5f" % (len(df), str(bound), len(clean), pct_removed))
+
+    return clean
+
 
 
 def ensure_numerical_wts(wts, flat_wts):

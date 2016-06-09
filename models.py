@@ -6,24 +6,22 @@ from numpy import array
 from numpy.random import sample as rs
 from numpy import hstack as hs
 from numpy import newaxis as na
+from numpy import cumsum as csum
 from scipy.stats.mstats import mquantiles as mq
 
 class Simulator(object):
-    """ Core code for simulating models
-
-          * All cond, trials, & timepoints are simulated simultaneously
-
-          * a, tr, and v parameters are initialized as vectors,
-          1 x nlevels so Optimizer class can minimize a single cost function
-          for multiple conditions.
+    """ Core code for simulating models. All cond, trials, &
+    timepoints are simulated simultaneously
     """
 
-    def __init__(self, fitparams=None, inits=None, pc_map=None, kind='dpm', dt=.001, si=.01, base=0):
+    def __init__(self, fitparams=None, inits=None, pc_map=None, kind='xdpm', dt=.001, si=.01, base=0, learn=False):
 
         self.dt = dt
         self.si = si
         self.dx = np.sqrt(self.si * self.dt)
         self.base = base
+
+        self.learn = learn
 
         self.inits = inits
         self.kind = kind
@@ -42,23 +40,29 @@ class Simulator(object):
         else:
             fp = dict(deepcopy(self.fitparams))
 
-        self.nlevels = self.fitparams['y'].ndim
+        # set y, wts to be used cost function
         self.y = self.fitparams['y'].flatten()
         self.wts = self.fitparams['wts'].flatten()
 
+        # misc data & model parameters used during
+        # simulations/optimizations
+        self.nlevels = self.fitparams['y'].ndim
         self.tb = fp['tb']
         self.ntot = fp['ntrials']
         self.percentiles = fp['percentiles']
         self.dynamic = fp['dynamic']
 
-        if 'ssd' in fp.keys():
+        # include SSD's if stop-signal task
+        if 'ssd' in list(fp):
             self.ssd = fp['ssd']
             self.nssd = fp['nssd']
             self.nss = int((.5 * self.ntot) / self.nssd)
 
-        self.pvc = ['a', 'tr', 'v', 'xb']
+        # non conditional parameters
+        self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']
         if self.nlevels>1:
-            map((lambda pkey: self.pvc.remove(pkey)), self.pc_map.keys())
+            # remove any parameters free to vary across experimental conditions
+            map((lambda pkey: self.pvc.remove(pkey)), list(self.pc_map))
 
 
     def __prep_global__(self, basin_params={}, basin_keys=[]):
@@ -68,7 +72,7 @@ class Simulator(object):
         # basin_params object (not available
         # to basinhopping minimizer)
         self.basin_params = basin_params
-        self.chunk = lambda x, n: [array(x[i:i + n]) for i in xrange(0, len(x), n)]
+        self.chunk = lambda x, n: [array(x[i:i + n]) for i in range(0, len(x), n)]
 
 
     def __init_model_functions__(self):
@@ -88,16 +92,22 @@ class Simulator(object):
         elif 'iact' in self.kind:
             self.sim_fx = self.simulate_interactive
             self.analyze_fx = self.analyze_interactive
+        elif 'nalt' in self.kind:
+            self.simfx = self.simulate_nalt
+            self.analyze_fx = self.analyze_nalt
+        if 'rl' in self.kind:
+            self.trialwise = True
+
 
         # SET STATIC/DYNAMIC BASIS FUNCTIONS
-        self.temporal_dynamics = lambda p, t: np.ones((self.nlevels, len(t)))
         if 'x' in self.kind and self.dynamic == 'hyp':
             # dynamic bias is hyperbolic
             self.temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
         elif 'x' in self.kind and self.dynamic == 'exp':
             # dynamic bias is exponential
             self.temporal_dynamics = lambda p, t: np.exp(p['xb'][:, na] * t)
-
+        else:
+            self.temporal_dynamics = lambda p, t: np.ones((self.nlevels, len(t)))
 
     def __init_analyze_functions__(self):
         """ initiates the analysis function used in
@@ -107,11 +117,25 @@ class Simulator(object):
         prob = self.percentiles
         dt = self.dt
 
-        self.resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
-        self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
-        self.resp_lo = lambda trace: np.argmax((trace.T <= 0).T, axis=3) * dt
-        self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
-        self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+
+        if self.learn:
+            self.go_resp = lambda trace, a: np.argmax((trace.T >= a).T, axis=1) * dt
+            self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
+            self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=2) * dt
+            self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 0))
+            self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+        else:
+            self.go_resp = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
+            self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
+            self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=3) * dt
+            self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
+            self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+
+        if 'irace' in self.kind:
+            self.ss_resp = self.ss_resp_up
+        else:
+            self.ss_resp = self.ss_resp_lo
+
 
 
     def vectorize_params(self, p):
@@ -129,16 +153,16 @@ class Simulator(object):
                     dictionary with all parameters as vectors
         """
 
-        if 'si' in p.keys():
-            self.dx = np.sqrt(p['si'] * self.dt)
-        if 'xb' not in p.keys():
+        if 'si' in list(p):
+             self.dx = np.sqrt(p['si'] * self.dt)
+        if 'xb' not in list(p):
             p['xb'] = 1.0
         for pkey in self.pvc:
             p[pkey] = p[pkey] * np.ones(self.nlevels).astype(np.float32)
         for pkey, pkc in self.pc_map.items():
             if self.nlevels == 1:
                 break
-            elif pkc[0] not in p.keys():
+            elif pkc[0] not in list(p):
                 p[pkey] = p[pkey] * np.ones(len(pkc)).astype(np.float32)
             else:
                 p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
@@ -150,23 +174,20 @@ class Simulator(object):
         objects with multiopt attr (See __opt_routine__ and perform_basinhopping
         methods of Optimizer object)
         """
-        p = dict(deepcopy(self.basin_params))
 
+        p = dict(deepcopy(self.basin_params))
         # segment 'x' into equal len arrays (one array,
         # nlevels vals long per free parameter) in basin_keys
         px = self.chunk(x, self.nlevels)
+
         for i, pk in enumerate(self.basin_keys):
             p[pk] = px[i]
 
-        #if np.any(p['tr'] >= self.tb):
-        #    return 1.e5
-
+        # simulate using filled params dictionary
         yhat = self.sim_fx(p)
-        #if hasattr(cost, '__iter__'):
-        #    return cost[0]
-        #return cost
-        return np.sum(self.wts * (yhat - self.y)**2)
 
+        # calculate and return cost error
+        return np.sum(self.wts * (yhat - self.y)**2)
 
 
     def __cost_fx__(self, theta):
@@ -178,6 +199,7 @@ class Simulator(object):
             p = dict(deepcopy(theta))
         else:
             p = theta.valuesdict()
+
         yhat = self.sim_fx(p, analyze=True)
         return np.sum(self.wts * (self.y - yhat)**2).astype(np.float32)
 
@@ -188,7 +210,7 @@ class Simulator(object):
         """
         Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
         Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
-        t = np.cumsum([self.dt] * Tg.max())
+        t = csum([self.dt] * Tg.max())
         self.xtb = self.temporal_dynamics(p, t)
         #diff = [Tg.max()-tg for tg in Tg]
         #self.xtb = np.vstack([np.append(np.ones(diff[i]), xtb[i][:tg]) for i, tg in enumerate(Tg)])
@@ -196,12 +218,12 @@ class Simulator(object):
 
 
     def __update_stop_process__(self, p, sso=0):
-        """ update Ps (probability of DVs +dx) and Ts (num ss process timepoints)
-        for stop process
+        """ update Ps (probability of DVs +dx) and
+        Ts (SSD onsets) for stop process
         """
-        if 'sso' in p.keys():
+        if 'sso' in list(p):
             sso = p['sso']
-        Ps = 0.5 * (1 + p['ssv'] * self.dx / self.si)
+        Ps = 0.5 * (1 + p['ssv'][0] * self.dx / self.si)
         Ts = np.ceil((self.tb - (self.ssd + sso)) / self.dt).astype(int)
         return Ps, Ts
 
@@ -212,7 +234,7 @@ class Simulator(object):
         Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
         Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
         nt = np.max(np.hstack([Tg, Ts]))
-        t = np.cumsum([self.dt] * nt)
+        t = csum([self.dt] * nt)
         self.xtb = self.temporal_dynamics(p, t)
         return Pg, Tg, Ps, Ts, nt
 
@@ -220,16 +242,16 @@ class Simulator(object):
     def simulate_dpm(self, p, analyze=True):
         """ Simulate the dependent process model (DPM)
         ::Arguments::
-              p (dict):
-                    parameter dictionary. values can be single floats
-                    or vectors where each element is the value of that
-                    parameter for a given condition
-              analyze (bool <True>):
-                    if True (default) return rt and accuracy information
-                    (yhat in cost fx). If False, return Go and Stop proc.
+            p (dict):
+                parameter dictionary. values can be single floats
+                or vectors where each element is the value of that
+                parameter for a given condition
+            analyze (bool <True>):
+                if True (default) return rt and accuracy information
+                (yhat in cost fx). If False, return Go and Stop proc.
         ::Returns::
-              yhat of cost vector (ndarray)
-              or Go & Stop processes in list (list of ndarrays)
+            yhat of cost vector (ndarray)
+            or Go & Stop processes in list (list of ndarrays)
         """
 
         p = self.vectorize_params(p)
@@ -242,10 +264,10 @@ class Simulator(object):
         nl = self.nlevels
         dx = self.dx
 
-        DVg = self.xtb[:, na] * np.cumsum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         # INITIALIZE DVs FROM DVg(t=SSD)
         init_ss = array([[DVg[i, :nss, ix] for ix in np.where(Ts < Tg[i], Tg[i] - Ts, 0)] for i in range(nl)])
-        DVs = init_ss[:, :, :, None] + np.cumsum(np.where(rs((nss, Ts.max())) < Ps, dx, -dx), axis=1)
+        DVs = init_ss[:, :, :, na] + csum(np.where(rs((nss, Ts.max())) < Ps, dx, -dx), axis=1)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         else:
@@ -262,7 +284,7 @@ class Simulator(object):
         dx = self.dx
         ntot = self.ntot
 
-        DVg = self.xtb[:, na] * np.cumsum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         if analyze:
             return self.analyze_fx(DVg, p)
         return DVg
@@ -283,12 +305,74 @@ class Simulator(object):
         nl = self.nlevels
         dx = self.dx
 
-        DVg = self.xtb[:, None] * np.cumsum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         # INITIALIZE DVs FROM 0
-        DVs = np.cumsum(np.where(rs((nl, nssd, nss, Ts.max())) < Ps, dx, -dx), axis=3)
+        DVs = csum(np.where(rs((nl, nssd, nss, Ts.max())) < Ps, dx, -dx), axis=3)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         return [DVg, DVs]
+
+
+    def simulate_rldpm(self, p, analyze=True):
+        """ Simulate the dependent process model (DPM)
+        ::Arguments::
+            p (dict):
+                parameter dictionary. values can be single floats
+                or vectors where each element is the value of that
+                parameter for a given condition
+            analyze (bool <True>):
+                if True (default) return rt and accuracy information
+                (yhat in cost fx). If False, return Go and Stop proc.
+        ::Returns::
+            yhat of cost vector (ndarray)
+            or Go & Stop processes in list (list of ndarrays)
+        """
+
+        p = self.vectorize_params(p)
+        Pg, Tg = self.__update_go_process__(p)
+        Ps, Ts = self.__update_stop_process__(p)
+
+        ntot = self.ntot
+        nss = self.nss
+        nl = self.nlevels
+        dx = self.dx
+
+        for trial in range(ntot):
+            DVg = self.xtb[:, na] * csum(np.where((rs((nl, Tg.max())).T<Pg), dx, -dx).T, axis=1)
+            # INITIALIZE DVs FROM DVg(t=SSD)
+            if trial%2:
+                init_ss = array([[DVg[i, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i in range(nl)])
+                DVs = init_ss[:,:,na] + csum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
+
+        if analyze:
+            return self.analyze_fx(DVg, DVs, p)
+        else:
+            return [DVg, DVs]
+
+
+    def analyze_rldpm(self, DVg, DVs=None, p=None):
+        """ get rt and accuracy of go and stop process for simulated
+        conditions generated from simulate_dpm
+        """
+
+        prob = self.percentiles
+        ssd = self.ssd
+        tb = self.tb
+        nl = self.nlevels
+        nssd = self.nssd
+
+        gdec = self.go_resp(DVg, p['a'])
+        gort = self.RT(p['tr'], gdec)
+
+        sdec = self.ss_resp(DVs, p['a'])
+        ssrt = self.RT(ssd, sdec)
+        ert = np.tile(gort, nssd).reshape(nl, nssd)
+
+        eq = self.RTQ(zip(ert, ssrt))
+        gq = self.RTQ(zip(gort, [tb] * nl))
+        gacc = np.nanmean(np.where(gort < tb, 1, 0), axis=1)
+        sacc = np.where(ert < ssrt, 0, 1).mean(axis=2)
+        return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(nl)])
 
 
     def analyze_reactive(self, DVg, DVs, p):
@@ -302,11 +386,8 @@ class Simulator(object):
         nl = self.nlevels
         nssd = self.nssd
 
-        gdec = self.resp_up(DVg, p['a'])
-        if 'irace' in self.kind:
-            sdec = self.ss_resp_up(DVs, p['a'])
-        else:
-            sdec = self.resp_lo(DVs)
+        gdec = self.go_resp(DVg, p['a'])
+        sdec = self.ss_resp(DVs, p['a'])
 
         gort = self.RT(p['tr'], gdec)
         ssrt = self.RT(ssd, sdec)
@@ -327,19 +408,15 @@ class Simulator(object):
         ssd = self.ssd
         tb = self.tb
         nl = self.nlevels
-        ix = self.rt_cix
-        gdec = self.resp_up(DVg, p['a'])
-        rt = self.RT(p['tr'], gdec)
 
-        if nl == 1:
-            qrt = mq(rt[rt < tb], prob=prob)
-        else:
-            zpd = zip([hs(rt[ix:]), hs(rt[1:ix])], [tb] * 2)
-            qrt = hs(self.RTQ(zpd))
+        gdec = self.go_resp(DVg, p['a'])
+        gort = self.RT(p['tr'], gdec)
+        gq = hs(self.RTQ(zip(gort, [tb] * nl)))
 
         # Get response and stop accuracy information
-        gacc = 1 - np.mean(np.where(rt < tb, 1, 0), axis=1)
-        return hs([gacc, qrt])
+        gacc = 1 - np.mean(np.where(gort < tb, 1, 0), axis=1)
+        return hs([gacc, gq])
+
 
     def mean_pgo_rts(self, p, return_vals=True):
         """ Simulate proactive model and calculate mean RTs
@@ -348,7 +425,7 @@ class Simulator(object):
         import pandas as pd
 
         DVg = self.simulate_pro(p, analyze=False)
-        gdec = self.resp_up(DVg, p['a'])
+        gdec = self.go_resp(DVg, p['a'])
 
         rt = self.RT(p['tr'], gdec)
         mu = np.nanmean(rt, axis=1)
@@ -360,44 +437,12 @@ class Simulator(object):
             return self.pgo_rts
 
 
-    def analyze_data(self, DVg, DVs=None, p=None):
-        """ get rt and accuracy of go and stop process for simulated
-        conditions generated from simulate_dpm
-        """
-        nss = self.nss
-        prob = self.percentiles
-        ssd = self.ssd
-        tb = self.tb
-        nl = self.nlevels
-        nssd = self.nssd
-
-        if 'sso' in p.keys():
-            ssd = ssd + p['sso']
-        gdec = self.resp_up(DVg, p['a'])
-        gort = self.RT(p['tr'], gdec)
-        if 'pro' not in self.kind:
-            if 'irace' in self.kind:
-                sdec = self.ss_resp_up(DVs, p['a'])
-            else:
-                sdec = self.resp_lo(DVs)
-            ssrt = self.RT(ssd, sdec)
-
-        #ert = gort[:,:nss][:, None]*np.ones_like(ssrt)
-        ert = np.tile(gort[:, :nss], nssd).reshape(nl, nssd, nss)
-
-        eq = self.RTQ(zip(ert, ssrt))
-        gq = self.RTQ(zip(gort, [tb] * nl))
-        gacc = np.nanmean(np.where(gort < tb, 1, 0), axis=1)
-        sacc = np.where(ert < ssrt, 0, 1).mean(axis=2)
-        return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(nl)])
-
-
     def analyze_pro_data(self, DVg, p):
         prob = self.percentiles
         tb = self.tb
         nl = self.nlevels
         ix = self.rt_cix
-        gdec = self.resp_up(DVg, p['a'])
+        gdec = self.go_resp(DVg, p['a'])
         rt = self.RT(p['tr'], gdec)
         hi = hs(rt[ix:])
         low = hs(rt[1:ix])
@@ -423,13 +468,11 @@ class Simulator(object):
         ttype = np.tile(array([['stop'] * nsstot + ['go'] * nsstot]), nl)
 
         DVg, DVs = dv
-        if 'sso' in p.keys():
+        if 'sso' in list(p):
             ssd = ssd + p['sso']
-        gdec = self.resp_up(DVg, p['a'])
-        if 'irace' in self.kind:
-            sdec = self.ss_resp_up(DVs, p['a'])
-        else:
-            sdec = self.resp_lo(DVs)
+        gdec = self.go_resp(DVg, p['a'])
+        sdec = self.ss_resp(DVs, p['a'])
+
         gort = self.RT(p['tr'], gdec)
         ssrt = self.RT(ssd, sdec)
         ert = np.tile(gort[:, :nss], nssd).reshape(nl, nssd, nss)

@@ -122,7 +122,7 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
         measure = 'Sensitivity ("Q")'
 
     n = trialsdf.agroup.unique().size
-    a_go = trialsdf.a_go.unique()
+    a_go = np.sort(trialsdf.a_go.unique())
     sm, vmin, vmax = gen_mappable(vals_to_map=a_go, cm=cm)
 
     f, axes = plt.subplots(2,2, figsize=(14, 10))

@@ -11,17 +11,21 @@ class DataHandler(object):
         self.model = model
         self.data = model.data
         self.inits = model.inits
+        self.idx = model.idx
+        self.nidx = model.nidx
 
         self.kind = model.kind
         self.fit_on = model.fit_on
         self.percentiles = model.percentiles
+        self.groups = model.groups
 
         self.conds = model.conds
         self.nconds = model.nconds
         self.levels = model.levels
         self.nlevels = model.nlevels
-        self.idx = model.idx
-        self.nidx = model.nidx
+
+        self.nrows = self.nidx * self.nlevels * self.nconds
+        self.grpData = self.data.groupby(self.groups)
 
 
     def make_dataframes(self):
@@ -47,126 +51,74 @@ class DataHandler(object):
               predictions of the optimized model
         fitinfo (DF):
               stores all opt. parameter values and model fit statistics
-        avg_y (ndarray):
-              average y vector for each condition entered into costfx
-        flat_y (1d array):
-              average y vector used to initialize parameters prior to fitting
-              conditional model. calculated collapsing across conditions
         """
 
-        data = self.data
-
-        idx_list = self.idx
-        nidx = self.nidx
-        conds = self.conds
-        nconds = self.nconds
-        levels = self.levels
-        nlevels = self.nlevels
-        nsplits = nlevels * nconds
-        nrows = nidx * nlevels * nconds
-
-        idx_conds = np.hstack(['idx', conds]).tolist()
-        params = sorted(self.inits.keys())
-        self.__get_headers__(params)
         self.make_observed_groupDFs()
-
-        self.avg_y = self.observedDF.groupby(conds).mean().loc[:, 'acc':].values
-        self.flat_y = self.observedDF.mean().loc['acc':].values
 
         if self.fit_on=='subjects':
             idxdf = lambda idx: self.observedDF[self.observedDF['idx']==idx]
-            self.observed = [idxdf(idx).dropna(axis=1).loc[:, 'acc':].values for idx in idx_list]
-            self.observed_flat = [idxdf(idx).dropna(axis=1).mean()['acc':].values for idx in idx_list]
-
-        elif self.fit_on == 'bootstrap':
-            i_grp = data.groupby(['idx'])
-            self.observed = np.vstack([i_grp.apply(self.resample_data, kind=self.kind).values for i in idx_list]).unstack()
+            observed = [idxdf(idx).dropna(axis=1).loc[:, 'acc':].values for idx in self.idx]
+            observedflat = [idxdf(idx).dropna(axis=1).mean().loc['acc':].values for idx in self.idx]
 
         elif self.fit_on=='average':
-            self.observed = [self.avg_y]
-            self.observed_flat = [self.flat_y]
+            observed = [self.observedDF.groupby(self.conds).mean().loc[:, 'acc':].values]
+            observedflat = [self.observedDF.mean().loc['acc':].values]
+
+        # elif self.fit_on == 'bootstrap':
+        #     observed = self.idxData.apply(self.resample_data)
+
+        # Get rid of any extra dimensions
+        self.observed = [obs_i.squeeze() for obs_i in observed]
+        self.observed_flat = [obsF_i.squeeze() for obsF_i in observedflat]
 
 
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
         """
+
+        idxdf_cols, obsdf_cols, infodf_cols = self.__get_headers__()
+
         data = self.data
-        nperc = self.percentiles.size
-        all_qp_cols = self.all_qp_cols
-        idx_qp_cols = self.idx_qp_cols
+        ncols = len(obsdf_cols)
+        nrows = self.nrows
+        index = range(nrows)
 
-        nrows = self.nidx * self.nlevels * self.nconds
-        ncols = len(all_qp_cols)
+        self.datdf = self.grpData.apply(self.model.rangl_data).sortlevel(0)
+        self.dfvals = [self.datdf.values[i].astype(float) for i in index]
 
-        idx_conds = np.hstack(['idx', self.conds]).tolist()
-        ic_grp = self.data.groupby(idx_conds)
-        i_grp = self.data.groupby('idx')
+        self.observedDF = pd.DataFrame(np.zeros((nrows, ncols))*np.nan, columns=obsdf_cols, index=index)
+        self.observedDF.loc[:, self.groups] = self.datdf.reset_index()[self.groups].values
+        self.fits = self.observedDF.copy()
 
-        self.datdf = ic_grp.apply(self.model.rangl_data).unstack().unstack().sortlevel(1)
-        self.dfvals = [self.datdf.values[i].astype(float) for i in xrange(nrows)]
-
-        self.observedDF = pd.DataFrame(np.zeros((nrows, ncols))*np.nan, columns=all_qp_cols)
-        self.observedDF.loc[:, idx_conds] = self.datdf.reset_index()[idx_conds].values
-
-        for rowi in xrange(nrows):
-            self.observedDF.loc[rowi, idx_qp_cols[rowi]] = self.dfvals[rowi]
+        for rowi in range(nrows):
+            self.observedDF.loc[rowi, idxdf_cols[rowi]] = self.dfvals[rowi]
 
         # GENERATE DF FOR FIT RESULTS
-        self.fits = pd.DataFrame(np.zeros((nrows, ncols)), columns=all_qp_cols, index=self.observedDF.index)
-        self.fitinfo = pd.DataFrame(columns=self.infolabels, index=self.observedDF.index)
+        self.fitinfo = pd.DataFrame(columns=infodf_cols, index=index)
+        self.fitinfo.loc[:, self.groups] = self.observedDF.loc[:, self.groups]
 
 
-    def get_ssds(self):
-        """ set model attr "ssd" as list of np.arrays
-        ssds to use when simulating data during optimization
-        """
-        idx_conds = np.hstack(['idx', self.conds]).tolist()
-        stopdf = self.data[self.data.ttype=='stop']
-        ic_stopdf = stopdf.groupby(idx_conds)
+    def __get_headers__(self):
 
-        self.idx_ssd_ids = [np.sort(df.ssd.unique().astype(int)).tolist() for _,df in ic_stopdf]
-        self.all_ssd_ids = np.sort(stopdf.ssd.unique().astype(np.int))
+        obsdf_cols = np.hstack([self.groups + ['acc']]).tolist()
+        cq = ['c' + str(int(n * 100)) for n in self.percentiles]
+        eq = ['e' + str(int(n * 100)) for n in self.percentiles]
+        qcols = cq + eq
 
-        if self.fit_on == 'subjects':
-            self.model.ssd = [np.asarray(ixssd)*.001 for ixssd in self.idx_ssd_ids]
+        if hasattr(self.model, 'ssd'):
+            ssd_list = [np.asarray(issd*1000, dtype=np.int) for issd in self.model.ssd]
+            idxdf_cols = [['acc'] + issd.tolist() + qcols for issd in ssd_list]
+            all_ssds = np.unique(np.hstack(ssd_list))
+            obsdf_cols = obsdf_cols + all_ssds.tolist()
         else:
-            self.model.ssd = [self.all_ssd_ids * .001]
+            idxdf_cols = [np.hstack(['acc'], qcols).tolist()]*nrows
 
+        obsdf_cols = obsdf_cols + qcols
+        params = np.sort(list(self.inits))
+        fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
+        fitdf_cols = np.hstack([self.groups, params, fit_cols]).tolist()
 
-    def bin_idx_ssd(self):
-        """ bin trials by ssd and collapse trials into nearest SSD if
-        trial_count<10.
-
-        Example: Perform for All Subjects in DF
-            gDF = DF.groupby('idx')
-            newDF = gDF.apply(bin_idx_ssd).reset_index(drop=True)
-        """
-
-        df = self.data.copy()
-
-        # insert order column to preserve trial order
-        # when rejoining stop and go trials
-        df['order']=np.arange(df.shape[0])
-
-        # split by trial type
-        dfg = df[df.ttype=='go'].copy()
-        dfx = df[df.ttype=='stop'].copy()
-
-        # bin and get trial_counts per ssd
-        counts = dfx.groupby('ssd').count().mean(axis=1)
-        lowest = counts[counts>=10].index.min()
-        highest = counts[counts>=10].index.max()
-
-        # apply cut-offs (collapse ssds with <10 trials)
-        dfx.loc[dfx.ssd<lowest, 'ssd']=lowest
-        dfx.loc[dfx.ssd>highest, 'ssd']=highest
-
-        # rejoin stop and go, sort, and drop "order" col
-        dfnew = pd.concat([dfg, dfx])
-        dfnew.sort_values(by='order', inplace=True)
-        dfnew.drop('order', axis=1, inplace=True)
-
-        return dfnew
+        return idxdf_cols, obsdf_cols, fitdf_cols
 
 
     def finfo_to_params(self, finfo='./finfo.csv', pc_map=None):
@@ -229,47 +181,6 @@ class DataHandler(object):
         return self.model.rangl_data(pd.concat(bootlist))
 
 
-    def __get_headers__(self, params=None, percentiles=np.array([.1, .3, .5, .7, .9])):
-
-        conds = self.conds
-        nrows = self.nidx * self.nlevels * self.nconds
-        idx_conds_acc = np.hstack(['idx', conds, 'acc']).tolist()
-
-        cq = ['c' + str(int(n * 100)) for n in percentiles]
-        eq = ['e' + str(int(n * 100)) for n in percentiles]
-        qcols = cq + eq
-
-        if 'ssd' in self.data.columns:
-            self.get_ssds()
-            self.idx_qp_cols = [['acc'] + idx_ssds + qcols for idx_ssds in self.idx_ssd_ids]
-            self.all_qp_cols = idx_conds_acc + self.all_ssd_ids.tolist() + qcols
-        else:
-            self.model.ssd = None
-            self.idx_qp_cols = [np.hstack(['acc', qcols]).tolist()]*nrows
-            self.all_qp_cols = idx_conds_acc + qcols
-
-        if params:
-            info = ['nfev', 'nvary', 'df', 'chi',
-                    'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
-            self.infolabels = params + info
-
-
-    def remove_outliers(df, sd=1.5, verbose=False):
-
-        ssdf = df[df.response == 0]
-        godf = df[df.response == 1]
-        bound = godf.rt.std() * sd
-        rmslow = godf[godf['rt'] < (godf.rt.mean() + bound)]
-        clean_go = rmslow[rmslow['rt'] > (godf.rt.mean() - bound)]
-
-        clean = pd.concat([clean_go, ssdf])
-        if verbose:
-            pct_removed = len(clean) * 1. / len(df)
-            print "len(df): %i\nbound: %s \nlen(cleaned): %i\npercent removed: %.5f" % (len(df), str(bound), len(clean), pct_removed)
-
-        return clean
-
-
     def extract_popt_fitinfo(self, finfo=None):
         """ takes optimized dict or DF of vectorized parameters and
         returns dict with only depends_on.keys() containing vectorized vals.
@@ -295,8 +206,8 @@ class DataHandler(object):
         popt = dict(deepcopy(self.inits))
         pc_map = self.model.pc_map
 
-        for pkey in popt.keys():
-            if pkey in self.depends_on.keys():
+        for pkey in list(popt):
+            if pkey in list(self.depends_on):
                 popt[pkey] = np.array([finfo[pc] for pc in pc_map[pkey]])
                 continue
             popt[pkey] = finfo[pkey]

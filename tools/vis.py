@@ -12,7 +12,7 @@ from scipy.stats.mstats import mquantiles as mq
 from numpy import cumsum as cs
 from numpy import append as app
 
-sns.set(font='Helvetica', style='white', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
+sns.set(style='white', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'})
 
 cdict = colors.get_cpals('all')
 rpal = cdict['rpal']
@@ -24,7 +24,7 @@ cool = cdict['cool']
 slate = cdict['slate']
 
 
-def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None):
+def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None):
     dont_label = False
     sns.set_context('notebook', font_scale=1.7)
     if ax is None:
@@ -42,29 +42,26 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
     scl = 100
 
     if x is None:
-        x = np.arange(len(lines[0]), dtype='float')[::-1]*50
-        #x = array([450, 400, 350, 300, 250, 200], dtype='float')
+        #x = np.arange(len(lines[0]), dtype='float')[::-1]*50
+        x = array([400, 350, 300, 250, 200], dtype='float')
 
     xtls = x.copy()
-    xsim = np.linspace(x.min(), x.max(), 10000)
-    yylabel = 'P(Stop)'
+    xsim = np.linspace(x.min()-20, x.max()+20, 10000)
 
+    yylabel = 'P(Stop)'
     xxlabel = 'SSD (ms)'
-    xxlim = (xsim[0]-2, xsim[-1]+2)
+
     markers = True
     mclinealpha = [.7, 1] * len(lines)
 
-    x = analyze.res(-x, lower=x[-1], upper=x[0])
-    xxlim = (x[0]-2, x[-1]+2)
+    x = analyze.res(-x, lower=x[0], upper=x[-1])
+    xxlim = (x[0]-20, x[-1]+20)
     print(x)
     for i, yi in enumerate(lines):
-        if i == 0:
-            color = 'k'
-        else:
-            color = colors[i]
+        color = colors[i]
         y = analyze.res(yi, lower=yi[-1], upper=yi[0])
-        p_guess = (np.mean(x), np.mean(y), .5, .5)
-        p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=5000, ftol=1.e-20)
+        p_guess = (np.mean(x), np.mean(y), .5, .2)
+        p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=10000, ftol=1.e-20)
         x0, y0, c, k = p
         pxp = analyze.sigmoid(p, xsim)
         idx = (np.abs(pxp - pstop)).argmin()
@@ -78,22 +75,18 @@ def scurves(lines=[], kind='pro', yerr=[], pstop=.5, ax=None, linestyles=None, c
             a = mclinealpha[i]
             ax.plot(xsim, pxp, linestyle=linestyles[i], lw=2.5, color=color, label=labels[i], alpha=a)
             for ii in range(len(y)):
-                if i % 2 == 0:
-                    ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color='k', markerfacecolor='none', mec='k', mew=1.5, alpha=.8)
-                else:
-                    # color=mc[ii]
-                    ax.plot(x[ii], y[ii], lw=0, marker='x', ms=7, color=color, mew=3, alpha=a)
+                ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color=color, markerfacecolor='none', mec=color, mew=1.5, alpha=.8)
         else:
             ax.plot(xsim, pxp, linestyle=linestyles[i], lw=3.5, color=colors[i], label=labels[i])
         pse.append(xsim[idx])
 
-    plt.setp(ax, xlim=xxlim, xticks=x, ylim=(-.01, 1.05), yticks=np.arange(0,1.2,.2))#[0,  1])
-    ax.set_xticklabels([int(xt) for xt in xtls])
-    ax.set_yticklabels(np.arange(0,1.2,.2))#[0.0, 1.0])
-    ax.set_xlabel(xxlabel)
-    ax.set_ylabel(yylabel)
+    plt.setp(ax, xticks=x, ylim=(-.01, 1.05), yticks=np.arange(0,1.2,.2))#[0,  1])
+    #ax.set_xticklabels([int(xt) for xt in xtls])
+    #ax.set_yticklabels(np.arange(0,1.2,.2))#[0.0, 1.0])
+    #ax.set_xlabel(xxlabel)
+    #ax.set_ylabel(yylabel)
 
-    ax.legend(loc=0)
+    #ax.legend(loc=0)
     plt.tight_layout()
     sns.despine()
     return (pse)

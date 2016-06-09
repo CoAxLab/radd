@@ -35,11 +35,11 @@ def saygo(depends_on={}, labels=[], kind='radd', fit_on='subjects', dynamic='hyp
     msg = get_one()
     strings = (kind, bias, fit_on, pdep, dep, lbls, msg)
 
-    print """
+    print("""
       Model is prepared to fit %s model %s to %s data,
       allowing %s to vary across levels of %s (%s)
 
-      %s \n""" % strings
+      %s \n""" % strings)
 
     return True
 
@@ -110,13 +110,14 @@ def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_ar
     yhat_str = 'yhat = array([' + ', '.join(str(elem)[:6] for elem in yhat) + '])'
     y_str = 'y = array([' + ', '.join(str(elem)[:6] for elem in y) + '])'
     with open(fname, 'a') as f:
-        f.write('==' * 30 + '\n')
+        f.write('\n\n')
+        f.write('==' * 30 + '\n\n')
         f.write(str(fit_on) + '\n')
         f.write(str(model_id) + '\n')
-        f.write(str(dep_id) + '\n')
-        f.write(wts_str + '\n')
-        f.write(yhat_str + '\n')
-        f.write(y_str + '\n')
+        f.write(str(dep_id) + '\n\n')
+        f.write(wts_str + '\n\n')
+        f.write(yhat_str + '\n\n')
+        f.write(y_str + '\n\n')
         f.write('--' * 30 + '\n')
         f.write("FIT REPORT")
         f.write('\n' + '--' * 30 + '\n')
@@ -127,6 +128,6 @@ def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_ar
         f.write('BIC: %.8f' % finfo['BIC'] + '\n')
         f.write('chi: %.8f' % finfo['chi'] + '\n')
         f.write('rchi: %.8f' % finfo['rchi'] + '\n')
-        f.write('converged: %s' % finfo['cnvrg'] + '\n')
+        f.write('converged: %s' % finfo['cnvrg'] + '\n\n')
         f.write('==' * 30 + '\n\n\n')
     return finfo

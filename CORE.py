@@ -1,5 +1,6 @@
 #!/usr/local/bin/env python
 from __future__ import division
+from future.utils import listvalues
 import os
 from copy import deepcopy
 import numpy as np
@@ -7,6 +8,8 @@ import pandas as pd
 from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from radd.tools import theta, analyze, dfhandler
+from radd.models import Simulator
+from radd.fit import Optimizer
 
 class RADDCore(object):
 
@@ -20,9 +23,9 @@ class RADDCore(object):
     TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, tb=None, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), hyp_effect_dir=None, weighted=True, verbose=False):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), hyp_effect_dir=None, weighted=True, verbose=False):
 
-        self.data = data
+
         self.kind = kind
         self.fit_on = fit_on
         self.dynamic = dynamic
@@ -30,26 +33,24 @@ class RADDCore(object):
         self.hyp_effect_dir = hyp_effect_dir
         self.percentiles = percentiles
         self.verbose=verbose
+        self.tb = data[data.response == 1].rt.max()
 
-        # CONDITIONAL PARAMETERS
+        self.idx = list(data.idx.unique())
+        self.nidx = len(self.idx)
         self.depends_on = depends_on
-        self.conds = depends_on.values()
+
+        if None in listvalues(depends_on):
+            data['cond'] = 'flat'
+            self.conds = ['cond']
+            self.is_flat = True
+        else:
+            self.conds = listvalues(depends_on)
+            self.is_flat = False
+
         self.nconds = len(self.conds)
         self.levels = [np.sort(data[cond].unique()) for cond in self.conds]
         self.nlevels = np.sum([len(lvls) for lvls in self.levels])
-
-        # DEFINE ITERABLES
-        if self.fit_on == 'bootstrap':
-            self.idx = range(niter)
-        else:
-            self.idx = list(data.idx.unique())
-        self.nidx = len(self.idx)
-
-        # Get timebound
-        if tb != None:
-            self.tb = tb
-        else:
-            self.tb = data[data.response == 1].rt.max()
+        self.groups = np.hstack([['idx'], self.conds]).tolist()
 
         # PARAMETER INITIALIZATION
         if inits is None:
@@ -57,6 +58,7 @@ class RADDCore(object):
         else:
             self.inits = inits
 
+        self.data = data
         self.handler = dfhandler.DataHandler(self)
 
 
@@ -81,34 +83,45 @@ class RADDCore(object):
             |---> p['v'] = array([V1, V2]) -------> [OUT]
         """
 
-        params = np.sort(self.inits.keys()).tolist()
+        params = np.sort(list(self.inits)).tolist()
         cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
         self.pc_map = {}
 
-        for cond_i in xrange(self.nconds):
-            for d in self.depends_on.keys():
+        for cond_i in range(self.nconds):
+            if self.is_flat:
+                break
+            for d in list(self.depends_on):
                 params.remove(d)
                 self.pc_map[d] = ['_'.join([d, l]) for l in self.levels[cond_i]]
                 params.extend(self.pc_map[d])
 
-        # MAKE DATAFRAMES FOR OBSERVED DATA, POPT, MODEL PREDICTIONS
+        if 'ssd' in self.data.columns:
+            self.__set_ssd__()
+
+        # generate dataframes for observed data, popt, fitinfo, etc
         self.__make_dataframes__()
-        # CALCULATE WEIGHTS FOR COST FX
-        if self.weighted:
-            self.__get_wts__()
-        else:
-            # MAKE PSEUDO WEIGHTS
-            self.flat_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
-            self.cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
 
-        if self.verbose:
-            self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
-        else:
-            self.prepared = True
+        # calculate costfx weights
+        self.__set_wts__()
 
+        # set fit parameters with default values
         self.set_fitparams()
+
+        # set basinhopping parameters with default values
         self.set_basinparams()
 
+        # initialize optimizer object for controlling fit routines
+        # (updated with fitparams/basinparams whenever params are set)
+        self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, inits=self.inits, depends_on=self.depends_on, pc_map=self.pc_map)
+
+        # initialize model simulator, mainly accessed by the model optimizer object
+        self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
+
+        if self.verbose:
+            self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels,
+            kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
+        else:
+            self.prepared = True
 
 
     def __make_dataframes__(self):
@@ -131,19 +144,27 @@ class RADDCore(object):
         self.fitinfo = self.handler.fitinfo
 
 
-    def __get_wts__(self, weight_presponse=True):
+    def __set_wts__(self, weight_presponse=True):
         """ wrapper for analyze functions used to calculate
         weights used in cost function
         """
-        if self.fit_on == 'subjects':
-            self.cost_wts, self.flat_cost_wts = analyze.get_subject_cost_weights(self, weight_presponse=weight_presponse)
+        if self.weighted and self.fit_on == 'subjects':
+            cost_wts, flat_cost_wts = analyze.get_subject_cost_weights(self.handler, weight_presponse=weight_presponse, percentiles=self.percentiles)
+        elif self.weighted:
+            cost_wts, flat_cost_wts = analyze.get_group_cost_weights(self.handler)
         else:
-            self.cost_wts, self.flat_cost_wts = analyze.get_group_cost_weights(self)
+            self.flat_cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
+            self.cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
+        # squeeze out any extra dimensions in wts arrays
+        # ex: array([[1, 2, 3]]) --> array([1, 2, 3])
+        self.cost_wts = [cw.squeeze() for cw in cost_wts]
+        self.flat_cost_wts = [fcw.squeeze() for fcw in flat_cost_wts]
 
 
     def set_fitparams(self, get_params=False, **kwargs):
         """ dictionary of fit parameters, passed to Optimizer/Simulator objects
         """
+
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_cost_wts
             self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True, 'tol': 1.e-5,
@@ -152,15 +173,18 @@ class RADDCore(object):
             self.fitparams['idx'] = 0
             self.fitparams['y'] = self.observed_flat[0]
             self.fitparams['wts'] = self.flat_cost_wts[0]
-
+            if hasattr(self, 'ssd'):
+                self.fitparams['ssd'] = self.ssd[0]
+                self.fitparams['nssd'] = self.fitparams['ssd'].size
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.fitparams[kw_arg] = kw_val
-
-        if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
-            self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
-            self.fitparams['nssd'] = self.fitparams['ssd'].size
+            if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
+                self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
+                self.fitparams['nssd'] = self.fitparams['ssd'].size
+            self.opt.fitparams = self.fitparams
+            self.opt.simulator.__update__(fitparams=self.opt.fitparams)
 
         if get_params:
             return self.fitparams
@@ -168,16 +192,25 @@ class RADDCore(object):
 
     def set_basinparams(self, get_params=False, **kwargs):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
-
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams = {'nrand_inits': 2, 'interval': 10, 'niter': 40, 'stepsize': .05, 'niter_success': 20, 'method': 'TNC', 'tol': 1.e-3, 'maxiter': 20, 'disp': False}
+            self.basinparams = {'nrand_inits': 10, 'nrand_samples': 1000, 'interval': 10, 'niter': 50, 'stepsize': .07, 'niter_success': 20, 'method': 'TNC', 'tol': 1.e-4, 'maxiter': 100, 'disp': True}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.basinparams[kw_arg] = kw_val
+            self.opt.basinparams = self.basinparams
         if get_params:
             return self.basinparams
+
+    def __set_ssd__(self):
+        """ set model attr "ssd" as list of np.arrays
+        ssds to use when simulating data during optimization
+        """
+        grpdf = self.data.groupby(self.groups)
+        get_stopdf = lambda df: df[df.ttype=='stop']
+        get_df_ssds = lambda df: np.sort(get_stopdf(df).ssd.unique()*.001)
+        self.ssd = [get_df_ssds(df) for _,df in grpdf]
 
     def __extract_popt_fitinfo__(self, finfo=None):
         """ wrapper for DataHandler.extract_popt_fitinfo()
@@ -197,13 +230,11 @@ class RADDCore(object):
         resampled = analyze.resample_data(data, n=100, data_style=self.data_style, tb=self.tb, kind=self.kind)
         return resampled
 
-
     def assess_fit(self, finfo=None):
         """ wrapper for analyze.assess_fit calculates and stores
         rchi, AIC, BIC and other fit statistics
         """
         return analyze.assess_fit(finfo)
-
 
     def params_io(self, p={}, io='w', iostr='popt'):
         """ read // write parameters dictionaries
@@ -215,59 +246,19 @@ class RADDCore(object):
             p = dict(zip(ps[0], ps[1]))
             return p
 
-
-    def fits_io(self, fits=[], io='w', iostr='fits'):
+    def fits_io(self, fitparams, fits=[], io='w', iostr='fits'):
         """ read // write y, wts, yhat arrays
         """
+        y = fitparams['y'].flatten()
+        wts = fitparams['wts'].flatten()
+        fits = fits.flatten()
         if io == 'w':
-            if np.ndim(self.avg_y) > 1:
-                y = self.avg_y.flatten()
-                fits = fits.flatten()
-            else:
-                y = self.avg_y
             index = np.arange(len(fits))
-            df = pd.DataFrame({'y': y, 'wts': self.avg_wts, 'yhat': fits}, index=index)
+            df = pd.DataFrame({'y': y, 'wts': wts, 'yhat': fits}, index=index)
             df.to_csv(''.join([iostr, '.csv']))
-
         elif io == 'r':
             df = pd.read_csv(''.join([iostr, '.csv']), index_col=0)
             return df
-
-
-    def __nudge_params__(self, p, lim=(.98, 1.02)):
-        """
-        nudge params so not all initialized at same val
-        """
-
-        if self.hyp_effect_dir == 'up':
-            lim = [np.min(lim), np.max(lim)]
-        else:
-            lim = [np.max(lim), np.min(lim)]
-
-        for pkey in p.keys():
-            bump = np.linspace(lim[0], lim[1], self.nlevels)
-            if pkey in self.pc_map.keys():
-                p[pkey] = p[pkey] * bump
-        return p
-
-
-    def slice_bounds_global(self, inits, pfit):
-
-        b = theta.get_bounds(kind=self.kind, tb=self.fitparams['tb'])
-        pclists = []
-        for pkey, pcl in self.pc_map.items():
-            pfit.remove(pkey)
-            pfit.extend(pcl)
-            # add bounds for all
-            # pkey condition params
-            for pkc in pcl:
-                inits[pkc] = inits[pkey]
-                b[pkc] = b[pkey]
-
-        pbounds = tuple([slice(b[pk][0], b[pk][1], .25 * np.max(np.abs(b[pk]))) for pk in pfit])
-        params = tuple([inits[pk] for pk in pfit])
-
-        return pbounds, params
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         self.data = analyze.remove_outliers(self.data, sd=sd, verbose=verbose)
@@ -282,7 +273,7 @@ class RADDCore(object):
     def __check_inits__(self, inits=None, pro_ss=False, fit_noise=False):
         if inits is None:
             inits = dict(deepcopy(self.inits))
-        self.inits = theta.check_inits(inits=inits, pdep=self.depends_on.keys(), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
+        self.inits = theta.check_inits(inits=inits, pdep=list(self.depends_on), kind=self.kind, pro_ss=pro_ss, fit_noise=fit_noise)
 
     def __rename_bad_cols__(self):
         self.data = analyze.rename_bad_cols(self.data)

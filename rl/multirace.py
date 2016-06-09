@@ -23,12 +23,11 @@ def run_full_sims(p, env=pd.DataFrame, alphas_go=[], alphas_no=None, betas=[], n
         alphas_no=deepcopy(alphas_go)
 
     agroups = np.hstack([np.hstack([np.arange(n_a)]*n_b)]*nagents)
-    bgroups = np.hstack([np.sort(np.hstack([np.arange(n_b)]*n_a))]*nagents)
+    bgroups = np.sort(np.hstack([np.sort(np.hstack([np.arange(n_b)]*n_a))]*nagents))
     agents = np.sort(np.hstack([np.arange(nagents)]*n_a*n_b))
-
+    group = 0
     for agroup, bgroup, agent_i in zip(agroups, bgroups, agents):
 
-        group = (agroup+1)*(bgroup+1)
         beta = betas[bgroup]
         a_go = alphas_go[agroup]
         a_no = alphas_no[agroup]
@@ -45,6 +44,7 @@ def run_full_sims(p, env=pd.DataFrame, alphas_go=[], alphas_no=None, betas=[], n
         format_dict_updated = analyzer.analyze_learning_dynamics(format_dict)
         igtdf, agdf = analyzer.format_dataframes(format_dict_updated)
         agent_list.append([agdf, igtdf])
+        group += 1
 
     trial_df = pd.concat([ag[0] for ag in agent_list]) #.groupby(['group', 'trial']).mean().reset_index()
     igt_df = pd.concat([ag[1] for ag in agent_list], axis=1).T #.groupby('group').mean().reset_index()
