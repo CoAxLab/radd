@@ -3,7 +3,7 @@ import numpy as np
 
 setup(
     name='RADD',
-    version='0.0.4',
+    version='0.0.5',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
