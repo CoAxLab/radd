@@ -8,8 +8,7 @@ import pandas as pd
 from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from radd.tools import theta, analyze, dfhandler
-from radd.models import Simulator
-from radd.fit import Optimizer
+
 
 class RADDCore(object):
 
@@ -61,6 +60,7 @@ class RADDCore(object):
         # initialize dataframe handler
         self.handler = dfhandler.DataHandler(self)
         self.__prepare_fit__()
+        
 
     def __prepare_fit__(self):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
@@ -82,6 +82,9 @@ class RADDCore(object):
             |
             |---> p['v'] = array([V1, V2]) -------> [OUT]
         """
+        from radd.fit import Optimizer
+        from radd.models import Simulator
+
 
         params = np.sort(list(self.inits)).tolist()
         cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))

@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd.models import Simulator
-from radd.fit import Optimizer
 from radd.tools import messages
 from radd.CORE import RADDCore
 
