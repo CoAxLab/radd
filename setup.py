@@ -3,7 +3,7 @@ import numpy as np
 
 setup(
     name='RADD',
-    version='0.0.2',
+    version='0.0.3',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
@@ -13,12 +13,4 @@ setup(
     setup_requires=['NumPy >=1.8.2', 'SciPy >= 0.16.1', 'matplotlib >= 1.4.3', 'seaborn>=0.5.1', 'pandas >= 0.12.0', 'lmfit>=0.9.0'],
     include_package_data=True,
     include_dirs = [np.get_include()],
-    classifiers=[
-                'Environment :: Console',
-                'Operating System :: OS Independent',
-                'Intended Audience :: Science/Research',
-                'License :: OSI Approved :: BSD License',
-                'Programming Language :: Python',
-                'Topic :: Scientific/Engineering',
-                 ],
 )
