@@ -80,7 +80,7 @@ class Optimizer(object):
         self.pvc = deepcopy(['a', 'tr', 'v', 'xb'])
 
 
-    def get_best_inits(self, pkeys=None, nbest=20, nrand_samples=500):
+    def get_best_inits(self, pkeys=None, nbest=10, nrand_samples=500):
         """ test a large sample of random parameter values
         and submit <nbest> to hop_around() global optimization
         """

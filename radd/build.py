@@ -24,24 +24,22 @@ class Model(RADDCore):
             bias signal in model
         inits (dict):
             dictionary of parameters (v, a, tr, ssv, z) used to initialize model
+        fit_on (str):
+            set if model fits 'average', 'subjects', 'bootstrap' data
         depends_on (dict):
             set parameter dependencies on task conditions
             (ex. depends_on={'v': 'Condition'})
-        fit_on (str):
-            set if model fits 'average', 'subjects', 'bootstrap' data
+        weighted (bool):
+            if True (default), perform fits using a weighted least-squares approach
         dynamic (str):
             set dynamic bias signal to follow an exponential or hyperbolic
             form when fitting models with 'x' included in <kind> attr
-        hyp_effect_dir (str):
-            up or down: apriori hypothesized relationship between key:value pairs
-            in depends_on dict
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, weighted=True, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), verbose=False, hyp_effect_dir=None):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, weighted=True, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9])):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, hyp_effect_dir=hyp_effect_dir, percentiles=percentiles, weighted=weighted, verbose=verbose)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, percentiles=percentiles, weighted=weighted)
 
-        self.__prepare_fit__()
 
 
     def optimize(self, inits=None, fit_flat=True, fit_cond=True, multiopt=True):
@@ -95,13 +93,13 @@ class Model(RADDCore):
         """ optimizes flat model to data collapsing across all conditions
 
         ::Arguments::
-            random_init (bool <False>):
-                if True performs random initializaiton by sampling from parameter distributions and uses basinhopping alg. to find global minimum before entering stage 1 simplex
-            p0 (dict):
+            p (dict):
                 parameter dictionary to initalize model, if None uses init params
                 passed by Model object
-            y (ndarray):
-                data to be fit; must be same shape as flat_wts vector
+        ::Returns::
+            yhat_flat (array): model-predicted data array
+            finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
+            popt_flat (dict): optimized parameters dictionary
         """
         if self.multiopt:
             # Global Optimization w/ Basinhopping (+TNC)
@@ -117,15 +115,13 @@ class Model(RADDCore):
         """ optimizes full model to all conditions in data
 
         ::Arguments::
-        <OPTIONAL>
-            precond (bool <True>):
-                if True performs pre-conditionalizes params (p)  using
-                basinhopping alg. to find global minimum for each condition
-                before entering final simplex
             p (dict):
-                parameter dictionary, if None uses default init params passed by Model object
-            y (ndarray):
-                data to be fit; must be same shape as avg_wts vector
+                parameter dictionary to initalize model, if None uses init params
+                passed by Model object
+        ::Returns::
+            yhat (array): model-predicted data array
+            finfo (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
+            popt (dict): optimized parameters dictionary
         """
 
         if self.multiopt:

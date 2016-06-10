@@ -13,8 +13,8 @@ from radd.fit import Optimizer
 
 class RADDCore(object):
 
-    """ Parent class for constructing shared attributes and methods
-    of Model & Optimizer objects. Not meant to be used directly.
+    """ Parent class for constructing attributes and methods used by
+    of Model objects. Not meant to be used directly.
 
     Contains methods for building dataframes, generating observed data vectors
     that are entered into cost function during fitting as well as calculating
@@ -23,16 +23,15 @@ class RADDCore(object):
     TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), hyp_effect_dir=None, weighted=True, verbose=False):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), weighted=True, verbose=False):
 
+        self.verbose = verbose
 
         self.kind = kind
         self.fit_on = fit_on
         self.dynamic = dynamic
         self.weighted = weighted
-        self.hyp_effect_dir = hyp_effect_dir
         self.percentiles = percentiles
-        self.verbose=verbose
         self.tb = data[data.response == 1].rt.max()
 
         self.idx = list(data.idx.unique())
@@ -59,11 +58,12 @@ class RADDCore(object):
             self.inits = inits
 
         self.data = data
+        # initialize dataframe handler
         self.handler = dfhandler.DataHandler(self)
-
+        self.__prepare_fit__()
 
     def __prepare_fit__(self):
-        """ performs model setup and initiates dataframes. Automatically run when Model object is initialized
+        """ model setup and initiates dataframes. Automatically run when Model object is initialized
             *   pc_map is a dict containing parameter names as keys with values
                     corresponding to the names given to that parameter in Parameters object
                     (see optmize.Optimizer).
@@ -167,7 +167,7 @@ class RADDCore(object):
 
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_cost_wts
-            self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True, 'tol': 1.e-5,
+            self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True, 'tol': 1.e-4,
                 'method': 'nelder', 'niter': 500, 'tb': self.tb, 'percentiles': self.percentiles,
                 'dynamic': self.dynamic, 'fit_on': self.fit_on, 'depends_on': self.depends_on}
             self.fitparams['idx'] = 0
@@ -194,7 +194,7 @@ class RADDCore(object):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams = {'nrand_inits': 10, 'nrand_samples': 1000, 'interval': 10, 'niter': 50, 'stepsize': .07, 'niter_success': 20, 'method': 'TNC', 'tol': 1.e-4, 'maxiter': 100, 'disp': True}
+            self.basinparams = {'nrand_inits': 30, 'nrand_samples': 5000, 'interval': 10, 'niter': 40, 'stepsize': .05, 'niter_success': 20, 'method': 'TNC', 'tol': 1.e-3, 'maxiter': 100, 'disp': True}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
