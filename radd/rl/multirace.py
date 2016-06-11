@@ -7,7 +7,7 @@ from numpy import newaxis as na
 import pandas as pd
 from radd.rl import visr, analyzer
 from copy import deepcopy
-from radd import theta
+from radd.tools import theta
 
 temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
 updateQ = lambda q, winner, r, A: q[winner][-1] + A*(r - q[winner][-1])

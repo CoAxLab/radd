@@ -5,7 +5,7 @@ from numpy import array
 from numpy.random import sample as rs
 from numpy import newaxis as na
 import pandas as pd
-from radd import vis
+from radd.tools import vis
 from copy import deepcopy
 
 

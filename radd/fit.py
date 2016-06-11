@@ -9,7 +9,6 @@ from radd.tools import messages, theta
 from radd.tools.analyze import assess_fit
 from radd.models import Simulator
 from lmfit import minimize, fit_report
-from radd.CORE import RADDCore
 from scipy.optimize import basinhopping
 from numpy.random import uniform
 

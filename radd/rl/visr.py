@@ -8,7 +8,6 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
-from radd import vis
 from copy import deepcopy
 import matplotlib as mpl
 from IPython.display import display, Latex
@@ -21,7 +20,7 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
     tb = np.ceil(np.max([np.max(rti) if len(rti)>0 else 0 for rti in rt_dists]))+100
 
     sns.set(style='white', font_scale=1.2)
-    f, axes = vis.build_multi_axis(p, tb=tb)
+    f, axes = build_multi_axis(p, tb=tb)
     clrs = sns.color_palette('muted', 5)
 
     for i in xrange(len(all_traces)):
@@ -164,3 +163,31 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
     f.subplots_adjust(wspace=.4, hspace=.3)
     if save:
         f.savefig('.'.join(['reactivity_strategy_', measure, 'png']), dpi=400)
+
+
+def build_multi_axis(p, nresp=4, tb=1000):
+    bound = p['a']
+    onset = p['tr']
+    if hasattr(bound, '__iter__'):
+        bound = bound[0]
+        onset = onset[0]
+    # init figure, axes, properties
+    f, axes = plt.subplots(2, 2, figsize=(10, 5), sharex=True, sharey=True)
+    f.subplots_adjust(hspace=.1, top=.99, bottom=.05)
+    w = tb + 40
+    h = bound
+    start = onset - 80
+    axes=axes.flatten()
+    # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
+    for i, ax in enumerate(axes):
+        plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
+        ax.hlines(y=h, xmin=start, xmax=w, color='k')
+        ax.hlines(y=0, xmin=start, xmax=w, color='k')
+        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='-', alpha=.5)
+        ax.vlines(x=start + 2, ymin=0, ymax=h, color='k')
+        ax.set_xticklabels([])
+        ax.set_yticklabels([])
+        ax.set_xticks([])
+        ax.set_yticks([])
+    sns.despine(top=True, right=True, bottom=True, left=True)
+    return f, axes

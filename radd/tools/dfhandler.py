@@ -1,5 +1,6 @@
 #!usr/bin/env python
 from __future__ import division
+from future.utils import listvalues
 import pandas as pd
 import numpy as np
 from numpy import array
@@ -18,6 +19,7 @@ class DataHandler(object):
         self.fit_on = model.fit_on
         self.percentiles = model.percentiles
         self.groups = model.groups
+        self.depends_on = model.depends_on
 
         self.conds = model.conds
         self.nconds = model.nconds
@@ -95,7 +97,6 @@ class DataHandler(object):
 
         # GENERATE DF FOR FIT RESULTS
         self.fitinfo = pd.DataFrame(columns=infodf_cols, index=index)
-        self.fitinfo.loc[:, self.groups] = self.observedDF.loc[:, self.groups]
 
 
     def __get_headers__(self):
@@ -115,8 +116,13 @@ class DataHandler(object):
 
         obsdf_cols = obsdf_cols + qcols
         params = np.sort(list(self.inits))
+        if not self.model.is_flat:
+            dep_keys = list(self.model.pc_map)
+            cond_param_names = listvalues(self.model.pc_map)
+            params = np.hstack([params, np.squeeze(cond_param_names)]).tolist()
+            _ = [params.remove(pname) for pname in dep_keys]
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
-        fitdf_cols = np.hstack([self.groups, params, fit_cols]).tolist()
+        fitdf_cols = np.hstack([['idx'], params, fit_cols]).tolist()
 
         return idxdf_cols, obsdf_cols, fitdf_cols
 
