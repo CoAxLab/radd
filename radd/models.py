@@ -14,16 +14,13 @@ class Simulator(object):
     timepoints are simulated simultaneously
     """
 
-    def __init__(self, fitparams=None, inits=None, pc_map=None, kind='xdpm', dt=.001, si=.01, base=0, learn=False):
+    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.001, si=.01, learn=False):
 
         self.dt = dt
         self.si = si
         self.dx = np.sqrt(self.si * self.dt)
-        self.base = base
 
         self.learn = learn
-
-        self.inits = inits
         self.kind = kind
         self.pc_map = pc_map
 
@@ -66,11 +63,12 @@ class Simulator(object):
 
 
     def __prep_global__(self, basin_params={}, basin_keys=[]):
-        # set
+        """ prepare simulator for global optimization using
+        scipy.optimize.basinhopping algorithm
+        """
+        # set parameter names used to populate params dict
         self.basin_keys = basin_keys
-        # set all constant parameters in
-        # basin_params object (not available
-        # to basinhopping minimizer)
+        # set all constant parameters in basin_params object
         self.basin_params = basin_params
         self.chunk = lambda x, n: [array(x[i:i + n]) for i in range(0, len(x), n)]
 
@@ -79,7 +77,6 @@ class Simulator(object):
         """ initiates the simulation function used in
         optimization routine
         """
-
         if 'dpm' in self.kind:
             self.sim_fx = self.simulate_dpm
             self.analyze_fx = self.analyze_reactive
@@ -98,7 +95,6 @@ class Simulator(object):
         if 'rl' in self.kind:
             self.trialwise = True
 
-
         # SET STATIC/DYNAMIC BASIS FUNCTIONS
         if 'x' in self.kind and self.dynamic == 'hyp':
             # dynamic bias is hyperbolic
@@ -116,20 +112,15 @@ class Simulator(object):
 
         prob = self.percentiles
         dt = self.dt
-
-
+        rt_axis, go_axis, ss_axis = 1, 2, 3
         if self.learn:
-            self.go_resp = lambda trace, a: np.argmax((trace.T >= a).T, axis=1) * dt
-            self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
-            self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=2) * dt
-            self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 0))
-            self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
-        else:
-            self.go_resp = lambda trace, a: np.argmax((trace.T >= a).T, axis=2) * dt
-            self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=3) * dt
-            self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=3) * dt
-            self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, 1))
-            self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+            rt_axis-=1; go_axis-=1; ss_axis-=1
+
+        self.go_resp = lambda trace, a: np.argmax((trace.T >= a).T, axis=go_axis) * dt
+        self.ss_resp_up = lambda trace, a: np.argmax((trace.T >= a).T, axis=ss_axis) * dt
+        self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=ss_axis) * dt
+        self.RT = lambda ontime, rbool: ontime[:, na] + (rbool * np.where(rbool == 0, np.nan, rt_axis))
+        self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
 
         if 'irace' in self.kind:
             self.ss_resp = self.ss_resp_up
@@ -187,7 +178,7 @@ class Simulator(object):
         yhat = self.sim_fx(p)
 
         # calculate and return cost error
-        return np.sum(self.wts * (yhat - self.y)**2)
+        return np.sum(self.wts * (yhat - self.y)**2).astype(np.float32)
 
 
     def __cost_fx__(self, theta):
@@ -201,25 +192,23 @@ class Simulator(object):
             p = theta.valuesdict()
 
         yhat = self.sim_fx(p, analyze=True)
-        return np.sum(self.wts * (self.y - yhat)**2).astype(np.float32)
+        return np.sum(self.wts * (yhat - self.y)**2).astype(np.float32)
 
 
     def __update_go_process__(self, p):
-        """ update Pg (probability of DVg +dx) and Tg (num go process timepoints)
+        """ update Pg (probability of DVg +dx) and Tg (n timepoints)
         for go process and get get dynamic bias signal if 'x' model
         """
         Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
         Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
         t = csum([self.dt] * Tg.max())
         self.xtb = self.temporal_dynamics(p, t)
-        #diff = [Tg.max()-tg for tg in Tg]
-        #self.xtb = np.vstack([np.append(np.ones(diff[i]), xtb[i][:tg]) for i, tg in enumerate(Tg)])
         return Pg, Tg
 
 
     def __update_stop_process__(self, p, sso=0):
-        """ update Ps (probability of DVs +dx) and
-        Ts (SSD onsets) for stop process
+        """ update Ps (probability of DVs +dx) and Ts (n timepoints)
+        for each SSD of stop process
         """
         if 'sso' in list(p):
             sso = p['sso']

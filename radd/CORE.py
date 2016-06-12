@@ -7,7 +7,8 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from scipy.stats.mstats import mquantiles as mq
-from radd.tools import theta, analyze, dfhandler
+from radd.tools import theta, analyze
+from radd import dfhandler
 
 
 class RADDCore(object):
@@ -25,7 +26,6 @@ class RADDCore(object):
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), weighted=True, verbose=False):
 
         self.verbose = verbose
-
         self.kind = kind
         self.fit_on = fit_on
         self.dynamic = dynamic
@@ -38,6 +38,7 @@ class RADDCore(object):
         self.depends_on = depends_on
 
         if None in listvalues(depends_on):
+            data = data.copy()
             data['cond'] = 'flat'
             self.conds = ['cond']
             self.is_flat = True
@@ -45,22 +46,34 @@ class RADDCore(object):
             self.conds = listvalues(depends_on)
             self.is_flat = False
 
-        self.nconds = len(self.conds)
-        self.levels = [np.sort(data[cond].unique()) for cond in self.conds]
-        self.nlevels = np.sum([len(lvls) for lvls in self.levels])
-        self.groups = np.hstack([['idx'], self.conds]).tolist()
-
         # PARAMETER INITIALIZATION
         if inits is None:
             self.__get_default_inits__()
         else:
             self.inits = inits
 
+        self.nconds = len(self.conds)
+        self.levels = [np.sort(data[cond].unique()) for cond in self.conds]
+        self.nlevels = np.sum([len(lvls) for lvls in self.levels])
+        self.groups = np.hstack([['idx'], self.conds]).tolist()
+
         self.data = data
+        self.make_pcmap()
         # initialize dataframe handler
         self.handler = dfhandler.DataHandler(self)
         self.__prepare_fit__()
-        
+
+    def make_pcmap(self):
+        params = np.sort(list(self.inits)).tolist()
+        cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
+        self.pc_map = {}
+        for cond_i in range(self.nconds):
+            if self.is_flat:
+                break
+            for d in list(self.depends_on):
+                params.remove(d)
+                self.pc_map[d] = ['_'.join([d, l]) for l in self.levels[cond_i]]
+                params.extend(self.pc_map[d])
 
     def __prepare_fit__(self):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
@@ -85,21 +98,8 @@ class RADDCore(object):
         from radd.fit import Optimizer
         from radd.models import Simulator
 
-
-        params = np.sort(list(self.inits)).tolist()
-        cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
-        self.pc_map = {}
-
-        for cond_i in range(self.nconds):
-            if self.is_flat:
-                break
-            for d in list(self.depends_on):
-                params.remove(d)
-                self.pc_map[d] = ['_'.join([d, l]) for l in self.levels[cond_i]]
-                params.extend(self.pc_map[d])
-
         if 'ssd' in self.data.columns:
-            self.__set_ssd__()
+            self.set_ssd()
 
         # generate dataframes for observed data, popt, fitinfo, etc
         self.__make_dataframes__()
@@ -118,7 +118,7 @@ class RADDCore(object):
         self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, inits=self.inits, depends_on=self.depends_on, pc_map=self.pc_map)
 
         # initialize model simulator, mainly accessed by the model optimizer object
-        self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, inits=self.inits, pc_map=self.pc_map)
+        self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
 
         if self.verbose:
             self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels,
@@ -146,22 +146,28 @@ class RADDCore(object):
         # dataframe with same dim as observeddf for storing fit info
         self.fitinfo = self.handler.fitinfo
 
+        # dataframe containing cost_function wts (see dfhandler docs)
+        self.wtsDF = self.handler.wtsDF
+
 
     def __set_wts__(self, weight_presponse=True):
         """ wrapper for analyze functions used to calculate
         weights used in cost function
         """
+
         if self.weighted and self.fit_on == 'subjects':
-            cost_wts, flat_cost_wts = analyze.get_subject_cost_weights(self.handler, weight_presponse=weight_presponse, percentiles=self.percentiles)
-        elif self.weighted:
-            cost_wts, flat_cost_wts = analyze.get_group_cost_weights(self.handler)
+            cost_wts = self.wtsDF.groupby(self.groups).mean().loc[:, 'acc':].values
+            flat_wts = self.wtsDF.groupby('idx').mean().loc['acc':].values
+        elif self.weighted and self.fit_on == 'average':
+            cost_wts =  [self.wtsDF.groupby(self.conds).mean().loc[:, 'acc':].values]
+            flat_wts = [self.wtsDF.mean().loc['acc':].values]
         else:
-            self.flat_cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
-            self.cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
+            cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
+            flat_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
         # squeeze out any extra dimensions in wts arrays
         # ex: array([[1, 2, 3]]) --> array([1, 2, 3])
         self.cost_wts = [cw.squeeze() for cw in cost_wts]
-        self.flat_cost_wts = [fcw.squeeze() for fcw in flat_cost_wts]
+        self.flat_cost_wts = [fcw.squeeze() for fcw in flat_wts]
 
 
     def set_fitparams(self, get_params=False, **kwargs):
@@ -170,9 +176,9 @@ class RADDCore(object):
 
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_cost_wts
-            self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True, 'tol': 1.e-4,
-                'method': 'nelder', 'niter': 500, 'tb': self.tb, 'percentiles': self.percentiles,
-                'dynamic': self.dynamic, 'fit_on': self.fit_on, 'depends_on': self.depends_on}
+            self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True,
+            'tol': 1.e-4, 'method': 'nelder', 'niter': 500, 'tb': self.tb, 'fit_on': self.fit_on,
+            'percentiles': self.percentiles, 'dynamic': self.dynamic, 'depends_on': self.depends_on}
             self.fitparams['idx'] = 0
             self.fitparams['y'] = self.observed_flat[0]
             self.fitparams['wts'] = self.flat_cost_wts[0]
@@ -206,14 +212,21 @@ class RADDCore(object):
         if get_params:
             return self.basinparams
 
-    def __set_ssd__(self):
+    def set_ssd(self, groups=None, scale=.001, get=False, unique=False):
         """ set model attr "ssd" as list of np.arrays
         ssds to use when simulating data during optimization
         """
-        grpdf = self.data.groupby(self.groups)
+        if groups is None:
+            groups = self.groups
+        grpdf = self.data.groupby(groups)
         get_stopdf = lambda df: df[df.ttype=='stop']
-        get_df_ssds = lambda df: np.sort(get_stopdf(df).ssd.unique()*.001)
-        self.ssd = [get_df_ssds(df) for _,df in grpdf]
+        get_df_ssds = lambda df: np.sort(get_stopdf(df).ssd.unique()*scale)
+        ssd = [get_df_ssds(df) for _,df in grpdf]
+        if get and unique:
+            return np.unique(np.hstack(ssd)).tolist()
+        elif get:
+            return [issd.tolist() for issd in ssd]
+        self.ssd = ssd
 
     def __extract_popt_fitinfo__(self, finfo=None):
         """ wrapper for DataHandler.extract_popt_fitinfo()

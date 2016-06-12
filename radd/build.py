@@ -90,7 +90,6 @@ class Model(RADDCore):
 
     def optimize_flat(self, p):
         """ optimizes flat model to data collapsing across all conditions
-
         ::Arguments::
             p (dict):
                 parameter dictionary to initalize model, if None uses init params
@@ -112,7 +111,6 @@ class Model(RADDCore):
 
     def optimize_conditional(self, p):
         """ optimizes full model to all conditions in data
-
         ::Arguments::
             p (dict):
                 parameter dictionary to initalize model, if None uses init params

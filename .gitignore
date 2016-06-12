@@ -1,7 +1,5 @@
 ##########################
-##########################
 # radd .gitignore file #
-##########################
 ##########################
 
 
@@ -9,30 +7,18 @@
 ###################
 *.so
 
-
-# Logs and databases #
-######################
-*.log
-*.sql
-*.sqlite
-
-# OS generated files #
-######################
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
-
 # Temporary Files #
 ###################
 *.pyc
 
-# Setuptools distribution folder.
-/dist/
+# Wheel build folder #
+######################
+build/
+
+# Setuptools distribution folder #
+##################################
+dist/
 
 # Python egg metadata, regenerated from source files by setuptools.
-/*.egg-info
-/*.egg
+*.egg-info
+*.egg

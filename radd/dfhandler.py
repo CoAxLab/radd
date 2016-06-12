@@ -1,19 +1,25 @@
 #!usr/bin/env python
 from __future__ import division
 from future.utils import listvalues
+from copy import deepcopy
 import pandas as pd
 import numpy as np
 from numpy import array
+from radd.tools import analyze
+from scipy.stats.mstats_extras import mjci
+
 
 class DataHandler(object):
 
-    def __init__(self, model):
+    def __init__(self, model, max_wt=10):
 
         self.model = model
         self.data = model.data
         self.inits = model.inits
         self.idx = model.idx
         self.nidx = model.nidx
+
+        self.max_wt = max_wt
 
         self.kind = model.kind
         self.fit_on = model.fit_on
@@ -78,43 +84,175 @@ class DataHandler(object):
         """ concatenate all idx data vectors into a dataframe
         """
 
-        idxdf_cols, obsdf_cols, infodf_cols = self.__get_headers__()
-
+        #idx_cols, obsdf_cols, finfo_cols = self.__make_headers__()
+        masterDF_header = self.__make_headers__()
         data = self.data
-        ncols = len(obsdf_cols)
+        ncols = len(masterDF_header)
         nrows = self.nrows
         index = range(nrows)
+        nandata = np.zeros((nrows, ncols))*np.nan
 
         self.datdf = self.grpData.apply(self.model.rangl_data).sortlevel(0)
         self.dfvals = [self.datdf.values[i].astype(float) for i in index]
-
-        self.observedDF = pd.DataFrame(np.zeros((nrows, ncols))*np.nan, columns=obsdf_cols, index=index)
+        self.observedDF = pd.DataFrame(nandata, columns=masterDF_header, index=index)
         self.observedDF.loc[:, self.groups] = self.datdf.reset_index()[self.groups].values
         self.fits = self.observedDF.copy()
+        self.wtsDF = self.observedDF.copy()
 
         for rowi in range(nrows):
-            self.observedDF.loc[rowi, idxdf_cols[rowi]] = self.dfvals[rowi]
+            self.observedDF.loc[rowi, self.idx_cols[rowi]] = self.dfvals[rowi]
 
         # GENERATE DF FOR FIT RESULTS
-        self.fitinfo = pd.DataFrame(columns=infodf_cols, index=index)
+        self.fitinfo = pd.DataFrame(columns=self.finfo_cols, index=index)
+        idx_qwts, idx_pwts = self.estimate_cost_weights()
+        # fill wtsDF with idx quantile wts (ratios)
+        self.wtsDF.loc[:, self.q_cols] = idx_qwts
+        # fill wtsDF with resp. probability wts (ratios)
+        self.wtsDF.loc[:, self.p_cols] = idx_pwts
+
+    def __make_headers__(self, ssd_list=None):
+
+        gcols = self.groups
+        if hasattr(self.model, 'ssd'):
+            ssd_list = self.model.set_ssd(scale=1, get=True)
+
+        self.make_idx_cols(ssd_list)
+        masterDF_header = self.groups + self.p_cols + self.q_cols
+        return masterDF_header
+
+    def estimate_cost_weights(self):
+        """ calculate weights using observed variability
+        across subjects (model.observedDF)
+        """
+
+        data = self.data
+        nsplits = self.nlevels * self.nconds
+        percents = self.percentiles
+        nquant = percents.size
+
+        # estimate quantile weights
+        idx_qwts = self.mj_quanterr()
+        # estimate resp. probability weights
+        if self.model.fit_on=='subjects':
+            idx_pwts = self.pwts_idx_error_calc()
+        elif self.model.fit_on=='average':
+            # repeat for all rows in wtsDF (idx x ncond x nlevels)
+            idx_pwts = self.pwts_group_error_calc()
+
+        return idx_qwts, idx_pwts
 
 
-    def __get_headers__(self):
+    def mj_quanterr(self):
+        """ calculates weight vectors for reactive RT quantiles by
+        first estimating the SEM of RT quantiles for corr. and err. responses.
+        (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
+        Then representing these variances as ratios.
+        e.g.
+              QSEM = mjci(rtvectors)
+              wts = median(QSEM)/QSEM
+        """
+        idx_mjci = lambda x: mjci(x.rt, prob=self.percentiles)
+        nidx = self.nidx
+        nquant = self.percentiles.size
+        groups = self.groups
+        nsplits = self.nlevels * self.nconds
+        # get all trials with response recorded
+        godf = self.data.query('response==1')
+        # sort by ttype first so go(acc==1) occurs before stop(acc==0)
+        ttype_ordered_groups = np.hstack([groups, 'ttype', 'acc']).tolist()
+        godf_grouped = godf.groupby(ttype_ordered_groups)
+        # apply self.idx_mjci() to estimate quantile CI's
+        quant_err = np.vstack(godf_grouped.apply(idx_mjci).values)
+        # reshape [nidx   x   ncond * nquant * nacc]
+        idx_qerr = quant_err.reshape(nidx, nsplits * nquant * 2)
+        # calculate subject median across all conditions quantiles and accuracy
+        # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
+        # for conditions with greater number of observations (i.e., more acc==1 in godf)
+        idx_medians = np.nanmedian(idx_qerr, axis=1)
+        idx_qratio = idx_medians[:, None] / idx_qerr
+        # set extreme values to max_wt arg val
+        idx_qratio[idx_qratio >= self.max_wt] = self.max_wt
+        # reshape to fit in wtsDF[:, q_cols]
+        return idx_qratio.reshape(nidx * nsplits, nquant * 2)
 
-        obsdf_cols = np.hstack([self.groups + ['acc']]).tolist()
+    def pwts_group_error_calc(self):
+        """ get stdev across subjects (and any conds) in observedDF
+        weight perr by inverse of counts for each resp. probability measure
+        """
+        groupedDF = self.observedDF.groupby(self.conds)
+        perr = groupedDF.agg(np.nanstd).loc[:, self.p_cols].values
+        counts = groupedDF.count().loc[:, self.p_cols].values
+        nsplits = self.nlevels * self.nconds
+        ndata = len(self.p_cols)
+        # replace stdev of 0 with next smallest value in vector
+        perr[perr==0.] = perr[perr>0.].min()
+        p_wt_bycount = perr * (1./counts)
+        # set wts equal to ratio --> median_perr / all_perr_values
+        pwts_ratio = np.nanmedian(p_wt_bycount, axis=1)[:, None] / p_wt_bycount
+        # set extreme values to max_wt arg val
+        pwts_ratio[pwts_ratio >= self.max_wt] = self.max_wt
+        # shape pwts_ratio to conform to wtsDF
+        idx_pwts = np.array([pwts_ratio]*self.nidx)
+        return idx_pwts.reshape(self.nidx * nsplits, ndata)
+
+    def pwts_idx_error_calc(self, extra_group=None):
+        """ count number of observed responses across levels transform into ratios
+        (np.median(counts_at_each_level) / counts_at_each_level) for weight
+        subject-level p(response) values in cost function.
+
+        ::Arguments::
+            df (DataFrame): group-level dataframe
+            var (str): column header for variable to count responses
+            conds (list): depends_on.values()
+        """
+        df = self.data.copy()
+        if hasattr(self.model, 'ssd'):
+            df = df[df.ttype == 'stop'].copy()
+            extra_group = 'ssd'
+
+        def calc_pwts(df_i):
+            countdf = df_i.groupby(extra_group).count()
+            # get counts across levels except for last (correct Go//SSD==1000)
+            lvl_counts = countdf.reset_index()['response'].values
+            # calculate count ratio for all values
+            varwts = np.median(lvl_counts)/lvl_counts
+            # append 1 to front as weight of correct P(Go|No_SS)
+            acc_var_wts = np.append(1., varwts)
+            return acc_var_wts
+
+        ic_grp = df.groupby(self.groups)
+        idx_pwts = [calc_pwts(cdf) for c, cdf in ic_grp]
+        return idx_pwts
+
+
+    def make_idx_cols(self, ssd_list=None):
+        """ make idx-specific headers in event of missing data
+        make all other headers if not done yet
+        """
+        if not hasattr(self, 'q_cols'):
+            self.make_q_cols()
+        if not hasattr(self, 'p_cols'):
+            self.make_p_cols(ssd_list)
+        if not hasattr(self, 'finfo_cols'):
+            self.make_finfo_cols()
+        idx_pcols = list(self.p_cols[0])*self.nrows
+        idx_qcols = list(self.q_cols)*self.nrows
+        if ssd_list:
+            self.idx_cols = [[self.p_cols[0]] + issd + self.q_cols for issd in ssd_list]
+        else:
+            self.idx_cols = [self.p_cols + self.q_cols]*self.nrows
+
+    def make_q_cols(self):
         cq = ['c' + str(int(n * 100)) for n in self.percentiles]
         eq = ['e' + str(int(n * 100)) for n in self.percentiles]
-        qcols = cq + eq
+        self.q_cols = cq + eq
 
-        if hasattr(self.model, 'ssd'):
-            ssd_list = [np.asarray(issd*1000, dtype=np.int) for issd in self.model.ssd]
-            idxdf_cols = [['acc'] + issd.tolist() + qcols for issd in ssd_list]
-            all_ssds = np.unique(np.hstack(ssd_list))
-            obsdf_cols = obsdf_cols + all_ssds.tolist()
-        else:
-            idxdf_cols = [np.hstack(['acc'], qcols).tolist()]*nrows
+    def make_p_cols(self, ssd_list=None):
+        self.p_cols = ['acc']
+        if ssd_list:
+            self.p_cols = self.p_cols + np.unique(ssd_list).tolist()
 
-        obsdf_cols = obsdf_cols + qcols
+    def make_finfo_cols(self):
         params = np.sort(list(self.inits))
         if not self.model.is_flat:
             dep_keys = list(self.model.pc_map)
@@ -122,9 +260,7 @@ class DataHandler(object):
             params = np.hstack([params, np.squeeze(cond_param_names)]).tolist()
             _ = [params.remove(pname) for pname in dep_keys]
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
-        fitdf_cols = np.hstack([['idx'], params, fit_cols]).tolist()
-
-        return idxdf_cols, obsdf_cols, fitdf_cols
+        self.finfo_cols = np.hstack([['idx'], params, fit_cols]).tolist()
 
 
     def finfo_to_params(self, finfo='./finfo.csv', pc_map=None):
