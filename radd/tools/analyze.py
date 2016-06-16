@@ -27,19 +27,24 @@ def assess_fit(finfo):
 
     return finfo
 
-def rangl_data(data, data_style='re', tb=.555, percentiles=([.1, .3, .5, .7, .9])):
+def rangl_data(data, tb=.555, percentiles=([.1, .3, .5, .7, .9]), ssd_method='all'):
     """ called by __make_dataframes__ to generate observed dataframes and iterables for
     subject fits
     """
-
     gac = data.query('ttype=="go"').acc.mean()
-    sacc = data.query('ttype=="stop"').groupby('ssd').mean()['acc'].values
     grt = data.query('ttype=="go" & acc==1').rt.values
     ert = data.query('response==1 & acc==0').rt.values
     gq = mq(grt, prob=percentiles)
     eq = mq(ert, prob=percentiles)
-    return np.hstack([gac, sacc, gq, eq])
-
+    data_vector = [gac, gq, eq]
+    if 'ssd' in data.columns:
+        stopdf = data.query('ttype=="stop"')
+        if ssd_method=='all':
+            sacc=stopdf.groupby('ssd').mean()['acc'].values
+        elif ssd_method=='central':
+            sacc = np.array([stopdf.mean()['acc']])
+        data_vector.insert(1, sacc)
+    return np.hstack(data_vector)
 
 def remove_outliers(data, sd=1.5, verbose=False):
 

@@ -6,23 +6,24 @@ import pandas as pd
 import numpy as np
 from numpy import array
 from radd.tools import analyze
+from scipy.stats.mstats import mquantiles as mq
 from scipy.stats.mstats_extras import mjci
 
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=10):
+    def __init__(self, model, max_wt=5):
 
         self.model = model
         self.data = model.data
         self.inits = model.inits
         self.idx = model.idx
         self.nidx = model.nidx
-
         self.max_wt = max_wt
 
         self.kind = model.kind
         self.fit_on = model.fit_on
+        self.ssd_method = model.ssd_method
         self.percentiles = model.percentiles
         self.groups = model.groups
         self.depends_on = model.depends_on
@@ -62,29 +63,25 @@ class DataHandler(object):
         """
 
         self.make_observed_groupDFs()
+        odf = self.observedDF.copy()
+        wdf = self.wtsDF.copy()
+        as_values = lambda df: df.loc[:, 'acc':].dropna(axis=1).values.squeeze()
 
         if self.fit_on=='subjects':
-            idxdf = lambda idx: self.observedDF[self.observedDF['idx']==idx]
-            observed = [idxdf(idx).dropna(axis=1).loc[:, 'acc':].values for idx in self.idx]
-            observedflat = [idxdf(idx).dropna(axis=1).mean().loc['acc':].values for idx in self.idx]
-
+            self.observed = [as_values(odf[odf['idx']==idx]) for idx in self.idx]
+            self.cond_wts = [as_values(wdf[wdf['idx']==idx]) for idx in self.idx]
+            self.observed_flat = [self.observed[idx].mean(axis=0) for idx in range(self.nidx)]
+            self.flat_wts = [self.cond_wts[idx].mean(axis=0) for idx in range(self.nidx)]
         elif self.fit_on=='average':
-            observed = [self.observedDF.groupby(self.conds).mean().loc[:, 'acc':].values]
-            observedflat = [self.observedDF.mean().loc['acc':].values]
-
-        # elif self.fit_on == 'bootstrap':
-        #     observed = self.idxData.apply(self.resample_data)
-
-        # Get rid of any extra dimensions
-        self.observed = [obs_i.squeeze() for obs_i in observed]
-        self.observed_flat = [obsF_i.squeeze() for obsF_i in observedflat]
+            self.observed = [as_values(odf.groupby(self.conds).mean())]
+            self.cond_wts = [as_values(wdf.groupby(self.conds).mean())]
+            self.observed_flat = [self.observed[0].mean(axis=0)]
+            self.flat_wts = [self.cond_wts[0].mean(axis=0)]
 
 
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
         """
-
-        #idx_cols, obsdf_cols, finfo_cols = self.__make_headers__()
         masterDF_header = self.__make_headers__()
         data = self.data
         ncols = len(masterDF_header)
@@ -92,7 +89,7 @@ class DataHandler(object):
         index = range(nrows)
         nandata = np.zeros((nrows, ncols))*np.nan
 
-        self.datdf = self.grpData.apply(self.model.rangl_data).sortlevel(0)
+        self.datdf = self.grpData.apply(self.rangl_data).sortlevel(0)
         self.dfvals = [self.datdf.values[i].astype(float) for i in index]
         self.observedDF = pd.DataFrame(nandata, columns=masterDF_header, index=index)
         self.observedDF.loc[:, self.groups] = self.datdf.reset_index()[self.groups].values
@@ -101,35 +98,42 @@ class DataHandler(object):
 
         for rowi in range(nrows):
             self.observedDF.loc[rowi, self.idx_cols[rowi]] = self.dfvals[rowi]
-
         # GENERATE DF FOR FIT RESULTS
         self.fitinfo = pd.DataFrame(columns=self.finfo_cols, index=index)
+        # Calculate p(resp) and rt quantile costfx weights
         idx_qwts, idx_pwts = self.estimate_cost_weights()
         # fill wtsDF with idx quantile wts (ratios)
         self.wtsDF.loc[:, self.q_cols] = idx_qwts
         # fill wtsDF with resp. probability wts (ratios)
         self.wtsDF.loc[:, self.p_cols] = idx_pwts
 
-    def __make_headers__(self, ssd_list=None):
-
-        gcols = self.groups
-        if hasattr(self.model, 'ssd'):
-            ssd_list = self.model.set_ssd(scale=1, get=True)
-
-        self.make_idx_cols(ssd_list)
-        masterDF_header = self.groups + self.p_cols + self.q_cols
-        return masterDF_header
+    def rangl_data(self, data):
+        """ called by __make_dataframes__ to generate observed dataframes and iterables for
+        subject fits
+        """
+        gac = data.query('ttype=="go"').acc.mean()
+        grt = data.query('ttype=="go" & acc==1').rt.values
+        ert = data.query('response==1 & acc==0').rt.values
+        gq = mq(grt, prob=self.percentiles)
+        eq = mq(ert, prob=self.percentiles)
+        data_vector = [gac, gq, eq]
+        if 'ssd' in self.data.columns:
+            stopdf = data.query('ttype=="stop"')
+            if self.model.ssd_method=='all':
+                sacc=stopdf.groupby('ssd').mean()['acc'].values
+            elif self.model.ssd_method=='central':
+                sacc = np.array([stopdf.mean()['acc']])
+            data_vector.insert(1, sacc)
+        return np.hstack(data_vector)
 
     def estimate_cost_weights(self):
         """ calculate weights using observed variability
         across subjects (model.observedDF)
         """
-
         data = self.data
         nsplits = self.nlevels * self.nconds
         percents = self.percentiles
         nquant = percents.size
-
         # estimate quantile weights
         idx_qwts = self.mj_quanterr()
         # estimate resp. probability weights
@@ -138,9 +142,7 @@ class DataHandler(object):
         elif self.model.fit_on=='average':
             # repeat for all rows in wtsDF (idx x ncond x nlevels)
             idx_pwts = self.pwts_group_error_calc()
-
         return idx_qwts, idx_pwts
-
 
     def mj_quanterr(self):
         """ calculates weight vectors for reactive RT quantiles by
@@ -195,35 +197,47 @@ class DataHandler(object):
         idx_pwts = np.array([pwts_ratio]*self.nidx)
         return idx_pwts.reshape(self.nidx * nsplits, ndata)
 
-    def pwts_idx_error_calc(self, extra_group=None):
-        """ count number of observed responses across levels transform into ratios
-        (np.median(counts_at_each_level) / counts_at_each_level) for weight
+    def pwts_idx_error_calc(self, index=['idx'], extra_group=None):
+        """ count number of observed responses across levels, transform into ratios
+        (counts_at_each_level / np.median(counts_at_each_level)) for weight
         subject-level p(response) values in cost function.
-
         ::Arguments::
             df (DataFrame): group-level dataframe
             var (str): column header for variable to count responses
             conds (list): depends_on.values()
         """
         df = self.data.copy()
-        if hasattr(self.model, 'ssd'):
-            df = df[df.ttype == 'stop'].copy()
-            extra_group = 'ssd'
+        if not self.model.is_flat:
+            index = index + self.conds
 
-        def calc_pwts(df_i):
-            countdf = df_i.groupby(extra_group).count()
-            # get counts across levels except for last (correct Go//SSD==1000)
-            lvl_counts = countdf.reset_index()['response'].values
-            # calculate count ratio for all values
-            varwts = np.median(lvl_counts)/lvl_counts
-            # append 1 to front as weight of correct P(Go|No_SS)
-            acc_var_wts = np.append(1., varwts)
-            return acc_var_wts
+        if 'ssd' in df.columns:
+            if self.ssd_method=='all':
+                df = df[df.ttype=='stop'].copy()
+                split_by = 'ssd'
+            elif self.ssd_method=='central':
+                split_by = 'ttype'
+        else:
+            split_by = self.conds
+            _ = index.remove(split_by)
 
-        ic_grp = df.groupby(self.groups)
-        idx_pwts = [calc_pwts(cdf) for c, cdf in ic_grp]
+        df['n'] = 1
+        countdf = df.pivot_table('n', index=index, columns=split_by, aggfunc=np.sum)
+        idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
+        if self.ssd_method=='all':
+            go_wts = np.ones(countdf.shape[0])
+            idx_pwts = np.concatenate((go_wts[:,None], idx_pwts), axis=1)
         return idx_pwts
 
+    def __make_headers__(self, ssd_list=None):
+        gcols = self.groups
+        if 'ssd' in self.data.columns:
+            if self.ssd_method=='all':
+                ssd_list = self.model.set_ssd(scale=1, get=True)
+            else:
+                ssd_list = [['sacc'] for i in range(self.nrows)]
+        self.make_idx_cols(ssd_list)
+        masterDF_header = self.groups + self.p_cols + self.q_cols
+        return masterDF_header
 
     def make_idx_cols(self, ssd_list=None):
         """ make idx-specific headers in event of missing data
@@ -235,10 +249,9 @@ class DataHandler(object):
             self.make_p_cols(ssd_list)
         if not hasattr(self, 'finfo_cols'):
             self.make_finfo_cols()
-        idx_pcols = list(self.p_cols[0])*self.nrows
-        idx_qcols = list(self.q_cols)*self.nrows
         if ssd_list:
-            self.idx_cols = [[self.p_cols[0]] + issd + self.q_cols for issd in ssd_list]
+            acc = [self.p_cols[0]]
+            self.idx_cols = [acc + issd + self.q_cols for issd in ssd_list]
         else:
             self.idx_cols = [self.p_cols + self.q_cols]*self.nrows
 
@@ -250,7 +263,8 @@ class DataHandler(object):
     def make_p_cols(self, ssd_list=None):
         self.p_cols = ['acc']
         if ssd_list:
-            self.p_cols = self.p_cols + np.unique(ssd_list).tolist()
+            ssd_unique = np.unique(np.hstack(ssd_list))
+            self.p_cols = self.p_cols + ssd_unique.tolist()
 
     def make_finfo_cols(self):
         params = np.sort(list(self.inits))

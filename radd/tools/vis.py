@@ -24,8 +24,8 @@ cool = cdict['cool']
 slate = cdict['slate']
 
 
-def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None):
-    dont_label = False
+def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None, pse=[], scl=100):
+
     sns.set_context('notebook', font_scale=1.7)
     if ax is None:
         f, ax = plt.subplots(1, figsize=(5.5, 6))
@@ -33,14 +33,10 @@ def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None,
         colors = slate(len(lines))
     if labels is None:
         labels = [''] * len(lines)
-        dont_label = True
     if linestyles is None:
         linestyles = ['-'] * len(lines)
 
     lines = [(line) if type(line) == list else line for line in lines]
-    pse = []
-    scl = 100
-
     if x is None:
         #x = np.arange(len(lines[0]), dtype='float')[::-1]*50
         x = array([400, 350, 300, 250, 200], dtype='float')
@@ -50,17 +46,15 @@ def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None,
 
     yylabel = 'P(Stop)'
     xxlabel = 'SSD (ms)'
-
-    markers = True
     mclinealpha = [.7, 1] * len(lines)
 
     x = analyze.res(-x, lower=x[0], upper=x[-1])
     xxlim = (x[0]-20, x[-1]+20)
-    print(x)
+
     for i, yi in enumerate(lines):
         color = colors[i]
         y = analyze.res(yi, lower=yi[-1], upper=yi[0])
-        p_guess = (np.mean(x), np.mean(y), .5, .2)
+        p_guess = (np.mean(x), np.mean(y), .39, .5)
         p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=10000, ftol=1.e-20)
         x0, y0, c, k = p
         pxp = analyze.sigmoid(p, xsim)
@@ -83,10 +77,10 @@ def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None,
     plt.setp(ax, xticks=x, ylim=(-.01, 1.05), yticks=np.arange(0,1.2,.2))#[0,  1])
     #ax.set_xticklabels([int(xt) for xt in xtls])
     #ax.set_yticklabels(np.arange(0,1.2,.2))#[0.0, 1.0])
-    #ax.set_xlabel(xxlabel)
-    #ax.set_ylabel(yylabel)
+    ax.set_xlabel(xxlabel)
+    ax.set_ylabel(yylabel)
 
-    #ax.legend(loc=0)
+    ax.legend(loc=0)
     plt.tight_layout()
     sns.despine()
     return (pse)

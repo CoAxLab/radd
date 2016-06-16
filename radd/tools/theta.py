@@ -9,37 +9,30 @@ from numpy import array
 from scipy.stats.distributions import norm, gamma, uniform
 from lmfit import Parameters
 
-
 def random_inits(pkeys, ninits=1, kind='dpm'):
     """ random parameter values for initiating model across range of
     parameter values.
     ::Arguments::
-          pkeys (list/dict):
-                list of parameter names to sample, makes list of dict keys
-                if pkeys is dictionary type
+        pkeys (list/dict):
+            list of parameter names to sample, makes list of dict keys
+            if pkeys is dictionary type
     ::Returns::
-          params (dict):
-                dictionary with pkeys as keys with values as 1d arrays ninits long
-                of randomly sampled parameter values
+        params (dict):
+            dictionary with pkeys as keys with values as 1d arrays ninits long
+            of randomly sampled parameter values
     """
-
     if isinstance(pkeys, dict):
         pkeys = pkeys.keys()
-
     bnd = get_bounds(kind=kind)
     params = {pk: init_distributions(pk, bnd[pk], nrvs=ninits, kind=kind) for pk in pkeys}
-
     if 'vd' in params.keys():
         params['vi'] = params['vi']*params['vd']
-
     return params
-
 
 def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
     """ Generates and returns an lmfit Parameters object with
     bounded parameters initialized for flat or non flat model fit
     """
-
     ParamsObj = Parameters()
     pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
     pfit = list(set(inits.keys()).intersection(pnames))
@@ -58,7 +51,6 @@ def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
             if isinstance(v, np.ndarray):
                 v = np.asscalar(v)
             ParamsObj.add(k, value=v, vary=True, min=mn, max=mx)
-
     for pk in pfit:
         inits = all_params_to_scalar(inits, pfit)
         if is_flat:
@@ -69,11 +61,10 @@ def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
             ParamsObj.add(pk, value=inits[pk], vary=False)
     return ParamsObj
 
-
 def all_params_to_scalar(params, params_list=None, exclude=[]):
-
+    """ scalarize all parameters in params dict """
     if params_list is None:
-        params_list = params.keys()
+        params_list = list(params)
     for pk in params_list:
         if pk in exclude:
             continue
@@ -86,27 +77,23 @@ def all_params_to_scalar(params, params_list=None, exclude=[]):
         params[exc] = np.asarray(params[exc], dtype=float)
     return params
 
-
 def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scale=None):
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
     """
-    mu_defaults = {'a': .3, 'tr': .29, 'v': 1., 'vi': .15, 'vd': 1.,
-                   'ssv': -1, 'z': .1, 'xb': 1.5, 'sso': .15}
-    sigma_defaults = {'a': .15, 'tr': .1, 'v': .15, 'vi': .70, 'vd':.15,
+    mu_defaults = {'a': .3, 'tr': .1, 'v': 1., 'vi': .15, 'vd': 1.,
+                   'ssv': -1., 'z': .1, 'xb': 1.5, 'sso': .15}
+    sigma_defaults = {'a': .2, 'tr': .2, 'v': .2, 'vi': .7, 'vd':.2,
                       'ssv': .15, 'z': .05, 'xb': .5, 'sso': .01}
-
 
     if pkey == 'si':
         return .01
-
     if 'race' in kind or 'iact' in kind:
         mu_defaults['ssv'] = abs(mu_defaults['ssv'])
     if loc is None:
         loc = mu_defaults[pkey]
     if scale is None:
         scale = sigma_defaults[pkey]
-
 
     # init and freeze dist shape
     if pkey in ['tr', 'v', 'vd', 'ssv', 'z', 'xb', 'sso']:
@@ -129,18 +116,15 @@ def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scal
         rvinits[ix] = dist.rvs()
     return rvinits
 
-
-def get_bounds(kind='dpm', a=(.1, 1.0), tr=(.1, .54), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .95)):
+def get_bounds(kind='dpm', a=(.1, 1.5), tr=(.01, .5), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .1)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
-
     if 'irace' in kind or 'iact' in kind:
         ssv = (abs(ssv[1]), abs(ssv[0]))
     bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'vd':vd, 'vi':vi,
               'z': z, 'xb': xb, 'si': si, 'sso': sso}
     return bounds
-
 
 def format_local_bounds(xmin, xmax):
     """ groups (xmin, xmax) for each parameter """
@@ -148,7 +132,8 @@ def format_local_bounds(xmin, xmax):
     return map((tupler), zip(xmin, xmax))
 
 def format_basinhopping_bounds(basin_keys, nlevels=1):
-
+    """ returns separate lists of all parameter
+    min and max values """
     allbounds = get_bounds()
     xmin, xmax = [], []
     for pk in basin_keys:
@@ -159,10 +144,10 @@ def format_basinhopping_bounds(basin_keys, nlevels=1):
     return xmin, xmax
 
 def get_stepsize_scalars(keys, nlevels=1):
-
+    """ returns an array of scalars used by fit.HopStep() object
+    to control stepsize of basinhopping algorithm for each parameter """
     scalar_dict = {'a': .5, 'tr': .1, 'v': 2., 'vi': 2., 'vd': 2.,
                    'ssv': 2., 'z': .1, 'xb': 1.5, 'sso': .1}
-
     stepsize_scalars = np.array([scalar_dict[k] for k in keys]*nlevels)
     stepsize_scalars = stepsize_scalars.squeeze()
     return stepsize_scalars
@@ -172,7 +157,6 @@ def get_default_inits(kind='dpm', dynamic='hyp', depends_on={}):
     """ if user does not provide inits dict when initializing Model instance,
     grab default dictionary of init params reasonably suited for Model kind
     """
-
     if 'dpm' in kind:
         popt = {'a': 0.53625, 'v': 1.26, 'xb': 0.87761,
                 'ssv': -0.98396, 'tr': 0.17801}

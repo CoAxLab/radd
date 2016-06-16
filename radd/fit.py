@@ -207,25 +207,27 @@ class Optimizer(object):
         optmod = minimize(self.simulator.__cost_fx__, lmParams, method=fp['method'], options=opt_kws)
 
         # gen dict of opt. params
-        finfo = dict(deepcopy(optmod.params.valuesdict()))
-        popt = dict(deepcopy(finfo))
+        self.finfo = dict(deepcopy(optmod.params.valuesdict()))
+        popt = dict(deepcopy(self.finfo))
         y = self.simulator.y
         wts = self.simulator.wts
         yhat_iter = [self.simulator.sim_fx(popt) for i in range(100)]
         yhat = np.mean(yhat_iter, axis=0)
 
         # ASSUMING THE weighted SSE is CALC BY COSTFX
-        finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
-        finfo['ndata'] = len(yhat)
-        finfo['cnvrg'] = optmod.success
-        finfo['nfev'] = optmod.nfev
-        finfo['nvary'] = len(optmod.var_names)
-        finfo = assess_fit(finfo)
+        self.finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
+        self.finfo['ndata'] = len(yhat)
+        self.finfo['cnvrg'] = optmod.success
+        self.finfo['nfev'] = optmod.nfev
+        self.finfo['nvary'] = len(optmod.var_names)
+        self.finfo = assess_fit(self.finfo)
         print(finfo['cnvrg'])
 
-        popt = theta.all_params_to_scalar(popt, exclude=list(self.pc_map))
+        self.popt = theta.all_params_to_scalar(popt, exclude=list(self.pc_map))
         log_arrays = {'y': y, 'yhat': yhat, 'wts': wts}
         param_report = fit_report(optmod.params)
-        messages.logger(param_report=param_report, finfo=finfo, pdict=popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=fp['fit_on'], dynamic=fp['dynamic'], pc_map=self.pc_map)
-
-        return yhat, finfo, popt
+        try:
+            messages.logger(param_report=param_report, finfo=self.finfo, pdict=self.popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=fp['fit_on'], dynamic=fp['dynamic'], pc_map=self.pc_map)
+        except Exception:
+            pass
+        return yhat, self.finfo, self.popt

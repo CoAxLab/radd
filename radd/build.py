@@ -35,20 +35,16 @@ class Model(RADDCore):
             form when fitting models with 'x' included in <kind> attr
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, weighted=True, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9])):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, weighted=True, ssd_method=None, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9])):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, percentiles=percentiles, weighted=weighted)
-
-
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, percentiles=percentiles, weighted=weighted, ssd_method=ssd_method)
 
     def optimize(self, inits=None, fit_flat=True, fit_cond=True, multiopt=True):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
-
         if not inits:
             inits = self.inits
-
         self.multiopt = multiopt
         if inits is None:
             inits = self.inits
@@ -62,31 +58,23 @@ class Model(RADDCore):
 
         self.yhat_list, self.finfo_list, self.popt_list = [], [], []
         self.yhat_flat_list, self.finfo_flat_list, self.popt_flat_list = [], [], []
-
-        for idx in range(len(self.observed)):
-
+        index = np.arange(self.nidx)
+        for i, y, wts in zip(index, self.observed, self.cond_wts):
             if fit_flat:
-                flat_y = self.observed_flat[idx]
-                flat_wts = self.flat_cost_wts[idx]
-                self.set_fitparams(idx=idx, y=flat_y, wts=flat_wts)
+                flat_y = np.mean(y, axis=0)
+                flat_wts = np.mean(wts, axis=0)
+                self.set_fitparams(idx=i, y=flat_y, wts=flat_wts)
                 yhat_flat, finfo_flat, popt_flat = self.optimize_flat(p=p_flat)
-
                 self.yhat_flat_list.append(yhat_flat)
                 self.finfo_flat_list.append(finfo_flat)
                 self.popt_flat_list.append(dict(deepcopy(popt_flat)))
                 p_flat = dict(deepcopy(popt_flat))
-
             if fit_cond:
-                y = self.observed[idx]
-                wts = self.cost_wts[idx]
-                self.set_fitparams(idx=idx, y=y, wts=wts)
+                self.set_fitparams(idx=i, y=y, wts=wts)
                 yhat, finfo, popt = self.optimize_conditional(p=p_flat)
-
-                # optimize params iterating over subjects/bootstraps
                 self.yhat_list.append(deepcopy(yhat))
                 self.finfo_list.append(deepcopy(finfo))
                 self.popt_list.append(dict(deepcopy(popt)))
-
 
     def optimize_flat(self, p):
         """ optimizes flat model to data collapsing across all conditions

@@ -12,32 +12,28 @@ from radd import dfhandler
 
 
 class RADDCore(object):
-
     """ Parent class for constructing attributes and methods used by
     of Model objects. Not meant to be used directly.
 
     Contains methods for building dataframes, generating observed data vectors
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
-
-    TODO: COMPLETE DOCSTRINGS
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={None: None}, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), weighted=True, verbose=False):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False):
 
         self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
+        self.ssd_method = ssd_method
         self.dynamic = dynamic
         self.weighted = weighted
         self.percentiles = percentiles
         self.tb = data[data.response == 1].rt.max()
-
         self.idx = list(data.idx.unique())
         self.nidx = len(self.idx)
         self.depends_on = depends_on
-
-        if None in listvalues(depends_on):
+        if depends_on is None:
             data = data.copy()
             data['cond'] = 'flat'
             self.conds = ['cond']
@@ -45,78 +41,54 @@ class RADDCore(object):
         else:
             self.conds = listvalues(depends_on)
             self.is_flat = False
-
         # PARAMETER INITIALIZATION
         if inits is None:
             self.__get_default_inits__()
         else:
             self.inits = inits
-
         self.nconds = len(self.conds)
         self.levels = [np.sort(data[cond].unique()) for cond in self.conds]
         self.nlevels = np.sum([len(lvls) for lvls in self.levels])
         self.groups = np.hstack([['idx'], self.conds]).tolist()
-
         self.data = data
-        self.make_pcmap()
-        # initialize dataframe handler
-        self.handler = dfhandler.DataHandler(self)
         self.__prepare_fit__()
-
-    def make_pcmap(self):
-        params = np.sort(list(self.inits)).tolist()
-        cond_inits = lambda a, b: pd.Series(dict(zip(a, b)))
-        self.pc_map = {}
-        for cond_i in range(self.nconds):
-            if self.is_flat:
-                break
-            for d in list(self.depends_on):
-                params.remove(d)
-                self.pc_map[d] = ['_'.join([d, l]) for l in self.levels[cond_i]]
-                params.extend(self.pc_map[d])
 
     def __prepare_fit__(self):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
-            *   pc_map is a dict containing parameter names as keys with values
-                    corresponding to the names given to that parameter in Parameters object
-                    (see optmize.Optimizer).
-            *   Parameters (p[pkey]=pval) that are constant across conditions are broadcast as [pval]*n.
-                    Conditional parameters are treated as arrays with distinct values [V1, V2...Vn], one for
-                    each condition.
-
-            pc_map (dict):    keys: conditional parameter names (i.e. 'v')
-                              values: keys + condition names ('v_bsl, v_pnl')
-
-            |<--- PARAMETERS OBJECT [LMFIT] <-------- [IN]
-            |
-            |---> p = {'v_bsl': V1, 'v_pnl': V2...} --->|
-                                                        |
-            |<--- pc_map = {'v':['v_bsl', 'v_pnl']} <---|
-            |
-            |---> p['v'] = array([V1, V2]) -------> [OUT]
+        *pc_map is a dict containing parameter names as keys with values
+                corresponding to the names given to that parameter in Parameters object
+                (see optmize.Optimizer).
+        *Parameters (p[pkey]=pval) that are constant across conditions are broadcast as [pval]*n.
+                Conditional parameters are treated as arrays with distinct values [V1, V2...Vn], one for
+                each condition.
+        pc_map (dict): keys: conditional parameter names (i.e. 'v')
+                    values: keys + condition names ('v_bsl, v_pnl')
+                    |<--- PARAMETERS OBJECT [LMFIT] <------- [IN]
+                    |---> p = {'v_bsl': V1, 'v_pnl': V2...} --->|
+                    |<--- pc_map = {'v':['v_bsl', 'v_pnl']} <---|
+                    |---> p['v'] = array([V1, V2]) -------> [OUT]
         """
         from radd.fit import Optimizer
         from radd.models import Simulator
-
+        self.pc_map = {}
+        if not self.is_flat:
+            self.__set_pcmap__()
         if 'ssd' in self.data.columns:
             self.set_ssd()
-
+        # initialize dataframe handler
+        self.handler = dfhandler.DataHandler(self)
         # generate dataframes for observed data, popt, fitinfo, etc
         self.__make_dataframes__()
-
         # calculate costfx weights
         self.__set_wts__()
-
         # set fit parameters with default values
         self.set_fitparams()
-
         # set basinhopping parameters with default values
         self.set_basinparams()
 
         # initialize optimizer object for controlling fit routines
         # (updated with fitparams/basinparams whenever params are set)
         self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, inits=self.inits, depends_on=self.depends_on, pc_map=self.pc_map)
-
         # initialize model simulator, mainly accessed by the model optimizer object
         self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
 
@@ -125,7 +97,6 @@ class RADDCore(object):
             kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
         else:
             self.prepared = True
-
 
     def __make_dataframes__(self):
         """ wrapper for dfhandler.DataHandler.make_dataframes
@@ -137,73 +108,49 @@ class RADDCore(object):
         self.observed = self.handler.observed
         # list of flattened data arrays (averaged across conditions)
         self.observed_flat = self.handler.observed_flat
-
-        self.datdf = self.handler.datdf
-        self.dfvals = self.handler.dfvals
-
         # dataframe with same dim as observeddf for storing model predictions
         self.fits = self.handler.fits
         # dataframe with same dim as observeddf for storing fit info
         self.fitinfo = self.handler.fitinfo
 
-        # dataframe containing cost_function wts (see dfhandler docs)
-        self.wtsDF = self.handler.wtsDF
-
-
-    def __set_wts__(self, weight_presponse=True):
+    def __set_wts__(self):
         """ wrapper for analyze functions used to calculate
         weights used in cost function
         """
-
-        if self.weighted and self.fit_on == 'subjects':
-            cost_wts = self.wtsDF.groupby(self.groups).mean().loc[:, 'acc':].values
-            flat_wts = self.wtsDF.groupby('idx').mean().loc['acc':].values
-        elif self.weighted and self.fit_on == 'average':
-            cost_wts =  [self.wtsDF.groupby(self.conds).mean().loc[:, 'acc':].values]
-            flat_wts = [self.wtsDF.mean().loc['acc':].values]
-        else:
-            cost_wts = [np.ones_like(idat.flatten()) for idat in self.observed]
-            flat_wts = [np.ones_like(idat.flatten()) for idat in self.observed_flat]
-        # squeeze out any extra dimensions in wts arrays
-        # ex: array([[1, 2, 3]]) --> array([1, 2, 3])
-        self.cost_wts = [cw.squeeze() for cw in cost_wts]
-        self.flat_cost_wts = [fcw.squeeze() for fcw in flat_wts]
-
+        # dataframe containing cost_function wts (see dfhandler docs)
+        self.wtsDF = self.handler.wtsDF
+        # list of arrays containing conditional costfx weights
+        self.cond_wts = self.handler.cond_wts
+        # list of arrays containing flat costfx weights
+        self.flat_wts = self.handler.flat_wts
 
     def set_fitparams(self, get_params=False, **kwargs):
         """ dictionary of fit parameters, passed to Optimizer/Simulator objects
         """
-
         if not hasattr(self, 'fitparams'):
-            # initialize with default values and first arrays in observed_flat, flat_cost_wts
-            self.fitparams = {'ntrials': 10000, 'maxfev': 5000, 'maxiter': 500, 'disp': True,
-            'tol': 1.e-4, 'method': 'nelder', 'niter': 500, 'tb': self.tb, 'fit_on': self.fit_on,
-            'percentiles': self.percentiles, 'dynamic': self.dynamic, 'depends_on': self.depends_on}
-            self.fitparams['idx'] = 0
-            self.fitparams['y'] = self.observed_flat[0]
-            self.fitparams['wts'] = self.flat_cost_wts[0]
-            if hasattr(self, 'ssd'):
-                self.fitparams['ssd'] = self.ssd[0]
-                self.fitparams['nssd'] = self.fitparams['ssd'].size
+            y = self.observed[0]; wts = self.cond_wts[0]
+            # initialize with default values and first arrays in observed_flat, flat_wts
+            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 10000, 'maxfev': 5000,
+            'maxiter': 500, 'disp': True, 'tol': 1.e-4, 'method': 'nelder', 'niter': 500,
+            'tb': self.tb, 'fit_on': self.fit_on, 'percentiles': self.percentiles,
+            'dynamic': self.dynamic, 'depends_on': self.depends_on}
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.fitparams[kw_arg] = kw_val
-            if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
-                self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
-                self.fitparams['nssd'] = self.fitparams['ssd'].size
-            self.opt.fitparams = self.fitparams
-            self.opt.simulator.__update__(fitparams=self.opt.fitparams)
-
+                self.opt.fitparams = self.fitparams
+                self.opt.simulator.__update__(fitparams=self.opt.fitparams)
+        if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
+            self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
+            self.fitparams['nssd'] = self.fitparams['ssd'].size
         if get_params:
             return self.fitparams
-
 
     def set_basinparams(self, get_params=False, **kwargs):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams = {'nrand_inits': 30, 'nrand_samples': 5000, 'interval': 10, 'niter': 40, 'stepsize': .05, 'niter_success': 20, 'method': 'TNC', 'tol': 1.e-3, 'maxiter': 100, 'disp': True}
+            self.basinparams = {'nrand_inits': 20, 'nrand_samples': 500, 'interval': 5, 'niter': 40, 'stepsize': .06, 'niter_success': 30, 'method': 'TNC', 'tol': 1.e-4, 'maxiter': 100, 'disp': True}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -212,21 +159,50 @@ class RADDCore(object):
         if get_params:
             return self.basinparams
 
-    def set_ssd(self, groups=None, scale=.001, get=False, unique=False):
+    def set_ssd(self, index=['idx'], scale=.001, get=False):
         """ set model attr "ssd" as list of np.arrays
         ssds to use when simulating data during optimization
         """
-        if groups is None:
-            groups = self.groups
-        grpdf = self.data.groupby(groups)
-        get_stopdf = lambda df: df[df.ttype=='stop']
-        get_df_ssds = lambda df: np.sort(get_stopdf(df).ssd.unique()*scale)
-        ssd = [get_df_ssds(df) for _,df in grpdf]
-        if get and unique:
-            return np.unique(np.hstack(ssd)).tolist()
-        elif get:
-            return [issd.tolist() for issd in ssd]
-        self.ssd = ssd
+        sdf = self.data[self.data.ttype=='stop'].copy()
+        if self.ssd_method is None:
+            self.__determine_ssd_method__()
+        if get and hasattr(self, "ssd"):
+            get_df_ssds = lambda df: df.ssd.unique()
+            ssds = [get_df_ssds(df) for _, df in sdf.groupby(self.groups)]
+            return [np.sort(issd).tolist() for issd in ssds]
+        if self.ssd_method == 'all':
+            get_df_ssds = lambda df: df.groupby(self.conds).ssd.unique().values
+            cond_ssds =  [get_df_ssds(df) for _,df in sdf.groupby('idx')]
+        elif self.ssd_method == 'central':
+            mean_cond_ssd_df = sdf.pivot_table('ssd', index='idx', columns=self.conds)
+            cond_ssds = list(mean_cond_ssd_df.values)
+        self.ssd = [np.sort(np.vstack(ssds))*scale for ssds in cond_ssds]
+
+    def __determine_ssd_method__(self):
+        """ Determine how to include ssd in cost function
+        only called if not supplied by user.
+        if all ssd have same ntrials, ssd_method = 'all':
+            costfx includes stopaccuracy at each ssd
+        if ssd is set by adaptive tracking procedure
+        (and thus different ntrials per ssd) ssd_method = 'central':
+            costfx includes stopaccuracy at mean ssd
+        """
+        stopdf = self.data[self.data.ttype=='stop'].copy()
+        ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
+        # test if equal # of trials per ssd
+        if ssd_n[1:] == ssd_n[:-1]:
+            self.ssd_method = 'all'
+        else:
+            self.ssd_method = 'central'
+
+    def __set_pcmap__(self):
+        """ format pc_map, dictionary used by Simulator to extract conditional
+        parameter values by name from lmfit Parameters object and store in
+        standard p dictionary as an array """
+
+        for p, cond in self.depends_on.items():
+            levels = np.sort(self.data[cond].unique())
+            self.pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
 
     def __extract_popt_fitinfo__(self, finfo=None):
         """ wrapper for DataHandler.extract_popt_fitinfo()

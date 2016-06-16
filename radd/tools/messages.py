@@ -97,15 +97,17 @@ def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_ar
     wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
     if is_flat:
         fit_on = ' '.join([fit_on, 'FLAT'])
+        fname = './' + kind + '.txt'
     else:
         fit_on = ' '.join([fit_on, 'FULL'])
-    pkeys = depends_on.keys()
-    pvals = depends_on.values()
-    fname = '_'.join(['./' + kind, '_'.join(pkeys) + '.txt'])
+        pkeys = depends_on.keys()
+        pvals = depends_on.values()
+        fname = '_'.join(['./' + kind, '_'.join(pkeys) + '.txt'])
+        dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
+
     model_id = "MODEL: %s" % kind
     if 'x' in kind:
         model_id = ' ('.join([model_id, dynamic]) + ')'
-    dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
     wts_str = 'wts = array([' + ', '.join(str(elem)[:6] for elem in wts) + '])'
     yhat_str = 'yhat = array([' + ', '.join(str(elem)[:6] for elem in yhat) + '])'
     y_str = 'y = array([' + ', '.join(str(elem)[:6] for elem in y) + '])'
@@ -114,7 +116,8 @@ def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_ar
         f.write('==' * 30 + '\n\n')
         f.write(str(fit_on) + '\n')
         f.write(str(model_id) + '\n')
-        f.write(str(dep_id) + '\n\n')
+        if not is_flat:
+            f.write(str(dep_id) + '\n\n')
         f.write(wts_str + '\n\n')
         f.write(yhat_str + '\n\n')
         f.write(y_str + '\n\n')
