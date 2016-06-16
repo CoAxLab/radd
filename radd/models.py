@@ -2,6 +2,7 @@
 from __future__ import division
 from copy import deepcopy
 import numpy as np
+import numba
 from numpy import array
 from numpy.random import sample as rs
 from numpy import hstack as hs
@@ -40,7 +41,6 @@ class Simulator(object):
         # set y, wts to be used cost function
         self.y = self.fitparams['y'].flatten()
         self.wts = self.fitparams['wts'].flatten()
-
         # misc data & model parameters used during
         # simulations/optimizations
         self.nlevels = self.fitparams['y'].ndim
@@ -48,18 +48,12 @@ class Simulator(object):
         self.ntot = fp['ntrials']
         self.percentiles = fp['percentiles']
         self.dynamic = fp['dynamic']
-
         # include SSD's if stop-signal task
         if 'ssd' in list(fp):
-            ssd = fp['ssd']
-            if self.nlevels==1 and ssd.ndim>1:
-                self.ssd = np.mean(ssd, axis=0)
-            else:
-                self.ssd = ssd
+            self.ssd = fp['ssd']
             self.nssd = self.ssd.shape[-1]
             self.nss = int((.5 * self.ntot))
             self.nss_per_ssd = int(self.nss/self.nssd)
-
         # non conditional parameters
         self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']
         if self.nlevels>1:
@@ -80,6 +74,9 @@ class Simulator(object):
         """ initiates the simulation function used in
         optimization routine
         """
+        nl = self.nlevels
+        ntot = self.ntot
+        dx = self.dx
         if 'dpm' in self.kind:
             self.sim_fx = self.simulate_dpm
             self.analyze_fx = self.analyze_reactive
@@ -113,6 +110,7 @@ class Simulator(object):
         """
         prob = self.percentiles
         dt = self.dt
+
         go_axis, ss_axis = 2, 3
         if self.learn:
             go_axis-=1; ss_axis-=1
@@ -190,8 +188,8 @@ class Simulator(object):
         Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
         Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
         t = csum([self.dt] * Tg.max())
-        self.xtb = self.temporal_dynamics(p, t)
-        return Pg, Tg
+        xtb = self.temporal_dynamics(p, t)
+        return Pg, Tg, xtb
 
     def __update_stop_process__(self, p, sso=0):
         """ update Ps (probability of DVs +dx) and Ts (n timepoints)
@@ -228,7 +226,7 @@ class Simulator(object):
             or Go & Stop processes in list (list of ndarrays)
         """
         p = self.vectorize_params(p)
-        Pg, Tg = self.__update_go_process__(p)
+        Pg, Tg, xtb = self.__update_go_process__(p)
         Ps, Ts = self.__update_stop_process__(p)
         ss_onsets = np.where(Ts<Tg[:, None], Tg[:, None]-Ts, 0)
 
@@ -239,7 +237,8 @@ class Simulator(object):
         ssd_ix = np.arange(nssd)
         nss_per = self.nss_per_ssd
         dx = self.dx
-        DVg = self.xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+
+        DVg = xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         dvg_ss = DVg[:, :nss, :].reshape(nl, nssd, nss_per, DVg.shape[-1])
         # initialize stop-process (DVs) FROM value of go-process (DVg) at t=SSD
         init_ss = np.array([dvg_ss[i, ssd_ix, :, ix] for i, ix in enumerate(ss_onsets)])
@@ -325,7 +324,6 @@ class Simulator(object):
         gacc = 1 - np.mean(np.where(gort < tb, 1, 0), axis=1)
         return hs([gacc, gq])
 
-
     def simulate_rldpm(self, p, analyze=True):
         """ Simulate the dependent process model (DPM)
         ::Arguments::
@@ -377,7 +375,6 @@ class Simulator(object):
         self.pgo_rts = {'mu': mu, 'ci': ci, 'std': std}
         if return_vals:
             return self.pgo_rts
-
 
     def analyze_pro_data(self, DVg, p):
         prob = self.percentiles

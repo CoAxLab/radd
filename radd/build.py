@@ -61,15 +61,12 @@ class Model(RADDCore):
         index = np.arange(self.nidx)
         for i, y, wts in zip(index, self.observed, self.cond_wts):
             if fit_flat:
-                flat_y = np.mean(y, axis=0)
-                flat_wts = np.mean(wts, axis=0)
-                self.set_fitparams(idx=i, y=flat_y, wts=flat_wts)
-                yhat_flat, finfo_flat, popt_flat = self.optimize_flat(p=p_flat)
+                self.set_fitparams(idx=i, y=self.observed_flat[i], wts=self.flat_wts[i])
+                yhat_flat, finfo_flat, p_flat = self.optimize_flat(p=p_flat)
                 self.yhat_flat_list.append(yhat_flat)
                 self.finfo_flat_list.append(finfo_flat)
-                self.popt_flat_list.append(dict(deepcopy(popt_flat)))
-                p_flat = dict(deepcopy(popt_flat))
-            if fit_cond:
+                self.popt_flat_list.append(dict(deepcopy(p_flat)))
+            if fit_cond and not self.is_flat:
                 self.set_fitparams(idx=i, y=y, wts=wts)
                 yhat, finfo, popt = self.optimize_conditional(p=p_flat)
                 self.yhat_list.append(deepcopy(yhat))
@@ -96,7 +93,6 @@ class Model(RADDCore):
         yhat_flat, finfo_flat, popt_flat = self.opt.gradient_descent(inits=p, is_flat=True)
         return yhat_flat, finfo_flat, popt_flat
 
-
     def optimize_conditional(self, p):
         """ optimizes full model to all conditions in data
         ::Arguments::
@@ -108,15 +104,12 @@ class Model(RADDCore):
             finfo (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt (dict): optimized parameters dictionary
         """
-
         if self.multiopt:
             # Pretune Conditional Parameters
             p, funcmin = self.opt.run_basinhopping(p, is_flat=False)
-
         # Final Simplex Optimization
         yhat, finfo, popt = self.opt.gradient_descent(inits=p, is_flat=False)
         return yhat, finfo, popt
-
 
     def make_simulator(self, fitparams=None, p=None):
         """ initializes Simulator object as Model attr
@@ -126,12 +119,10 @@ class Model(RADDCore):
             fitparams = dict(deepcopy(self.fitparams))
         if p is None:
             p = dict(deepcopy(self.inits))
-
         self.simulator = Simulator(fitparams=fitparams, inits=p, kind=self.kind, pc_map=self.pc_map)
         if hasattr(self, 'opt'):
             self.opt.simulator = self.simulator
             self.opt.fitparams = fitparams
-
 
     def simulate(self, p=None, analyze=True, return_traces=False):
         """ simulate yhat vector using popt or inits

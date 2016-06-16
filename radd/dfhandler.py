@@ -36,7 +36,6 @@ class DataHandler(object):
         self.nrows = self.nidx * self.nlevels * self.nconds
         self.grpData = self.data.groupby(self.groups)
 
-
     def make_dataframes(self):
         """ Generates the following dataframes and arrays:
         ::Arguments::
@@ -61,23 +60,21 @@ class DataHandler(object):
         fitinfo (DF):
               stores all opt. parameter values and model fit statistics
         """
-
         self.make_observed_groupDFs()
         odf = self.observedDF.copy()
         wdf = self.wtsDF.copy()
-        as_values = lambda df: df.loc[:, 'acc':].dropna(axis=1).values.squeeze()
-
+        condvalues = lambda df: df.loc[:, 'acc':].dropna(axis=1).values.squeeze()
+        flatvalues = lambda df: df.loc['acc':].values.squeeze()
         if self.fit_on=='subjects':
-            self.observed = [as_values(odf[odf['idx']==idx]) for idx in self.idx]
-            self.cond_wts = [as_values(wdf[wdf['idx']==idx]) for idx in self.idx]
-            self.observed_flat = [self.observed[idx].mean(axis=0) for idx in range(self.nidx)]
-            self.flat_wts = [self.cond_wts[idx].mean(axis=0) for idx in range(self.nidx)]
+            self.observed = [condvalues(odf[odf['idx']==idx]) for idx in self.idx]
+            self.cond_wts = [condvalues(wdf[wdf['idx']==idx]) for idx in self.idx]
+            self.observed_flat = [flatvalues(odf[odf['idx']==idx].mean()) for idx in self.idx]
+            self.flat_wts = [flatvalues(wdf[wdf['idx']==idx].mean()) for idx in self.idx]
         elif self.fit_on=='average':
-            self.observed = [as_values(odf.groupby(self.conds).mean())]
-            self.cond_wts = [as_values(wdf.groupby(self.conds).mean())]
-            self.observed_flat = [self.observed[0].mean(axis=0)]
-            self.flat_wts = [self.cond_wts[0].mean(axis=0)]
-
+            self.observed = [condvalues(odf.groupby(self.conds).mean())]
+            self.cond_wts = [condvalues(wdf.groupby(self.conds).mean())]
+            self.observed_flat = [flatvalues(odf.mean())]
+            self.flat_wts = [flatvalues(wdf.mean())]
 
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
@@ -276,9 +273,7 @@ class DataHandler(object):
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
         self.finfo_cols = np.hstack([['idx'], params, fit_cols]).tolist()
 
-
     def finfo_to_params(self, finfo='./finfo.csv', pc_map=None):
-
         pnames = set(['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso'])
         if isinstance(finfo, str):
             finfo = pd.read_csv(finfo, header=None, names=['id', 'vals'], index_col=0)
@@ -296,7 +291,6 @@ class DataHandler(object):
                 params[pkey] = array([params[pkc] for pkc in pclist])
         return params
 
-
     def rwr(self, X, get_index=False, n=None):
         """
         Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
@@ -313,29 +307,23 @@ class DataHandler(object):
         else:
             return X_resample
 
-
     def resample_data(self, n=120, groups=['ssd']):
         """ generates n resampled datasets using rwr()
         for bootstrapping model fits
         """
-
         df = self.data.copy()
         tb = self.tb
-
         bootlist = list()
         if n == None:
             n = len(df)
-
         for level, level_df in df.groupby(groups):
             boots = level_df.reset_index(drop=True)
             orig_ix = np.asarray(boots.index[:])
             resampled_ix = self.rwr(orig_ix, get_index=True, n=n)
             bootdf = level_df.irow(resampled_ix)
             bootlist.append(bootdf)
-
         # concatenate and return all resampled conditions
         return self.model.rangl_data(pd.concat(bootlist))
-
 
     def extract_popt_fitinfo(self, finfo=None):
         """ takes optimized dict or DF of vectorized parameters and
@@ -357,15 +345,12 @@ class DataHandler(object):
                 finfo = self.model.fitinfo.mean()
             except Exception:
                 finfo = self.model.fitinfo
-
         finfo = dict(deepcopy(finfo))
         popt = dict(deepcopy(self.inits))
         pc_map = self.model.pc_map
-
         for pkey in list(popt):
             if pkey in list(self.depends_on):
                 popt[pkey] = np.array([finfo[pc] for pc in pc_map[pkey]])
                 continue
             popt[pkey] = finfo[pkey]
-
         return popt

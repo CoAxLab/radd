@@ -19,9 +19,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False):
-
         self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
@@ -32,13 +30,14 @@ class RADDCore(object):
         self.tb = data[data.response == 1].rt.max()
         self.idx = list(data.idx.unique())
         self.nidx = len(self.idx)
-        self.depends_on = depends_on
         if depends_on is None:
             data = data.copy()
             data['cond'] = 'flat'
             self.conds = ['cond']
             self.is_flat = True
+            self.depends_on = {}
         else:
+            self.depends_on = depends_on
             self.conds = listvalues(depends_on)
             self.is_flat = False
         # PARAMETER INITIALIZATION
@@ -85,13 +84,11 @@ class RADDCore(object):
         self.set_fitparams()
         # set basinhopping parameters with default values
         self.set_basinparams()
-
         # initialize optimizer object for controlling fit routines
         # (updated with fitparams/basinparams whenever params are set)
         self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, inits=self.inits, depends_on=self.depends_on, pc_map=self.pc_map)
         # initialize model simulator, mainly accessed by the model optimizer object
         self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
-
         if self.verbose:
             self.is_prepared = messages.saygo(depends_on=self.depends_on, labels=self.levels,
             kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
@@ -138,11 +135,12 @@ class RADDCore(object):
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.fitparams[kw_arg] = kw_val
-                self.opt.fitparams = self.fitparams
-                self.opt.simulator.__update__(fitparams=self.opt.fitparams)
-        if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
-            self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
-            self.fitparams['nssd'] = self.fitparams['ssd'].size
+            if np.any([mk in self.kind for mk in ['dpm', 'irace', 'iact']]):
+                self.fitparams['ssd'] = self.ssd[self.fitparams['idx']]
+                self.fitparams['nssd'] = self.fitparams['ssd'].size
+            self.opt.fitparams = self.fitparams
+            self.opt.simulator.__update__(fitparams=self.opt.fitparams)
+
         if get_params:
             return self.fitparams
 
@@ -190,6 +188,7 @@ class RADDCore(object):
         stopdf = self.data[self.data.ttype=='stop'].copy()
         ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
         # test if equal # of trials per ssd
+        #return ssd_n
         if ssd_n[1:] == ssd_n[:-1]:
             self.ssd_method = 'all'
         else:
@@ -199,7 +198,6 @@ class RADDCore(object):
         """ format pc_map, dictionary used by Simulator to extract conditional
         parameter values by name from lmfit Parameters object and store in
         standard p dictionary as an array """
-
         for p, cond in self.depends_on.items():
             levels = np.sort(self.data[cond].unique())
             self.pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
