@@ -33,47 +33,32 @@ class Model(RADDCore):
         dynamic (str):
             set dynamic bias signal to follow an exponential or hyperbolic
             form when fitting models with 'x' included in <kind> attr
+        quantiles (array):
+            set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on=None, weighted=True, ssd_method=None, dynamic='hyp', percentiles=np.array([.1, .3, .5, .7, .9])):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, dynamic='hyp', quantiles=np.array([.1, .3, .5, .7, .9])):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, percentiles=percentiles, weighted=weighted, ssd_method=ssd_method)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, inits=None, fit_flat=True, fit_cond=True, multiopt=True):
+    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
-        if not inits:
-            inits = self.inits
-        self.multiopt = multiopt
-        if inits is None:
-            inits = self.inits
-        self.__check_inits__(inits=inits)
-        inits = dict(deepcopy(self.inits))
-
-        # make sure inits only contains subsets of these params
-        pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
-        pfit = list(set(list(self.inits)).intersection(pnames))
-        p_flat = dict(deepcopy({pk: self.inits[pk] for pk in pfit}))
-
-        self.yhat_list, self.finfo_list, self.popt_list = [], [], []
-        self.yhat_flat_list, self.finfo_flat_list, self.popt_flat_list = [], [], []
-        index = np.arange(self.nidx)
-        for i, y, wts in zip(index, self.observed, self.cond_wts):
-            if fit_flat:
-                self.set_fitparams(idx=i, y=self.observed_flat[i], wts=self.flat_wts[i])
-                yhat_flat, finfo_flat, p_flat = self.optimize_flat(p=p_flat)
-                self.yhat_flat_list.append(yhat_flat)
-                self.finfo_flat_list.append(finfo_flat)
-                self.popt_flat_list.append(dict(deepcopy(p_flat)))
+        nfits = len(self.observed)
+        for i in range(nfits):
+            popt = self.__check_inits__(self.inits)
+            if fit_flat or self.is_flat:
+                y, wts = self.iter_flat[i]
+                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
+                finfo, popt, yhat = self.optimize_flat(popt, multiopt)
             if fit_cond and not self.is_flat:
-                self.set_fitparams(idx=i, y=y, wts=wts)
-                yhat, finfo, popt = self.optimize_conditional(p=p_flat)
-                self.yhat_list.append(deepcopy(yhat))
-                self.finfo_list.append(deepcopy(finfo))
-                self.popt_list.append(dict(deepcopy(popt)))
+                y, wts = self.iter_cond[i]
+                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
+                finfo, popt, yhat = self.optimize_conditional(popt, multiopt)
+            self.assess_fit(finfo, popt, yhat)
 
-    def optimize_flat(self, p):
+    def optimize_flat(self, p, multiopt=True):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -84,16 +69,15 @@ class Model(RADDCore):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
-        if self.multiopt:
+        if multiopt:
             # Global Optimization w/ Basinhopping (+TNC)
             p = self.opt.hop_around(p)
             print('Finished Hopping Around')
-
         # Flat Simplex Optimization of Parameters at Global Minimum
-        yhat_flat, finfo_flat, popt_flat = self.opt.gradient_descent(inits=p, is_flat=True)
-        return yhat_flat, finfo_flat, popt_flat
+        finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=True)
+        return finfo, popt, yhat
 
-    def optimize_conditional(self, p):
+    def optimize_conditional(self, p, multiopt=True):
         """ optimizes full model to all conditions in data
         ::Arguments::
             p (dict):
@@ -104,12 +88,42 @@ class Model(RADDCore):
             finfo (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt (dict): optimized parameters dictionary
         """
-        if self.multiopt:
+        if multiopt:
             # Pretune Conditional Parameters
             p, funcmin = self.opt.run_basinhopping(p, is_flat=False)
         # Final Simplex Optimization
-        yhat, finfo, popt = self.opt.gradient_descent(inits=p, is_flat=False)
-        return yhat, finfo, popt
+        finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=False)
+        return finfo, popt, yhat
+
+    def assess_fit(self, finfo, popt, yhat, log=True):
+        """ wrapper for analyze.assess_fit calculates and stores
+        rchi, AIC, BIC and other fit statistics
+        """
+        fp = dict(deepcopy(self.fitparams))
+        fp['yhat'] = yhat.flatten()
+        y = fp['y'].flatten()
+        wts = fp['wts'].flatten()
+        # fill finfo dict with goodness-of-fit info
+        finfo['chi'] = np.sum(wts * (y - fp['yhat']) ** 2)
+        finfo['ndata'] = len(fp['yhat'])
+        finfo['df'] = finfo.ndata - finfo.nvary
+        finfo['rchi'] = finfo.chi / finfo.df
+        finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
+        finfo['AIC'] = finfo.logp + 2 * finfo.nvary
+        finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
+        self.finfo = finfo
+        self.popt = popt
+        self.log_fit_info(finfo, popt, fp)
+
+    def log_fit_info(self, finfo, popt, fitparams):
+        """ write meta-information about latest fit
+        to logfile (.txt) in working directory
+        """
+        fp = dict(deepcopy(fitparams))
+        # lmfit-structured fit_report to write in log file
+        param_report = self.opt.param_report
+        # log all fit and meta information in working directory
+        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
 
     def make_simulator(self, fitparams=None, p=None):
         """ initializes Simulator object as Model attr
@@ -136,15 +150,17 @@ class Model(RADDCore):
             1d array if analyze is True
             ndarray of decision traces if False
         """
-        if not hasattr(self, 'simulator'):
-            self.make_simulator()
         if p is None:
             if hasattr(self, 'popt'):
                 p = self.popt
             else:
                 p = self.inits
-        p = self.simulator.vectorize_params(p)
+        if not hasattr(self.opt, 'simulator'):
+            simulator = Simulator(fitparams=self.fitparams,
+                inits=p, kind=self.kind, pc_map=self.pc_map)
+        else:
+            simulator = self.opt.simulator
         out = self.simulator.sim_fx(p, analyze=analyze)
-        if not analyze and not return_traces:
+        if not analyze:
             out = self.simulator.predict_data(out, p)
         return out

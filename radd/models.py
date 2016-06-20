@@ -2,7 +2,6 @@
 from __future__ import division
 from copy import deepcopy
 import numpy as np
-import numba
 from numpy import array
 from numpy.random import sample as rs
 from numpy import hstack as hs
@@ -10,55 +9,59 @@ from numpy import newaxis as na
 from numpy import cumsum as csum
 from scipy.stats.mstats import mquantiles as mq
 
+
 class Simulator(object):
     """ Core code for simulating models. All cond, trials, &
     timepoints are simulated simultaneously
     """
-    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.001, si=.01, learn=False):
-
-        self.dt = dt
-        self.si = si
-        self.dx = np.sqrt(self.si * self.dt)
-
+    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False):
         self.learn = learn
         self.kind = kind
         self.pc_map = pc_map
-
+        self.fitparams = fitparams
+        self.__update_steps__(dt, si)
         self.__update__(fitparams=fitparams)
-        self.__init_model_functions__()
-        self.__init_analyze_functions__()
-
 
     def __update__(self, fitparams=None):
         """ update critical simulator parameters for each fit
         by providing an updated fitparams dictionary"""
-
         if fitparams:
             fp = dict(deepcopy(fitparams))
-            self.fitparams = fitparams
+            self.fitparams = fp
         else:
             fp = dict(deepcopy(self.fitparams))
         # set y, wts to be used cost function
-        self.y = self.fitparams['y'].flatten()
-        self.wts = self.fitparams['wts'].flatten()
+        self.y = fp['y'].flatten()
+        self.wts = fp['wts'].flatten()
         # misc data & model parameters used during
         # simulations/optimizations
-        self.nlevels = self.fitparams['y'].ndim
-        self.tb = fp['tb']
+        self.nlevels = fp['y'].ndim
         self.ntot = fp['ntrials']
-        self.percentiles = fp['percentiles']
+        self.quantiles = fp['quantiles']
         self.dynamic = fp['dynamic']
         # include SSD's if stop-signal task
-        if 'ssd' in list(fp):
-            self.ssd = fp['ssd']
-            self.nssd = self.ssd.shape[-1]
-            self.nss = int((.5 * self.ntot))
-            self.nss_per_ssd = int(self.nss/self.nssd)
+        if 'ssd_info' in list(fp):
+            self.ssd_info = fp['ssd_info']
         # non conditional parameters
         self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']
-        if self.nlevels>1:
+        self.is_flat_fit = fp['flat']
+        if not self.is_flat_fit and len(list(self.pc_map))>=1:
             # remove any parameters free to vary across experimental conditions
             map((lambda pkey: self.pvc.remove(pkey)), list(self.pc_map))
+        self.__init_model_functions__()
+        self.__init_analyze_functions__()
+
+    def __update_steps__(self, dt=.005, si=.01, tb=None):
+        """ update and store stepsize parameters
+        dx: size of step up/down t-->t+dt
+        dt: timestep of decision traces
+        si: diffusion constant (noise)
+        tb: time-boundary of trial
+        """
+        dx = np.sqrt(si * dt)
+        if tb is None:
+            tb = self.fitparams['tb']
+        self.steps = [dx, dt, si, tb]
 
     def __prep_global__(self, basin_params={}, basin_keys=[]):
         """ prepare simulator for global optimization using
@@ -68,92 +71,9 @@ class Simulator(object):
         self.basin_keys = basin_keys
         # set all constant parameters in basin_params object
         self.basin_params = basin_params
-        self.chunk = lambda x, n: [array(x[i:i + n]) for i in range(0, len(x), n)]
+        self.chunk = lambda x, nl: [array(x[i:i+nl]) for i in range(0, len(x), nl)]
 
-    def __init_model_functions__(self):
-        """ initiates the simulation function used in
-        optimization routine
-        """
-        nl = self.nlevels
-        ntot = self.ntot
-        dx = self.dx
-        if 'dpm' in self.kind:
-            self.sim_fx = self.simulate_dpm
-            self.analyze_fx = self.analyze_reactive
-        elif 'pro' in self.kind:
-            self.sim_fx = self.simulate_pro
-            self.analyze_fx = self.analyze_proactive
-        elif 'irace' in self.kind:
-            self.sim_fx = self.simulate_irace
-            self.analyze_fx = self.analyze_reactive
-        elif 'iact' in self.kind:
-            self.sim_fx = self.simulate_interactive
-            self.analyze_fx = self.analyze_interactive
-        elif 'nalt' in self.kind:
-            self.simfx = self.simulate_nalt
-            self.analyze_fx = self.analyze_nalt
-        if 'rl' in self.kind:
-            self.trialwise = True
-        # SET STATIC/DYNAMIC BASIS FUNCTIONS
-        if 'x' in self.kind and self.dynamic == 'hyp':
-            # dynamic bias is hyperbolic
-            self.temporal_dynamics = lambda p, t: np.cosh(p['xb'][:, na] * t)
-        elif 'x' in self.kind and self.dynamic == 'exp':
-            # dynamic bias is exponential
-            self.temporal_dynamics = lambda p, t: np.exp(p['xb'][:, na] * t)
-        else:
-            self.temporal_dynamics = lambda p, t: np.ones((self.nlevels, len(t)))
-
-    def __init_analyze_functions__(self):
-        """ initiates the analysis function used in
-        optimization routine to produce the yhat vector
-        """
-        prob = self.percentiles
-        dt = self.dt
-
-        go_axis, ss_axis = 2, 3
-        if self.learn:
-            go_axis-=1; ss_axis-=1
-        self.go_resp = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=go_axis) * dt
-        self.ss_resp_up = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=ss_axis) * dt
-        self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=ss_axis) * dt
-        self.go_RT = lambda ontime, rbool: ontime[:, na] + (rbool*np.where(rbool==0, np.nan, 1))
-        self.ss_RT = lambda ontime, rbool: ontime[:, :, na] + (rbool*np.where(rbool==0, np.nan, 1))
-        self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
-        if 'irace' in self.kind:
-            self.ss_resp = self.ss_resp_up
-        else:
-            self.ss_resp = self.ss_resp_lo
-
-    def vectorize_params(self, p):
-        """ ensures that all parameters are converted to arrays before simulation. see
-        doc strings for prepare_fit() method of Model class (in build.py) for details
-        regarding pc_map and logic for fitting models with parameters that depend on
-        experimental conditions
-        ::Arguments::
-            p (dict):
-                keys are parameter names (e.g. ['v', 'a', 'tr' ... ])
-                values are parameter values, can be vectors or floats
-        ::Returns::
-            p (dict):
-                dictionary with all parameters as vectors
-        """
-        if 'si' in list(p):
-             self.dx = np.sqrt(p['si'] * self.dt)
-        if 'xb' not in list(p):
-            p['xb'] = 1.0
-        for pkey in self.pvc:
-            p[pkey] = p[pkey] * np.ones(self.nlevels).astype(np.float32)
-        for pkey, pkc in self.pc_map.items():
-            if self.nlevels == 1:
-                break
-            elif pkc[0] not in list(p):
-                p[pkey] = p[pkey] * np.ones(len(pkc)).astype(np.float32)
-            else:
-                p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
-        return p
-
-    def basinhopping_minimizer(self, x):
+    def global_cost_fx(self, x):
         """ used specifically by fit.perform_basinhopping() for Model
         objects with multiopt attr (See __opt_routine__ and perform_basinhopping
         methods of Optimizer object)
@@ -169,7 +89,7 @@ class Simulator(object):
         # calculate and return cost error
         return np.sum(self.wts * (yhat - self.y)**2).astype(np.float32)
 
-    def __cost_fx__(self, theta):
+    def cost_fx(self, theta):
         """ Main cost function used for fitting all models self.sim_fx
         determines which model is simulated (determined when Simulator
         is initiated)
@@ -181,35 +101,102 @@ class Simulator(object):
         yhat = self.sim_fx(p, analyze=True)
         return np.sum(self.wts * (yhat - self.y)**2).astype(np.float32)
 
+    def __init_model_functions__(self):
+        """ initiates the simulation function used in
+        optimization routine
+        """
+        if 'dpm' in self.kind:
+            self.sim_fx = self.simulate_dpm
+            self.analyze_fx = self.analyze_reactive
+        elif 'pro' in self.kind:
+            self.sim_fx = self.simulate_pro
+            self.analyze_fx = self.analyze_proactive
+        elif 'irace' in self.kind:
+            self.sim_fx = self.simulate_irace
+            self.analyze_fx = self.analyze_reactive
+        # SET STATIC/DYNAMIC BASIS FUNCTIONS
+        if 'x' in self.kind and self.dynamic == 'hyp':
+            # dynamic bias is hyperbolic
+            self.dynamics_fx = lambda p, t: np.cosh(p['xb'][:, na] * t)
+        elif 'x' in self.kind and self.dynamic == 'exp':
+            # dynamic bias is exponential
+            self.dynamics_fx = lambda p, t: np.exp(p['xb'][:, na] * t)
+        else:
+            self.dynamics_fx = lambda p, t: np.ones((self.nlevels, len(t)))
+
+    def __init_analyze_functions__(self):
+        """ initiates the analysis function used in
+        optimization routine to produce the yhat vector
+        """
+        prob = self.quantiles
+        dx, dt, si, tb = self.steps
+        go_axis, ss_axis = 2, 3
+        if self.learn:
+            go_axis-=1; ss_axis-=1
+        self.go_resp = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=go_axis) * dt
+        self.ss_resp_up = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=ss_axis) * dt
+        self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=ss_axis) * dt
+        self.go_RT = lambda ontime, rbool: ontime[:, na] + (rbool*np.where(rbool==0., 999, 1))
+        self.ss_RT = lambda ontime, rbool: ontime[:, :, na] + (rbool*np.where(rbool==0., 999, 1))
+        self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+        if 'irace' in self.kind:
+            self.ss_resp = self.ss_resp_up
+        else:
+            self.ss_resp = self.ss_resp_lo
+
+    def vectorize_params(self, p):
+        """ ensures that all parameters are converted to arrays before simulation. see
+        doc strings for prepare_fit() method of Model class (in build.py) for details
+        regarding pc_map and logic for fitting models with parameters that depend on
+        experimental conditions
+        ::Arguments::
+            p (dict):
+                dictionary with all model parameters as
+                scalars/vectors/or both
+        ::Returns::
+            p (dict):
+                dictionary with all parameters as vectors
+        """
+        nl_ones = np.ones(self.nlevels).astype(np.float32)
+        if 'si' in list(p):
+            dx, dt, si, tb = self.steps
+            dx = np.sqrt(p['si'] * dt)
+            self.steps = [dx, dt, si, tb]
+        if 'xb' not in list(p):
+            p['xb'] = 1.0
+        for pkey in self.pvc:
+            p[pkey] = p[pkey] * nl_ones
+        for pkey, pkc in self.pc_map.items():
+            if self.is_flat_fit:
+                break
+            elif pkc[0] not in list(p):
+                p[pkey] = p[pkey] * nl_ones
+            else:
+                p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
+        return p
+
     def __update_go_process__(self, p):
         """ update Pg (probability of DVg +dx) and Tg (n timepoints)
         for go process and get get dynamic bias signal if 'x' model
         """
-        Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
-        Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
-        t = csum([self.dt] * Tg.max())
-        xtb = self.temporal_dynamics(p, t)
+        dx, dt, si, tb = self.steps
+        Pg = 0.5 * (1 + p['v'] * dx / si)
+        Tg = np.ceil((tb - p['tr']) / dt).astype(int)
+        t = csum([dt] * Tg.max())
+        xtb = self.dynamics_fx(p, t)
         return Pg, Tg, xtb
 
     def __update_stop_process__(self, p, sso=0):
         """ update Ps (probability of DVs +dx) and Ts (n timepoints)
         for each SSD of stop process
         """
+        dx, dt, si, tb = self.steps
+        ssd = self.ssd_info[0]
         if 'sso' in list(p):
             sso = p['sso']
-        Ps = 0.5 * (1 + p['ssv'][0] * self.dx / self.si)
-        Ts = np.ceil((self.tb - (self.ssd + sso)) / self.dt).astype(int)
+        Ps = 0.5 * (1 + p['ssv'][0] * dx / si)
+        Ts = np.ceil((tb - (ssd + sso)) / dt).astype(int)
         return Ps, Ts
-
-    def __update_interactive_params__(self, p):
-        # add ss interact delay to SSD
-        Ps, Ts = self.__update_stop_process__(p)
-        Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
-        Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
-        nt = np.max(np.hstack([Tg, Ts]))
-        t = csum([self.dt] * nt)
-        self.xtb = self.temporal_dynamics(p, t)
-        return Pg, Tg, Ps, Ts, nt
 
     def simulate_dpm(self, p, analyze=True):
         """ Simulate the dependent process model (DPM)
@@ -226,38 +213,33 @@ class Simulator(object):
             or Go & Stop processes in list (list of ndarrays)
         """
         p = self.vectorize_params(p)
+        nl, ntot = self.nlevels, self.ntot
+        ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
+        dx, dt, si, tb = self.steps
+
         Pg, Tg, xtb = self.__update_go_process__(p)
         Ps, Ts = self.__update_stop_process__(p)
-        ss_onsets = np.where(Ts<Tg[:, None], Tg[:, None]-Ts, 0)
+        ss_on = np.where(Ts<Tg[:, na], Tg[:, na]-Ts, 0)
 
-        ntot = self.ntot
-        nl = self.nlevels
-        nss = self.nss
-        nssd = self.nssd
-        ssd_ix = np.arange(nssd)
-        nss_per = self.nss_per_ssd
-        dx = self.dx
-
-        DVg = xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
-        dvg_ss = DVg[:, :nss, :].reshape(nl, nssd, nss_per, DVg.shape[-1])
+        DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        ssDVg = DVg[:, :nss, :].reshape(nl, nssd, nss_per, DVg.shape[-1])
         # initialize stop-process (DVs) FROM value of go-process (DVg) at t=SSD
-        init_ss = np.array([dvg_ss[i, ssd_ix, :, ix] for i, ix in enumerate(ss_onsets)])
-        DVs = init_ss[:,:,:,na] + csum(np.where(rs((nl, nssd, nss_per, Ts.max())) < Ps, dx, -dx), axis=3)
+        ssBase = np.array([ssDVg[i, ssd_ix, :, ix] for i, ix in enumerate(ss_on)])[:,:,:,na]
+        DVs = ssBase + csum(np.where(rs((nl, nssd, nss_per, Ts.max())) < Ps, dx, -dx), axis=3)
+
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
-        else:
-            return [DVg, DVs]
+        return [DVg, DVs]
 
     def simulate_pro(self, p, analyze=True):
         """ Simulate the proactive competition model
         (see simulate_dpm() for I/O details)
         """
         p = self.vectorize_params(p)
-        Pg, Tg = self.__update_go_process__(p)
-        nl = self.nlevels
-        dx = self.dx
-        ntot = self.ntot
-        DVg = self.xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        Pg, Tg, dvg = self.__update_go_process__(p)
+        dx, dt, si, tb = self.steps
+        nl, ntot = self.nlevels, self.ntot
+        DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         if analyze:
             return self.analyze_fx(DVg, p)
         return DVg
@@ -267,17 +249,15 @@ class Simulator(object):
         (see simulate_dpm() for I/O details)
         """
         p = self.vectorize_params(p)
-        Pg, Tg = self.__update_go_process__(p)
+        Pg, Tg, xtb = self.__update_go_process__(p)
         Ps, Ts = self.__update_stop_process__(p)
-        nss = self.nss
-        ntot = self.ntot
-        nssd = self.nssd
-        nl = self.nlevels
-        dx = self.dx
+        ssd, nssd, nss, nss_per_ssd, ssd_ix = self.ssd_info
+        dx, dt, si, tb = self.steps
+        nl, ntot = self.nlevels, self.ntot
 
-        DVg = self.xtb[:, na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
-        # INITIALIZE DVs FROM 0
+        DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         DVs = csum(np.where(rs((nl, nssd, nss, Ts.max())) < Ps, dx, -dx), axis=3)
+
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         return [DVg, DVs]
@@ -286,19 +266,18 @@ class Simulator(object):
         """ get rt and accuracy of go and stop process for simulated
         conditions generated from simulate_dpm
         """
-        nss = self.nss
-        prob = self.percentiles
-        ssd = self.ssd
-        tb = self.tb
-        nl = self.nlevels
-        nssd = self.nssd
-        nss_per = self.nss_per_ssd
+        ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
+        dx, dt, si, tb = self.steps
+        nl, ntot = self.nlevels, self.ntot
 
         gdec = self.go_resp(DVg, p['a'])
         sdec = self.ss_resp(DVs, p['a'])
         gort = self.go_RT(p['tr'], gdec)
         ssrt = self.ss_RT(ssd, sdec)
-        ert = gort[:, :nss].reshape(nl, nssd, nss_per)
+        if 'irace' in self.kind:
+            ert = np.tile(gort[:, :nss], nssd).reshape(nl, nssd, nss)
+        else:
+            ert = gort[:, :nss].reshape(nl, nssd, nss_per)
 
         eq = self.RTQ(zip(ert, ssrt))
         gq = self.RTQ(zip(gort, [tb] * nl))
@@ -306,47 +285,29 @@ class Simulator(object):
         sacc = np.where(ert < ssrt, 0, 1).mean(axis=2)
         return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(nl)])
 
-
     def analyze_proactive(self, DVg, p):
         """ get proactive rt and accuracy of go process for simulated
         conditions generated from simulate_pro
         """
-        prob = self.percentiles
-        ssd = self.ssd
-        tb = self.tb
-        nl = self.nlevels
-
+        dx, dt, si, tb = self.steps
+        nl, ntot = self.nlevels, self.ntot
         gdec = self.go_resp(DVg, p['a'])
         gort = self.go_RT(p['tr'], gdec)
-        gq = hs(self.RTQ(zip(gort, [tb] * nl)))
-
+        gq = self.RTQ(zip(gort, [tb] * nl))
         # Get response and stop accuracy information
         gacc = 1 - np.mean(np.where(gort < tb, 1, 0), axis=1)
         return hs([gacc, gq])
 
     def simulate_rldpm(self, p, analyze=True):
         """ Simulate the dependent process model (DPM)
-        ::Arguments::
-            p (dict):
-                parameter dictionary. values can be single floats
-                or vectors where each element is the value of that
-                parameter for a given condition
-            analyze (bool <True>):
-                if True (default) return rt and accuracy information
-                (yhat in cost fx). If False, return Go and Stop proc.
-        ::Returns::
-            yhat of cost vector (ndarray)
-            or Go & Stop processes in list (list of ndarrays)
+        with learning
         """
-
         p = self.vectorize_params(p)
         Pg, Tg = self.__update_go_process__(p)
         Ps, Ts = self.__update_stop_process__(p)
-
-        ntot = self.ntot
-        nss = self.nss
-        nl = self.nlevels
-        dx = self.dx
+        ssd, nssd, nss, nss_per_ssd, ssd_ix = self.ssd_info
+        dx, dt, si, tb = self.steps
+        nl, ntot = self.nlevels, self.ntot
 
         for trial in range(ntot):
             DVg = self.xtb[:, na] * csum(np.where((rs((nl, Tg.max())).T<Pg), dx, -dx).T, axis=1)
@@ -354,80 +315,6 @@ class Simulator(object):
             if trial%2:
                 init_ss = array([[DVg[i, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i in range(nl)])
                 DVs = init_ss[:,:,na] + csum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
-
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
-        else:
-            return [DVg, DVs]
-
-    def mean_pgo_rts(self, p, return_vals=True):
-        """ Simulate proactive model and calculate mean RTs
-        for all conditions rather than collapse across high and low
-        """
-        import pandas as pd
-        DVg = self.simulate_pro(p, analyze=False)
-        gdec = self.go_resp(DVg, p['a'])
-        rt = self.go_RT(p['tr'], gdec)
-        mu = np.nanmean(rt, axis=1)
-        ci = pd.DataFrame(rt.T).sem() * 1.96
-        std = pd.DataFrame(rt.T).std()
-
-        self.pgo_rts = {'mu': mu, 'ci': ci, 'std': std}
-        if return_vals:
-            return self.pgo_rts
-
-    def analyze_pro_data(self, DVg, p):
-        prob = self.percentiles
-        tb = self.tb
-        nl = self.nlevels
-        ix = self.rt_cix
-        gdec = self.go_resp(DVg, p['a'])
-        rt = self.go_RT(p['tr'], gdec)
-        hi = hs(rt[ix:])
-        low = hs(rt[1:ix])
-        # Get response and stop accuracy information
-        gacc = np.where(rt < self.tb, 0, 1)
-        return [gacc, hi[~np.isnan(hi)], low[~np.isnan(low)]]
-
-
-    def analyze_re_data(self, dv, p):
-        import pandas as pd
-        prob = self.percentiles
-        ssd = self.ssd
-        tb = self.tb
-        nl = self.nlevels
-        nss = self.nss
-        nssd = self.nssd
-        ntot = self.ntot
-        nsstot = nss * nssd
-        # get condition labels
-        conditions = np.sort(self.fitparams['labels'] * int(ntot))
-        # assign go trials pseudo ssd of 1000
-        delays = np.append(np.array([[c] * nss for c in sd]), [1000] * nss * nssd)
-        ttype = np.tile(array([['stop'] * nsstot + ['go'] * nsstot]), nl)
-
-        DVg, DVs = dv
-        if 'sso' in list(p):
-            ssd = ssd + p['sso']
-        gdec = self.go_resp(DVg, p['a'])
-        sdec = self.ss_resp(DVs, p['a'])
-
-        gort = self.go_RT(p['tr'], gdec)
-        ssrt = self.ss_RT(ssd, sdec)
-        ert = np.tile(gort[:, :nss], nssd).reshape(nl, nssd, nss)
-
-        # compare go proc. rt to ssrt and get error resp. (go proc win err)
-        ssgo = map((lambda z: z[0][z[0] < z[1]]), zip(ert, ssrt))
-        gresp = np.where(gort[:, nss * nssd:] < tb, 1, 0)
-        ssresp = np.where(ert < ssrt, 1, 0).reshape(nl, nsstot)
-
-        resp = np.concatenate([ssresp, gresp], axis=1)
-        rt = np.concatenate([ert.reshape(nl, nsstot), gort[:, :nsstot]], axis=1)
-
-        out = {'ssd': np.tile(delays, nl),
-               'response': np.hstack(resp),
-               'rt': np.hstack(rt),
-               'cond': conditions,
-               'ttype': ttype}
-
-        return pd.DataFrame(out)
+        return [DVg, DVs]

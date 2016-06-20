@@ -12,9 +12,16 @@ from scipy import optimize
 import functools
 
 
-def assess_fit(finfo):
+def assess_fit(finfo, lmMin=None, fitparams=None):
     """ calculate fit statistics
     """
+    y, wts, yhat = fitparams['y'], fitparams['wts'], fitparams['yhat']
+    # fill finfo dict with goodness-of-fit info
+    finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
+    finfo['ndata'] = len(yhat)
+    finfo['cnvrg'] = lmMinimizer.success
+    finfo['nfev'] = lmMinimizer.nfev
+    finfo['nvary'] = len(lmMinimizer.var_names)
     finfo = pd.Series(finfo)
     chisqr = finfo.chi
     finfo['df'] = finfo.ndata - finfo.nvary
@@ -24,15 +31,15 @@ def assess_fit(finfo):
     finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
     return finfo
 
-def rangl_data(data, tb=.555, percentiles=([.1, .3, .5, .7, .9]), ssd_method='all'):
+def rangl_data(data, tb=.555, quantiles=([.1, .3, .5, .7, .9]), ssd_method='all'):
     """ called by __make_dataframes__ to generate observed dataframes and iterables for
     subject fits
     """
     gac = data.query('ttype=="go"').acc.mean()
     grt = data.query('ttype=="go" & acc==1').rt.values
     ert = data.query('response==1 & acc==0').rt.values
-    gq = mq(grt, prob=percentiles)
-    eq = mq(ert, prob=percentiles)
+    gq = mq(grt, prob=quantiles)
+    eq = mq(ert, prob=quantiles)
     data_vector = [gac, gq, eq]
     if 'ssd' in data.columns:
         stopdf = data.query('ttype=="stop"')
@@ -90,15 +97,15 @@ def res(arr, lower=0.0, upper=1.0):
     arr += lower
     return arr
 
-def get_observed_vector(rt, percentiles=array([10, 30, 50, 70, 90])):
+def get_observed_vector(rt, quantiles=array([10, 30, 50, 70, 90])):
     """ takes array of rt values and returns binned counts (trials
-    that fall between each set of percentiles in percentiles). also returns
+    that fall between each set of quantiles in quantiles). also returns
     the total number of observations (len(rt)) and the RT values at those
-    percentiles (rtquant)
+    quantiles (rtquant)
     """
-    inter_percentiles = array([percentiles[0] - 0] + [percentiles[i] - percentiles[i - 1] for i in range(1, len(percentiles))] + [100 - percentiles[-1]])
-    rtquant = mq(rt, prob=percentiles * .01)
-    ocounts = np.ceil((inter_percentiles) * .01 * len(rt)).astype(int)
+    inter_quantiles = array([quantiles[0] - 0] + [quantiles[i] - quantiles[i - 1] for i in range(1, len(quantiles))] + [100 - quantiles[-1]])
+    rtquant = mq(rt, prob=quantiles * .01)
+    ocounts = np.ceil((inter_quantiles) * .01 * len(rt)).astype(int)
     n_obs = np.sum(ocounts)
     return [ocounts, rtquant, n_obs]
 
@@ -124,22 +131,22 @@ def ssrt_calc(df, avgrt=.3):
     ssrt_list = ([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
     return ssrt_list
 
-def get_obs_quant_counts(df, percentiles=([.10, .30, .50, .70, .90])):
+def get_obs_quant_counts(df, quantiles=([.10, .30, .50, .70, .90])):
     if type(df) == pd.Series:
         rt = df.copy()
     else:
         rt = df.rt.copy()
-    inter_percentiles = [percentiles[0] - 0] + [percentiles[i] - percentiles[i - 1] for i in range(1, len(percentiles))] + [1.00 - percentiles[-1]]
-    obs_quant = mq(rt, prob=percentiles)
-    observed = np.ceil((inter_percentiles) * len(rt) * .94).astype(int)
+    inter_quantiles = [quantiles[0] - 0] + [quantiles[i] - quantiles[i - 1] for i in range(1, len(quantiles))] + [1.00 - quantiles[-1]]
+    obs_quant = mq(rt, prob=quantiles)
+    observed = np.ceil((inter_quantiles) * len(rt) * .94).astype(int)
     return observed, obs_quant
 
-def get_exp_counts(simdf, obs_quant, n_obs, percentiles=([.10, .30, .50, .70, .90])):
+def get_exp_counts(simdf, obs_quant, n_obs, quantiles=([.10, .30, .50, .70, .90])):
     if type(simdf) == pd.Series:
         simrt = simdf.copy()
     else:
         simrt = simdf.rt.copy()
-    exp_quant = mq(simrt, prob=percentiles)
+    exp_quant = mq(simrt, prob=quantiles)
     oq = obs_quant
     expected = np.ceil(np.diff([0] + [pscore(simrt, oq_rt) * .01 for oq_rt in oq] + [1]) * n_obs)
     return expected, exp_quant

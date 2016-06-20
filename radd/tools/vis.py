@@ -23,7 +23,6 @@ heat = cdict['heat']
 cool = cdict['cool']
 slate = cdict['slate']
 
-
 def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None, pse=[], scl=100):
 
     sns.set_context('notebook', font_scale=1.7)
@@ -54,7 +53,7 @@ def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None,
     for i, yi in enumerate(lines):
         color = colors[i]
         y = analyze.res(yi, lower=yi[-1], upper=yi[0])
-        p_guess = (np.mean(x), np.mean(y), .39, .5)
+        p_guess = (np.mean(x), np.mean(y), .4, .5)
         p, cov, infodict, mesg, ier = optimize.leastsq(analyze.residuals, p_guess, args=(x, y), full_output=1, maxfev=10000, ftol=1.e-20)
         x0, y0, c, k = p
         pxp = analyze.sigmoid(p, xsim)
@@ -606,3 +605,53 @@ def plot_traces(DVg=[], DVs=[], sim_theta={}, kind='dpm', ssd=.450, ax=None, tau
     ax.set_yticks([])
 
     return ax
+
+
+def log_progress(sequence, every=None, size=None):
+    from ipywidgets import IntProgress, HTML, VBox
+    from IPython.display import display
+
+    is_iterator = False
+    if size is None:
+        try:
+            size = len(sequence)
+        except TypeError:
+            is_iterator = True
+    if size is not None:
+        if every is None:
+            if size <= 200:
+                every = 1
+            else:
+                every = size / 200     # every 0.5%
+    else:
+        assert every is not None, 'sequence is iterator, set every'
+
+    if is_iterator:
+        progress = IntProgress(min=0, max=1, value=1)
+        progress.bar_style = 'info'
+    else:
+        progress = IntProgress(min=0, max=size, value=0)
+    label = HTML()
+    box = VBox(children=[label, progress])
+    display(box)
+
+    index = 0
+    try:
+        for index, record in enumerate(sequence, 1):
+            if index == 1 or index % every == 0:
+                if is_iterator:
+                    label.value = '{index} / ?'.format(index=index)
+                else:
+                    progress.value = index
+                    label.value = u'{index} / {size}'.format(
+                        index=index,
+                        size=size
+                    )
+            yield record
+    except Exception:
+        progress.bar_style = 'danger'
+        raise
+    else:
+        progress.bar_style = 'success'
+        progress.value = index
+        label.value = str(index or '?')

@@ -43,7 +43,7 @@ class HopStep(object):
     def __init__(self, keys, nlevels=1, stepsize=0.05):
         self.stepsize_scalars = theta.get_stepsize_scalars(keys, nlevels)
         self.stepsize = stepsize
-        self.np = len(self.stepsize_scalars)
+        self.np = self.stepsize_scalars.size
 
     def __call__(self, x):
         s = self.stepsize
@@ -73,7 +73,7 @@ class Optimizer(object):
         self.kind = kind
         self.pc_map = pc_map
         self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
-        self.pvc = deepcopy(['a', 'tr', 'v', 'xb'])
+        self.constants = deepcopy(['a', 'tr', 'v', 'xb'])
 
     def get_best_inits(self, pkeys=None, nbest=10, nrand_samples=500):
         """ test a large sample of random parameter values
@@ -83,7 +83,7 @@ class Optimizer(object):
             pkeys = np.sort(list(self.inits))
         rinits = theta.random_inits(pkeys, ninits=nrand_samples, kind=self.kind)
         all_inits = [{pk: rinits[pk][i] for pk in pkeys} for i in range(nrand_samples)]
-        fmin_all = [self.simulator.__cost_fx__(inits_i) for inits_i in all_inits]
+        fmin_all = [self.simulator.cost_fx(inits_i) for inits_i in all_inits]
         fmin_series = pd.Series(fmin_all)
         best_inits_index = fmin_series.sort_values().index[:nbest]
         best_inits = [all_inits[i] for i in best_inits_index]
@@ -103,7 +103,7 @@ class Optimizer(object):
         # get cost fmin for default inits
         p0 = dict(deepcopy(p))
         p_init = dict(deepcopy(p))
-        fmin0 = self.simulator.__cost_fx__(p_init)
+        fmin0 = self.simulator.cost_fx(p_init)
         print("default inits: fmin0=%.9f" % (fmin0))
         # sample random inits and select best of
         best_inits = self.get_best_inits(pkeys, nbest=bp['nrand_inits'], nrand_samples=bp['nrand_samples'])
@@ -119,7 +119,7 @@ class Optimizer(object):
         fmin_best = xfmin[ix_min]
         # compare global basin (fmin_best) to
         # fmin using default inits (fmin0)
-        if fmin_best >= fmin0:
+        if fmin_best > fmin0:
             basin_decision = "USING DEFAULT INITS: fmin_inits=%.9f, next_best=%.9f" % (fmin0, fmin_best)
             print(basin_decision)
             return p0
@@ -140,13 +140,14 @@ class Optimizer(object):
         if is_flat:
             basin_keys = np.sort(list(p))
             xp = dict(deepcopy(p))
-            basin_params = theta.all_params_to_scalar(xp)
+            basin_params = theta.scalarize_params(xp)
             nl = 1
         else:
             basin_keys = np.sort(list(self.pc_map))
             basin_params = deepcopy(p)
             nl = fp['y'].ndim
         self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys)
+        self.simulator.__update__(fp)
         # make list of init values for all pkeys included in fit
         x0 = np.hstack(np.hstack([basin_params[pk]*np.ones(nl) for pk in basin_keys]))
         # define parameter boundaries for all params in pc_map.keys()
@@ -159,7 +160,7 @@ class Optimizer(object):
         accept_step = BasinBounds(xmin, xmax)
         custom_step = HopStep(basin_keys, nlevels=nl, stepsize=bp['stepsize'])
         # run basinhopping on simulator.basinhopping_minimizer func
-        out = basinhopping(self.simulator.basinhopping_minimizer, x0=x0, minimizer_kwargs=mkwargs, take_step=custom_step, accept_test=accept_step, stepsize=bp['stepsize'], niter=bp['niter'], niter_success=bp['niter_success'], interval=bp['interval'], disp=bp['disp'])
+        out = basinhopping(self.simulator.global_cost_fx, x0=x0, minimizer_kwargs=mkwargs, take_step=custom_step, accept_test=accept_step, stepsize=bp['stepsize'], niter=bp['niter'], niter_success=bp['niter_success'], interval=bp['interval'], disp=bp['disp'])
         xopt = out.x
         funcmin = out.fun
         if nl > 1:
@@ -175,33 +176,21 @@ class Optimizer(object):
         fp = self.fitparams
         if inits is None:
             inits = dict(deepcopy(self.inits))
-        opt_kws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'],
-        'maxiter': fp['maxiter'], 'maxfev': fp['maxfev']}
-
-        # GEN PARAMS OBJ & OPTIMIZE THETA
+        optkws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxiter': fp['maxiter'], 'maxfev': fp['maxfev']}
+        # make lmfit Parameters object to keep track of
+        # parameter names and dependencies during fir
         lmParams = theta.loadParameters(inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
-        optmod = minimize(self.simulator.__cost_fx__, lmParams, method=fp['method'], options=opt_kws)
-
-        # gen dict of opt. params
-        self.finfo = dict(deepcopy(optmod.params.valuesdict()))
-        popt = dict(deepcopy(self.finfo))
-        y = self.simulator.y
-        wts = self.simulator.wts
-        yhat_iter = [self.simulator.sim_fx(popt) for i in range(100)]
-        yhat = np.mean(yhat_iter, axis=0)
-        # ASSUMING THE weighted SSE is CALC BY COSTFX
-        self.finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
-        self.finfo['ndata'] = len(yhat)
-        self.finfo['cnvrg'] = optmod.success
-        self.finfo['nfev'] = optmod.nfev
-        self.finfo['nvary'] = len(optmod.var_names)
-        self.finfo = assess_fit(self.finfo)
-        print(finfo['cnvrg'])
-        self.popt = theta.all_params_to_scalar(popt, exclude=list(self.pc_map))
-        log_arrays = {'y': y, 'yhat': yhat, 'wts': wts}
-        param_report = fit_report(optmod.params)
-        try:
-            messages.logger(param_report=param_report, finfo=self.finfo, pdict=self.popt, depends_on=fp['depends_on'], log_arrays=log_arrays, is_flat=is_flat, kind=self.kind, fit_on=fp['fit_on'], dynamic=fp['dynamic'], pc_map=self.pc_map)
-        except Exception:
-            pass
-        return yhat, self.finfo, self.popt
+        lmMinimizer = minimize(self.simulator.cost_fx, lmParams, method=fp['method'], options=optkws)
+        #self.lmMinimizer = deepcopy(lmMinimizer)
+        self.param_report = fit_report(lmMinimizer.params)
+        # gen dict of lmfit optimized Parameters object
+        finfo = pd.Series(lmMinimizer.params.valuesdict())
+        p = finfo.to_dict()
+        finfo['cnvrg'] = lmMinimizer.success
+        finfo['nfev'] = lmMinimizer.nfev
+        finfo['nvary'] = len(lmMinimizer.var_names)
+        # get model-predicted yhat vector
+        yhat = np.mean([self.simulator.sim_fx(p) for i in range(20)], axis=0)
+        # un-vectorize all parameters except conditionals
+        popt = theta.scalarize_params(p, exclude=list(self.pc_map))
+        return finfo, popt, yhat.flatten()

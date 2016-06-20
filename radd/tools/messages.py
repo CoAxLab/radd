@@ -1,76 +1,99 @@
 #!/usr/bin/env python
-from numpy.random import randint
-from lmfit import report_fit, fit_report
-from copy import deepcopy
 import os
+from copy import deepcopy
+from future.utils import listvalues
+import numpy as np
+from numpy.random import randint
+from lmfit import fit_report
 
+def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='average', array_names = ['y', 'wts', 'yhat']):
+    """ logs information by opening and appending to an existing log file
+    (named according to parameter dependencies) or creating a new log.
+    """
+    # functions for writing numpy arrays to strings (ex. "y = np.array([1,2,3])"")
+    name_equals = lambda name, strvector: '{0} = array([{1}])'.format(name, strvector)
+    stringify = lambda x: name_equals(x[0], ', '.join('{:f}'.format(n) for n in x[1]))
+    # brief-ify fitparams reference
+    fp = dict(deepcopy(fitparams))
+    # list flattened y, wts, and yhat arrays
+    arrays = [fp[k].flatten() for k in array_names]
+    # write arays to strings for easy logging
+    names_arrays = zip(array_names, arrays)
+    y_str, wts_str, yhat_str = map(stringify, names_arrays)
 
-def get_one():
+    if fp['y'].ndim==1:
+        fit_on = ' '.join([fit_on, 'FLAT'])
+        dep_id = "flat model (no conditional parameters)"
+        fname = './' + kind + '_flat.txt'
+    else:
+        depends_on = fp['depends_on']
+        fit_on = ' '.join([fit_on, 'FULL'])
+        pkeys = '_'.join(list(depends_on))
+        pconds = '_'.join(listvalues(depends_on))
+        dep_id = "{0} depends on {1}".format(pconds, pkeys)
+        fname = '_'.join(['./' + kind, pconds + '.txt'])
 
-    msgs = ["Optimize On, Wayne",
-            "Optimize On, Garth",
-            "See, it's not that simplex...",
-            "I wish you a merry fit, and a happy Nature paper",
-            "It'll probably work this time",
-            "'They dont think it be like it is, but it do' -Oscar Gamble",
-            "Check your zoomfile before optimizing. It should be in your computer",
-            "It's IN the computer?",
-            "What is this... a model for ANTS!?"]
+    with open(fname, 'a') as f:
+        f.write('\n\n')
+        f.write('==' * 30 + '\n\n')
+        f.write(str(fit_on) + '\n')
+        f.write(str(kind) + '\n')
+        f.write(str(dep_id) + '\n\n')
+        f.write(wts_str + '\n\n')
+        f.write(yhat_str + '\n\n')
+        f.write(y_str + '\n\n')
+        f.write('--' * 30 + '\n')
+        f.write("FIT REPORT")
+        f.write('\n' + '--' * 30 + '\n')
+        f.write(param_report)
+        f.write('\n' + '--' * 30 + '\n')
+        f.write('='.join(['popt', repr(popt)]) + '\n')
+        f.write('AIC: %.8f' % finfo['AIC'] + '\n')
+        f.write('BIC: %.8f' % finfo['BIC'] + '\n')
+        f.write('chi: %.8f' % finfo['chi'] + '\n')
+        f.write('rchi: %.8f' % finfo['rchi'] + '\n')
+        f.write('converged: %s' % finfo['cnvrg'] + '\n\n')
+        f.write('==' * 30 + '\n\n\n')
 
-    return msgs[randint(0, len(msgs))]
-
-
-def saygo(depends_on={}, labels=[], kind='radd', fit_on='subjects', dynamic='hyp'):
-
-    pdeps = depends_on.keys()
-    deplist = []
-    pdep = describe_model(depends_on)
-
+def saygo(depends_on={}, cond_map=None, kind='xdpm', fit_on='subjects', dynamic='hyp'):
+    """ generate confirmation message that model is prepared and ready to fit.
+    repeats structure and important fit details for user to confirm """
+    depkeys = describe_model(depends_on)
     if 'x' in kind:
         bias = '(w/ %s dynamic bias)' % dynamic
     else:
         bias = ""
-    dep = depends_on.values()[0]
-    lbls = ', '.join(labels)
-    msg = get_one()
+    dep = listvalues(depends_on)
+    # flatten list of all cond levels
+    lbls = ', '.join(sum(listvalues(depends_on), []))
+    msg = get_nonsense()
     strings = (kind, bias, fit_on, pdep, dep, lbls, msg)
-
     print("""
       Model is prepared to fit %s model %s to %s data,
       allowing %s to vary across levels of %s (%s)
-
       %s \n""" % strings)
-
     return True
 
-
-def basin_accept_fun(x, f, accepted):
-    print("at minimum %.4f accepted %d" % (f, int(accepted)))
-
-
 def describe_model(depends_on=None):
-
-    pdeps = depends_on.keys()
+    """ get names of any conditional parameters included in the model
+    """
+    pkeys = list(depends_on)
     deplist = []
-    if 'a' in pdeps:
+    if 'a' in pkeys:
         deplist.append('boundary')
-    if 'tr' in pdeps:
+    if 'tr' in pkeys:
         deplist.append('onset')
-    if 'v' in pdeps:
+    if 'v' in pkeys:
         deplist.append('drift')
-    if 'xb' in pdeps:
+    if 'xb' in pkeys:
         deplist.append('xbias')
-
-    if len(pdeps) > 1:
-        pdep = ' and '.join(deplist)
+    if len(pkeys) > 1:
+        depkeys = ' and '.join(deplist)
     else:
-        pdep = deplist[0]
-
-    return pdep
-
+        depkeys = deplist[0]
+    return depkeys
 
 def global_logger(logs):
-
     arr_str = lambda x: ', '.join(str(elem)[:6] for elem in x)
     str_str = lambda x: ', '.join(str(elem) for elem in x)
     single_str = lambda x: ', '.join(str(elem) for elem in x)
@@ -81,7 +104,6 @@ def global_logger(logs):
     yhat_str = 'yhat = array([' + arr_str(logs['yhat']) + '])'
     y_str = 'y = array([' + arr_str(logs['y']) + '])'
     cost_str = 'cost = %s' % str(logs['cost'])[:6]
-
     with open('global_min_report.txt', 'a') as f:
         f.write('==' * 20 + '\n')
         f.write(popt + '\n')
@@ -91,46 +113,16 @@ def global_logger(logs):
         f.write(y_str + '\n')
         f.write('==' * 20 + '\n')
 
-
-def logger(param_report, finfo={}, depends_on={}, pdict={}, is_flat=True, log_arrays={}, kind=None, dynamic=None, fit_on=None, pc_map=None):
-
-    wts, y, yhat = log_arrays['wts'], log_arrays['y'], log_arrays['yhat']
-    if is_flat:
-        fit_on = ' '.join([fit_on, 'FLAT'])
-        fname = './' + kind + '.txt'
-    else:
-        fit_on = ' '.join([fit_on, 'FULL'])
-        pkeys = depends_on.keys()
-        pvals = depends_on.values()
-        fname = '_'.join(['./' + kind, '_'.join(pkeys) + '.txt'])
-        dep_id = "%s DEPENDS ON %s" % (pvals[0], str(tuple(pkeys)))
-
-    model_id = "MODEL: %s" % kind
-    if 'x' in kind:
-        model_id = ' ('.join([model_id, dynamic]) + ')'
-    wts_str = 'wts = array([' + ', '.join(str(elem)[:6] for elem in wts) + '])'
-    yhat_str = 'yhat = array([' + ', '.join(str(elem)[:6] for elem in yhat) + '])'
-    y_str = 'y = array([' + ', '.join(str(elem)[:6] for elem in y) + '])'
-    with open(fname, 'a') as f:
-        f.write('\n\n')
-        f.write('==' * 30 + '\n\n')
-        f.write(str(fit_on) + '\n')
-        f.write(str(model_id) + '\n')
-        if not is_flat:
-            f.write(str(dep_id) + '\n\n')
-        f.write(wts_str + '\n\n')
-        f.write(yhat_str + '\n\n')
-        f.write(y_str + '\n\n')
-        f.write('--' * 30 + '\n')
-        f.write("FIT REPORT")
-        f.write('\n' + '--' * 30 + '\n')
-        f.write(param_report)
-        f.write('\n' + '--' * 30 + '\n')
-        f.write('='.join(['popt', repr(pdict)]) + '\n')
-        f.write('AIC: %.8f' % finfo['AIC'] + '\n')
-        f.write('BIC: %.8f' % finfo['BIC'] + '\n')
-        f.write('chi: %.8f' % finfo['chi'] + '\n')
-        f.write('rchi: %.8f' % finfo['rchi'] + '\n')
-        f.write('converged: %s' % finfo['cnvrg'] + '\n\n')
-        f.write('==' * 30 + '\n\n\n')
-    return finfo
+def get_nonsense():
+    """ random nonsensical words of encouragement
+    """
+    msgs = ["Optimize On, Wayne",
+            "Optimize On, Garth",
+            "See, it's not that simplex...",
+            "I wish you a merry fit, and a happy Nature paper",
+            "It'll probably work this time",
+            "'They dont think it be like it is, but it do' -Oscar Gamble",
+            "Check your zoomfile before optimizing. It should be in your computer",
+            "It's IN the computer?",
+            "What is this... a model for ANTS!?"]
+    return msgs[randint(0, len(msgs))]

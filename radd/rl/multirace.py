@@ -52,10 +52,10 @@ def run_full_sims(p, env=pd.DataFrame, alphas_go=[], alphas_no=None, betas=[], n
     return [trial_df, igt_df]
 
 def vectorize_params(p, pc_map, nresp=4):
-    pvc = ['a', 'tr', 'vd', 'vi', 'xb']
-    #remove conditional parameters from pvc
-    [pvc.remove(param) for param in pc_map.keys()]
-    for pkey in pvc:
+    constants = ['a', 'tr', 'vd', 'vi', 'xb']
+    #remove conditional parameters from constants
+    [constants.remove(param) for param in pc_map.keys()]
+    for pkey in constants:
         p[pkey]=p[pkey]*np.ones(nresp)
     for pkey, pkc in pc_map.items():
         if nresp==1:
