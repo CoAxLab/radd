@@ -11,7 +11,7 @@ setup(
     package_data={'radd':['examples/*.csv', 'examples/*.txt', 'examples/*.ipynb']},
     description='RADD (Race Against Drift-Diffusion) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
     install_requires=['NumPy>=1.8.2', 'SciPy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'future'],
-    dependency_links=["git+https://github.com/jakevdp/JSAnimation.git@master"],
+    dependency_links=["http://github.com/jakevdp/JSAnimation/tarball/master#egg=JSAnimation-0.1"],
     include_dirs = [np.get_include()],
     classifiers=[
                 'Environment :: Console',
