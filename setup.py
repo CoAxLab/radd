@@ -1,9 +1,11 @@
 from setuptools import setup, find_packages
 import numpy as np
+import os
 
+os.system('pip install git+https://github.com/jakevdp/JSAnimation.git@master')
 setup(
     name='RADD',
-    version='0.0.10',
+    version='0.0.11',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
@@ -11,7 +13,6 @@ setup(
     package_data={'radd':['examples/*.csv', 'examples/*.txt', 'examples/*.ipynb']},
     description='RADD (Race Against Drift-Diffusion) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
     install_requires=['NumPy>=1.8.2', 'SciPy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'future'],
-    dependency_links=["http://github.com/jakevdp/JSAnimation/tarball/master#egg=JSAnimation-0.1"],
     include_dirs = [np.get_include()],
     classifiers=[
                 'Environment :: Console',

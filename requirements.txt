@@ -5,4 +5,3 @@ matplotlib >= 1.4.3
 scipy >= 0.16.1
 lmfit >= 0.9.1
 future
-git+http://github.com/jakevdp/JSAnimation/tarball/master#egg=JSAnimation-0.1
