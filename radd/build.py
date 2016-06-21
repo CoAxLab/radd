@@ -7,6 +7,7 @@ from numpy import array
 from radd.models import Simulator
 from radd.tools import messages
 from radd.CORE import RADDCore
+from radd.tools.vis import plot_model_fits
 
 class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
@@ -153,7 +154,7 @@ class Model(RADDCore):
         """ wrapper for radd.tools.vis.plot_model_fits """
         if fitparams is None:
             fitparams=self.fitparams
-        vis.plot_model_fits(y, yhat, fitparams, kde_quant=kde_quant_plots, save=save)
+        plot_model_fits(y, yhat, fitparams, kde_quant=kde_quant, save=save)
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using
