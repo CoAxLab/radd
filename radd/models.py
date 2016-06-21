@@ -19,7 +19,7 @@ class Simulator(object):
         self.kind = kind
         self.pc_map = pc_map
         self.fitparams = fitparams
-        self.__update_steps__(dt, si)
+        self.__update_steps__(dt=dt, si=si)
         self.__update__(fitparams=fitparams)
 
     def __update__(self, fitparams=None):
@@ -30,6 +30,7 @@ class Simulator(object):
             self.fitparams = fp
         else:
             fp = dict(deepcopy(self.fitparams))
+        self.tb = fp['tb']
         # set y, wts to be used cost function
         self.y = fp['y'].flatten()
         self.wts = fp['wts'].flatten()
@@ -51,17 +52,20 @@ class Simulator(object):
         self.__init_model_functions__()
         self.__init_analyze_functions__()
 
-    def __update_steps__(self, dt=.005, si=.01, tb=None):
+    def __update_steps__(self, dt=None, si=None, tb=None):
         """ update and store stepsize parameters
         dx: size of step up/down t-->t+dt
         dt: timestep of decision traces
         si: diffusion constant (noise)
         tb: time-boundary of trial
         """
-        dx = np.sqrt(si * dt)
-        if tb is None:
-            tb = self.fitparams['tb']
-        self.steps = [dx, dt, si, tb]
+        if tb is not None:
+            self.tb = tb
+        if si is not None:
+            self.si = si
+        if dt is not None:
+            self.dt = dt
+        self.dx = np.sqrt(self.si * self.dt)
 
     def __prep_global__(self, basin_params={}, basin_keys=[]):
         """ prepare simulator for global optimization using
@@ -129,15 +133,14 @@ class Simulator(object):
         optimization routine to produce the yhat vector
         """
         prob = self.quantiles
-        dx, dt, si, tb = self.steps
         go_axis, ss_axis = 2, 3
         if self.learn:
             go_axis-=1; ss_axis-=1
-        self.go_resp = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=go_axis) * dt
-        self.ss_resp_up = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=ss_axis) * dt
-        self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=ss_axis) * dt
-        self.go_RT = lambda ontime, rbool: ontime[:, na] + (rbool*np.where(rbool==0., 999, 1))
-        self.ss_RT = lambda ontime, rbool: ontime[:, :, na] + (rbool*np.where(rbool==0., 999, 1))
+        self.go_resp = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=go_axis) * self.dt
+        self.ss_resp_up = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=ss_axis) * self.dt
+        self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=ss_axis) * self.dt
+        self.go_RT = lambda ontime, rbool: ontime[:, na] + (rbool*np.where(rbool==0., np.nan, 1))
+        self.ss_RT = lambda ontime, rbool: ontime[:, :, na] + (rbool*np.where(rbool==0., np.nan, 1))
         self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
         if 'irace' in self.kind:
             self.ss_resp = self.ss_resp_up
@@ -159,9 +162,7 @@ class Simulator(object):
         """
         nl_ones = np.ones(self.nlevels).astype(np.float32)
         if 'si' in list(p):
-            dx, dt, si, tb = self.steps
-            dx = np.sqrt(p['si'] * dt)
-            self.steps = [dx, dt, si, tb]
+            self.dx = np.sqrt(p['si'] * self.dt)
         if 'xb' not in list(p):
             p['xb'] = 1.0
         for pkey in self.pvc:
@@ -179,10 +180,9 @@ class Simulator(object):
         """ update Pg (probability of DVg +dx) and Tg (n timepoints)
         for go process and get get dynamic bias signal if 'x' model
         """
-        dx, dt, si, tb = self.steps
-        Pg = 0.5 * (1 + p['v'] * dx / si)
-        Tg = np.ceil((tb - p['tr']) / dt).astype(int)
-        t = csum([dt] * Tg.max())
+        Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
+        Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
+        t = csum([self.dt] * Tg.max())
         xtb = self.dynamics_fx(p, t)
         return Pg, Tg, xtb
 
@@ -190,12 +190,11 @@ class Simulator(object):
         """ update Ps (probability of DVs +dx) and Ts (n timepoints)
         for each SSD of stop process
         """
-        dx, dt, si, tb = self.steps
         ssd = self.ssd_info[0]
         if 'sso' in list(p):
             sso = p['sso']
-        Ps = 0.5 * (1 + p['ssv'][0] * dx / si)
-        Ts = np.ceil((tb - (ssd + sso)) / dt).astype(int)
+        Ps = 0.5 * (1 + p['ssv'][0] * self.dx / self.si)
+        Ts = np.ceil((self.tb - (ssd + sso)) / self.dt).astype(int)
         return Ps, Ts
 
     def simulate_dpm(self, p, analyze=True):
@@ -213,20 +212,35 @@ class Simulator(object):
             or Go & Stop processes in list (list of ndarrays)
         """
         p = self.vectorize_params(p)
-        nl, ntot = self.nlevels, self.ntot
-        ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
-        dx, dt, si, tb = self.steps
-
         Pg, Tg, xtb = self.__update_go_process__(p)
         Ps, Ts = self.__update_stop_process__(p)
         ss_on = np.where(Ts<Tg[:, na], Tg[:, na]-Ts, 0)
+
+        nl, ntot, dx = self.nlevels, self.ntot, self.dx
+        ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
 
         DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         ssDVg = DVg[:, :nss, :].reshape(nl, nssd, nss_per, DVg.shape[-1])
         # initialize stop-process (DVs) FROM value of go-process (DVg) at t=SSD
         ssBase = np.array([ssDVg[i, ssd_ix, :, ix] for i, ix in enumerate(ss_on)])[:,:,:,na]
         DVs = ssBase + csum(np.where(rs((nl, nssd, nss_per, Ts.max())) < Ps, dx, -dx), axis=3)
+        if analyze:
+            return self.analyze_fx(DVg, DVs, p)
+        return [DVg, DVs]
 
+    def simulate_irace(self, p, analyze=True):
+        """ simulate the independent race model
+        (see simulate_dpm() for I/O details)
+        """
+        p = self.vectorize_params(p)
+        Pg, Tg, xtb = self.__update_go_process__(p)
+        Ps, Ts = self.__update_stop_process__(p)
+
+        nl, ntot, dx = self.nlevels, self.ntot, self.dx
+        ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
+
+        DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVs = csum(np.where(rs((nl, nssd, nss_per, Ts.max())) < Ps, dx, -dx), axis=3)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         return [DVg, DVs]
@@ -237,51 +251,26 @@ class Simulator(object):
         """
         p = self.vectorize_params(p)
         Pg, Tg, dvg = self.__update_go_process__(p)
-        dx, dt, si, tb = self.steps
-        nl, ntot = self.nlevels, self.ntot
+        nl, ntot, dx = self.nlevels, self.ntot, self.dx
         DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         if analyze:
             return self.analyze_fx(DVg, p)
         return DVg
-
-    def simulate_irace(self, p, analyze=True):
-        """ simulate the independent race model
-        (see simulate_dpm() for I/O details)
-        """
-        p = self.vectorize_params(p)
-        Pg, Tg, xtb = self.__update_go_process__(p)
-        Ps, Ts = self.__update_stop_process__(p)
-        ssd, nssd, nss, nss_per_ssd, ssd_ix = self.ssd_info
-        dx, dt, si, tb = self.steps
-        nl, ntot = self.nlevels, self.ntot
-
-        DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
-        DVs = csum(np.where(rs((nl, nssd, nss, Ts.max())) < Ps, dx, -dx), axis=3)
-
-        if analyze:
-            return self.analyze_fx(DVg, DVs, p)
-        return [DVg, DVs]
 
     def analyze_reactive(self, DVg, DVs, p):
         """ get rt and accuracy of go and stop process for simulated
         conditions generated from simulate_dpm
         """
         ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
-        dx, dt, si, tb = self.steps
         nl, ntot = self.nlevels, self.ntot
-
         gdec = self.go_resp(DVg, p['a'])
         sdec = self.ss_resp(DVs, p['a'])
         gort = self.go_RT(p['tr'], gdec)
         ssrt = self.ss_RT(ssd, sdec)
-        if 'irace' in self.kind:
-            ert = np.tile(gort[:, :nss], nssd).reshape(nl, nssd, nss)
-        else:
-            ert = gort[:, :nss].reshape(nl, nssd, nss_per)
-
+        ert = gort[:, :nss].reshape(nl, nssd, nss_per)
         eq = self.RTQ(zip(ert, ssrt))
-        gq = self.RTQ(zip(gort, [tb] * nl))
-        gacc = np.nanmean(np.where(gort < tb, 1, 0), axis=1)
+        gq = self.RTQ(zip(gort, [self.tb] * nl))
+        gacc = np.nanmean(np.where(gort < self.tb, 1, 0), axis=1)
         sacc = np.where(ert < ssrt, 0, 1).mean(axis=2)
         return hs([hs([i[ii] for i in [gacc, sacc, gq, eq]]) for ii in range(nl)])
 
@@ -289,13 +278,12 @@ class Simulator(object):
         """ get proactive rt and accuracy of go process for simulated
         conditions generated from simulate_pro
         """
-        dx, dt, si, tb = self.steps
         nl, ntot = self.nlevels, self.ntot
         gdec = self.go_resp(DVg, p['a'])
         gort = self.go_RT(p['tr'], gdec)
-        gq = self.RTQ(zip(gort, [tb] * nl))
+        gq = self.RTQ(zip(gort, [self.tb] * nl))
         # Get response and stop accuracy information
-        gacc = 1 - np.mean(np.where(gort < tb, 1, 0), axis=1)
+        gacc = 1 - np.mean(np.where(gort < self.tb, 1, 0), axis=1)
         return hs([gacc, gq])
 
     def simulate_rldpm(self, p, analyze=True):
@@ -306,8 +294,7 @@ class Simulator(object):
         Pg, Tg = self.__update_go_process__(p)
         Ps, Ts = self.__update_stop_process__(p)
         ssd, nssd, nss, nss_per_ssd, ssd_ix = self.ssd_info
-        dx, dt, si, tb = self.steps
-        nl, ntot = self.nlevels, self.ntot
+        nl, ntot, dx = self.nlevels, self.ntot, self.dx
 
         for trial in range(ntot):
             DVg = self.xtb[:, na] * csum(np.where((rs((nl, Tg.max())).T<Pg), dx, -dx).T, axis=1)

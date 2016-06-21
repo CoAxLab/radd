@@ -121,10 +121,10 @@ class RADDCore(object):
             y = self.observed_flat[0]
             wts = self.flat_wts[0]
             # initialize with default values and first arrays in observed_flat, flat_wts
-            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 20000, 'maxfev': 5000,
-                'disp':True, 'maxiter': 5000, 'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb,
-                'fit_on': self.fit_on, 'clmap': self.clmap, 'dynamic':self.dynamic, 'nlevels': 1,
-                'quantiles': self.quantiles, 'depends_on': self.depends_on, 'flat': True}
+            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 20000, 'maxfev': 2000, 'disp':True,
+                'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
+                'clmap': self.clmap, 'dynamic':self.dynamic, 'quantiles': self.quantiles, 'flat': True,
+                'depends_on': self.depends_on, 'kind': self.kind}
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -139,7 +139,8 @@ class RADDCore(object):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'nrand_inits': 5, 'nrand_samples': 2000, 'interval': 5, 'niter': 40, 'disp': True, 'stepsize': .06, 'niter_success': 20, 'tol': 1.e-5, 'maxiter': 100, 'method': 'TNC'}
+            self.basinparams =  {'nrand_inits': 5, 'nrand_samples': 5000, 'interval': 10, 'disp': True,
+                'stepsize': .05, 'niter_success': 30, 'tol': 1.e-5, 'method': 'TNC'}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():

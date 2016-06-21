@@ -24,9 +24,9 @@ def random_inits(pkeys, ninits=1, kind='dpm'):
         pkeys = list(pkeys)
     params = {}
     for pk in pkeys:
-        pk_bounds = get_bounds(kind=kind)[pk]
-        params[pk] = init_distributions(pk, pk_bounds, nrvs=ninits, kind=kind)
+        params[pk] = init_distributions(pk, nrvs=ninits, kind=kind)
     if 'vd' in params.keys():
+        # vi_perc ~ U(.05, .95) --> vi = vi_perc*vd
         params['vi'] = params['vi']*params['vd']
     return params
 
@@ -78,32 +78,29 @@ def scalarize_params(params, params_list=None, exclude=[]):
         params[exc] = np.asarray(params[exc], dtype=float)
     return params
 
-def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scale=None):
+def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65):
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
     """
-    mu_defaults = {'a': .2, 'tr': .1, 'v': 1., 'vi': .15, 'vd': 1.,
-                   'ssv': -1.5, 'z': .1, 'xb': 1.5, 'sso': .15}
-    sigma_defaults = {'a': .3, 'tr': .1, 'v': .2, 'vi': .7, 'vd':.2,
-                      'ssv': .3, 'z': .05, 'xb': .5, 'sso': .01}
-
-    if pkey == 'si':
-        return .01
-    if 'race' in kind or 'iact' in kind:
+    mu_defaults = {'a': .15, 'tr': .02, 'v': 1., 'ssv': -1., 'z': .1, 'xb': 1., 'sso': .15, 'vi': .15, 'vd': 1.}
+    sigma_defaults = {'a': .3, 'tr': .2, 'v': .3, 'ssv': .3, 'z': .05, 'xb': .5, 'sso': .01, 'vi': .7, 'vd': .2}
+    normal_params = ['tr', 'v', 'vd', 'ssv', 'z', 'xb', 'sso']
+    gamma_params = ['a', 'tr']
+    uniform_params = ['vi']
+    if 'race' in kind:
         mu_defaults['ssv'] = abs(mu_defaults['ssv'])
-    if loc is None:
-        loc = mu_defaults[pkey]
-    if scale is None:
-        scale = sigma_defaults[pkey]
+
+    bounds = get_bounds(kind=kind)[pkey]
+    loc = mu_defaults[pkey]
+    scale = sigma_defaults[pkey]
 
     # init and freeze dist shape
-    if pkey in ['tr', 'v', 'vd', 'ssv', 'z', 'xb', 'sso']:
+    if pkey in normal_params:
         dist = norm(loc, scale)
-    elif pkey in ['vi']:
-        # vi_perc ~ U(.05, .95) --> vi = vi_perc*vd
+    elif pkey in gamma_params:
+        dist = gamma(.8, loc, scale)
+    elif pkey in uniform_params:
         dist = uniform(loc, scale)
-    elif pkey in ['a', 'tr']:
-        dist = gamma(1, loc, scale)
 
     # generate random variates
     rvinits = dist.rvs(nrvs)
@@ -115,13 +112,15 @@ def init_distributions(pkey, bounds, tb=.65, kind='dpm', nrvs=25, loc=None, scal
         # apply upper limit
         ix = rvinits.argmax()
         rvinits[ix] = dist.rvs()
+    if pkey =='tr':
+        rvinits = np.abs(rvinits)
     return rvinits
 
 def get_bounds(kind='dpm', a=(.1, 1.5), tr=(.01, .5), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .1)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
-    if 'irace' in kind or 'iact' in kind:
+    if 'irace' in kind:
         ssv = (abs(ssv[1]), abs(ssv[0]))
     bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'vd':vd, 'vi':vi,
               'z': z, 'xb': xb, 'si': si, 'sso': sso}
@@ -132,10 +131,10 @@ def format_local_bounds(xmin, xmax):
     tupler = lambda xlim: tuple([xlim[0], xlim[1]])
     return map((tupler), zip(xmin, xmax))
 
-def format_basinhopping_bounds(basin_keys, nlevels=1):
+def format_basinhopping_bounds(basin_keys, nlevels=1, kind='dpm'):
     """ returns separate lists of all parameter
     min and max values """
-    allbounds = get_bounds()
+    allbounds = get_bounds(kind=kind)
     xmin, xmax = [], []
     for pk in basin_keys:
         xmin.append([allbounds[pk][0]] * nlevels)
@@ -147,8 +146,8 @@ def format_basinhopping_bounds(basin_keys, nlevels=1):
 def get_stepsize_scalars(keys, nlevels=1):
     """ returns an array of scalars used by fit.HopStep() object
     to control stepsize of basinhopping algorithm for each parameter """
-    scalar_dict = {'a': .5, 'tr': .1, 'v': 2., 'vi': 2., 'vd': 2.,
-                   'ssv': 2., 'z': .1, 'xb': 1.5, 'sso': .1}
+    scalar_dict = {'a': .5, 'tr': .1, 'v': 1.5, 'vi': 1.5, 'vd': 1.5,
+                   'ssv': 1.5, 'z': .1, 'xb': 1.5, 'sso': .1}
     stepsize_scalars = np.array([scalar_dict[k] for k in keys]*nlevels)
     if nlevels>1:
         stepsize_scalars = stepsize_scalars.squeeze()

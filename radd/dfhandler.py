@@ -11,7 +11,7 @@ from scipy.stats.mstats_extras import mjci
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=5):
+    def __init__(self, model, max_wt=3):
         self.model = model
         self.data = model.data
         self.inits = model.inits
@@ -157,7 +157,8 @@ class DataHandler(object):
             idx_pwts = self.pwts_idx_error_calc()
         elif self.model.fit_on=='average':
             # repeat for all rows in wtsDF (idx x ncond x nlevels)
-            idx_pwts = self.pwts_group_error_calc()
+            #idx_pwts = self.pwts_group_error_calc()
+            idx_pwts = self.pwts_idx_error_calc()
         return idx_qwts, idx_pwts
 
     def mj_quanterr(self):
@@ -384,17 +385,3 @@ class DataHandler(object):
         elif io == 'r':
             df = pd.read_csv(''.join([iostr, '.csv']), index_col=0)
             return df
-
-    def fill_df(self, data, dftype='fit'):
-
-        nconds = self.nconds
-        nlevels = self.nlevels
-        keys = self.idx_cols[next_row]
-        if dftype=='fit':
-            next_row = np.argmax(self.fitDF.isnull().any(axis=1))
-            self.fitDF.iloc[next_row, self.f_cols] = data
-        elif dftype=='yhat':
-            next_row = np.argmax(self.yhatDF.isnull().any(axis=1))
-            keys = self.idx_cols[next_row]
-            data_series = pd.Series(data, index=keys)
-            self.yhatDF.loc[next_row, keys] = pd.Series(data_series, index=keys)
