@@ -157,14 +157,25 @@ def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
     plt.tight_layout()
     sns.despine()
 
-def animated_dpm_example(model):
+def render_animation(anim):
+    from IPython.display import HTML
+    plt.close(anim._fig)
+    return HTML(anim_to_html(anim))
+
+def animate_dpm(model):
+    """ to render animation within a notebook :
+        vis.render_animation(vis.animated_dpm_example(MODEL))
+    """
+    from matplotlib import animation
     params = deepcopy(model.inits)
     bound=theta.scalarize_params(params)['a']
     x, gtraces, straces, xi, yi, nframes = gen_re_traces(model, params)
     f, axes = build_decision_axis(onset=x[0][0], bound=bound)
     glines = [axes[i].plot([], [], linewidth=1.5)[0] for i, n in enumerate(gtraces)]
     slines = [axes[i].plot([xi[i]], [yi[i]], linewidth=1.5)[0] for i, n in enumerate(straces)]
-    return f, (x, gtraces, glines, straces, slines, params, xi, yi), nframes
+    f_args = (x, gtraces, glines, straces, slines, params, xi, yi)
+    anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=4, blit=True)
+    return anim
 
 def gen_re_traces(model, params, integrate_exec_ss=False, integrate=False):
     sim = deepcopy(model.opt.simulator)
@@ -249,14 +260,3 @@ def anim_to_html(anim):
             video = open(f.name, "rb").read()
         anim._encoded_video = video.encode("base64")
     return VIDEO_TAG.format(anim._encoded_video)
-
-def display_animation(anim):
-    from IPython.display import HTML
-    plt.close(anim._fig)
-    return HTML(anim_to_html(anim))
-
-def animate_dpm(dpm_model):
-    from matplotlib import animation
-    f, f_args, nframes = animated_dpm_example(dpm_model)
-    anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=4, blit=True)
-    return anim

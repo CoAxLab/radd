@@ -42,7 +42,7 @@ class Model(RADDCore):
 
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, best_inits=None, plot_fits=True, saveplot=True, kde_quant_plots=False):
+    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, best_inits=None, plot_fits=False, saveplot=False, kde_quant_plots=True):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
