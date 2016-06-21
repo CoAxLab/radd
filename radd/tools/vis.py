@@ -1,6 +1,7 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import os
+from copy import deepcopy
 import pandas as pd
 import numpy as np
 from numpy import array
@@ -157,7 +158,6 @@ def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
     sns.despine()
 
 def animated_dpm_example(model):
-    from copy import deepcopy
     params = deepcopy(model.inits)
     bound=theta.scalarize_params(params)['a']
     x, gtraces, straces, xi, yi, nframes = gen_re_traces(model, params)
@@ -167,7 +167,7 @@ def animated_dpm_example(model):
     return f, (x, gtraces, glines, straces, slines, params, xi, yi), nframes
 
 def gen_re_traces(model, params, integrate_exec_ss=False, integrate=False):
-    sim = model.opt.simulator
+    sim = deepcopy(model.opt.simulator)
     sim.__update_steps__(dt=.001)
     ssd, nssd, nss, nss_per, ssd_ix = sim.ssd_info
     nsstot = nss * nssd

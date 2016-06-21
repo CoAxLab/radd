@@ -5,4 +5,4 @@ matplotlib >= 1.4.3
 scipy >= 0.16.1
 lmfit >= 0.9.1
 future
--e git+https://github.com/jakevdp/JSAnimation.git#egg=JSAnimation
+git+https://github.com/jakevdp/JSAnimation.git@master

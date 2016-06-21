@@ -10,8 +10,8 @@ setup(
     packages=['radd', 'radd.rl', 'radd.tools', 'radd.examples'],
     package_data={'radd':['examples/*.csv', 'examples/*.txt', 'examples/*.ipynb']},
     description='RADD (Race Against Drift-Diffusion) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
-    install_requires=['NumPy>=1.8.2', 'SciPy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'future', 'JSAnimation'],
-    dependency_links=["git+https://github.com/jakevdp/JSAnimation.git#egg=JSAnimation"],
+    install_requires=['NumPy>=1.8.2', 'SciPy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'future'],
+    dependency_links=["git+https://github.com/jakevdp/JSAnimation.git@master"],
     include_dirs = [np.get_include()],
     classifiers=[
                 'Environment :: Console',
