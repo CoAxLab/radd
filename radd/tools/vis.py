@@ -195,11 +195,12 @@ def gen_re_traces(model, params, integrate_exec_ss=False, integrate=False):
             integrated.append(app(g[:tx], cs(app(g[tx], (np.diff(g[tx:]) + np.diff(s[tx:]))))))
     nframes = [len(gt) for gt in dvgs]
     x = params['tr'][0] * 1000 + [np.arange(nf) for nf in nframes]
+    sim.__update_steps__(dt=.005)
     return [x, dvgs, dvss, xinit_ss, ssi, np.max(nframes)]
 
 def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
     # init figure, axes, properties
-    f, axes = plt.subplots(len(ssd), 1, figsize=(5, 5), dpi=300)
+    f, axes = plt.subplots(len(ssd), 1, figsize=(7, 7), dpi=300)
     #f.subplots_adjust(wspace=.05, top=.1, bottom=.1)
     f.subplots_adjust(hspace=.05, top=.99, bottom=.05)
     w = tb + 40
@@ -208,12 +209,12 @@ def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
     # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
     for i, ax in enumerate(axes):
         plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
-        ax.vlines(x=ssd[i], ymin=0, ymax=h, color="#e74c3c", lw=1.5, alpha=.5)
+        ax.vlines(x=ssd[i], ymin=0, ymax=h, color="#e74c3c", lw=2.5, alpha=.5)
         ax.hlines(y=h, xmin=start, xmax=w, color='k')
         ax.hlines(y=0, xmin=start, xmax=w, color='k')
-        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='-', alpha=.5)
+        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=2.5, linestyle='-', alpha=.5)
         ax.vlines(x=start + 2, ymin=0, ymax=h, color='k')
-        ax.text(ssd[i] + 10, h * .87, str(ssd[i]) + 'ms', fontsize=15)
+        ax.text(ssd[i] + 10, h * .88, str(ssd[i]) + 'ms', fontsize=19)
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.set_xticks([])
@@ -244,7 +245,7 @@ def anim_to_html(anim):
             </video>"""
     if not hasattr(anim, '_encoded_video'):
         with NamedTemporaryFile(suffix='.mp4') as f:
-            anim.save(f.name, dpi=300, extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
+            anim.save(f.name, extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
             video = open(f.name, "rb").read()
         anim._encoded_video = video.encode("base64")
     return VIDEO_TAG.format(anim._encoded_video)
@@ -253,3 +254,9 @@ def display_animation(anim):
     from IPython.display import HTML
     plt.close(anim._fig)
     return HTML(anim_to_html(anim))
+
+def animate_dpm(dpm_model):
+    from matplotlib import animation
+    f, f_args, nframes = animated_dpm_example(dpm_model)
+    anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=4, blit=True)
+    return anim
