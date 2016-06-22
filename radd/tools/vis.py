@@ -160,11 +160,7 @@ def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
 def render_animation(anim):
     from IPython.display import HTML
     plt.close(anim._fig)
-    #rc('animation', html='html5')
-    #return HTML(anim.to_html5_video())
     return HTML(anim_to_html(anim))
-
-
 
 def animate_dpm(model):
     """ to render animation within a notebook :
@@ -179,11 +175,10 @@ def animate_dpm(model):
     glines = [axes[i].plot([], [], linewidth=1.5)[0] for i, n in enumerate(gtraces)]
     slines = [axes[i].plot([xi[i]], [yi[i]], linewidth=1.5)[0] for i, n in enumerate(straces)]
     f_args = (x, gtraces, glines, straces, slines, params, xi, yi)
-    return f, f_args, nframes
-    #anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=4, blit=True)
-    #return anim
+    anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=1, blit=True)
+    return anim
 
-def gen_re_traces(model, params, integrate_exec_ss=False, integrate=False):
+def gen_re_traces(model, params):
     sim = deepcopy(model.opt.simulator)
     sim.__update_steps__(dt=.001)
     ssd, nssd, nss, nss_per, ssd_ix = sim.ssd_info
@@ -207,9 +202,6 @@ def gen_re_traces(model, params, integrate_exec_ss=False, integrate=False):
         ixmin = np.min([len(g), len(s)])
         dvgs.append(g[:ixmin])
         dvss.append(s[:ixmin])
-        if integrate:
-            tx = xinit_ss[i]
-            integrated.append(app(g[:tx], cs(app(g[tx], (np.diff(g[tx:]) + np.diff(s[tx:]))))))
     nframes = [len(gt) for gt in dvgs]
     x = params['tr'][0] * 1000 + [np.arange(nf) for nf in nframes]
     sim.__update_steps__(dt=.005)
@@ -219,7 +211,7 @@ def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
     # init figure, axes, properties
     f, axes = plt.subplots(len(ssd), 1, figsize=(7, 7), dpi=300)
     #f.subplots_adjust(wspace=.05, top=.1, bottom=.1)
-    f.subplots_adjust(hspace=.05, top=.99, bottom=.05)
+    f.subplots_adjust(hspace=.05, top=.99, bottom=.09)
     w = tb + 40
     h = bound
     start = onset - 80
