@@ -9,7 +9,7 @@ setup(
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
     packages=['radd', 'radd.rl', 'radd.tools', 'radd.examples'],
-    package_data={'radd':['examples/*.csv', 'examples/*.txt']},
+    package_data={'radd':['examples/*.csv', 'examples/*.txt', 'examples/*.mp4']},
     description='RADD (Race Against Drift-Diffusion) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
     install_requires=['NumPy>=1.8.2', 'SciPy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'future'],
     include_dirs = [np.get_include()],

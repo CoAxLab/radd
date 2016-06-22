@@ -160,13 +160,18 @@ def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
 def render_animation(anim):
     from IPython.display import HTML
     plt.close(anim._fig)
+    #rc('animation', html='html5')
+    #return HTML(anim.to_html5_video())
     return HTML(anim_to_html(anim))
+
+
 
 def animate_dpm(model):
     """ to render animation within a notebook :
         vis.render_animation(vis.animated_dpm_example(MODEL))
     """
     from matplotlib import animation
+    from copy import deepcopy
     params = deepcopy(model.inits)
     bound=theta.scalarize_params(params)['a']
     x, gtraces, straces, xi, yi, nframes = gen_re_traces(model, params)
@@ -174,8 +179,9 @@ def animate_dpm(model):
     glines = [axes[i].plot([], [], linewidth=1.5)[0] for i, n in enumerate(gtraces)]
     slines = [axes[i].plot([xi[i]], [yi[i]], linewidth=1.5)[0] for i, n in enumerate(straces)]
     f_args = (x, gtraces, glines, straces, slines, params, xi, yi)
-    anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=4, blit=True)
-    return anim
+    return f, f_args, nframes
+    #anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=4, blit=True)
+    #return anim
 
 def gen_re_traces(model, params, integrate_exec_ss=False, integrate=False):
     sim = deepcopy(model.opt.simulator)
