@@ -2,7 +2,6 @@
 # radd .gitignore file #
 ##########################
 
-
 # Compiled source #
 ###################
 *.so
@@ -10,6 +9,7 @@
 # Temporary Files #
 ###################
 *.pyc
+.ipynb_checkpoints/
 
 # Wheel build folder #
 ######################
