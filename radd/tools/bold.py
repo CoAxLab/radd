@@ -10,12 +10,12 @@ from numpy import concatenate as concat
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from radd import build, vis
+from radd import build
+from radd.tools import vis
 from radd.tools.colors import get_cpals
-from radd theta import get_xbias_theta
+from radd.tools.theta import get_xbias_theta
 from radd.tools.messages import describe_model
 from radd.models import Simulator
-
 
 class BOLD(Simulator):
     """ Simulated BOLD response // neural activity
@@ -48,8 +48,7 @@ class BOLD(Simulator):
                 self.p = model.inits
 
         # GENERATE MODEL SIMULATOR
-        super(BOLD, self).__init__(model=model, inits=self.p,
-                                   pc_map=model.pc_map, kind=model.kind, dt=.0001)
+        super(BOLD, self).__init__(model=model, inits=self.p, pc_map=model.pc_map, kind=model.kind, dt=.001)
 
         self.ncond = model.ncond
         self.depends_on = model.depends_on
@@ -222,6 +221,7 @@ class BOLD(Simulator):
             self.mean_go_traces = [gt.mean(axis=1).dropna().values for gt in self.go_traces]
             self.mean_ng_traces = [ng.mean(axis=1).dropna().values for ng in self.ng_traces]
 
+
     def make_bold_dfs(self, shape='long', savestr='sim', save=False):
         if not hasattr(self, 'go_traces'):
             self.simulate_bold()
@@ -247,6 +247,7 @@ class BOLD(Simulator):
 
         if save:
             self.bold_mag.to_csv('_'.join([savestr, 'bold_mag.csv']), index=False)
+
 
     def cap_n_bound(self, traces, bound, Tg, decay=False):
         """ take 2d array and set values >= upper boundary as np.nan
@@ -276,6 +277,7 @@ class BOLD(Simulator):
         traces_df.iloc[Tg:, :] = np.nan
         return traces_df
 
+
     def __ix_lastnum__(self, s):
         """ search for index of last numeric (non-NAN)
         value in series (Modified from goo.gl/tId5Rw)
@@ -294,6 +296,7 @@ class BOLD(Simulator):
         else:
             return s[s.last_valid_index()]
 
+
     def __ix_firstnum__(self, s):
         """ see __ix_lastnum__
         ::Arguments::
@@ -307,6 +310,7 @@ class BOLD(Simulator):
             return None
         else:
             return s[s.first_valid_index()]
+
 
     def drop_n_roll(self, df, na_position='last'):
         """ rolls all NAN to end of column series for all cols in df
@@ -341,6 +345,7 @@ class BOLD(Simulator):
 
         return df
 
+
     def simulate(self, theta=None, analyze=True):
         """ simulate yhat vector using popt or inits
         if model is not optimized
@@ -359,6 +364,7 @@ class BOLD(Simulator):
         theta = self.simulator.vectorize_params(theta)
         out = self.simulator.sim_fx(theta, analyze=analyze)
         return out
+
 
     def plot_means(self, save=False, ax=None, label_x=True):
 
@@ -391,6 +397,7 @@ class BOLD(Simulator):
             plt.savefig(
                 '_'.join([titl, self.decay, 'means.svg']), format='svg', rasterized=True)
         return ax
+
 
     def plot_traces(self, style='HL', ax=None, label_x=True, save=False):
 
