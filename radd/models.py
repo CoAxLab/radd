@@ -91,9 +91,9 @@ class Simulator(object):
         # simulate using filled params dictionary
         yhat = self.sim_fx(p)
         # calculate and return cost error
-        return np.sum(self.wts * (yhat - self.y)**2).astype(np.float32)
+        return np.sum((self.wts * (yhat - self.y))**2).astype(np.float32)
 
-    def cost_fx(self, theta):
+    def cost_fx(self, theta, sse=False):
         """ Main cost function used for fitting all models self.sim_fx
         determines which model is simulated (determined when Simulator
         is initiated)
@@ -103,7 +103,10 @@ class Simulator(object):
         else:
             p = theta.valuesdict()
         yhat = self.sim_fx(p, analyze=True)
-        return np.sum(self.wts * (yhat - self.y)**2).astype(np.float32)
+        residuals = array(self.wts * (yhat - self.y))
+        if sse:
+            return np.sum(residuals**2).astype(np.float32)
+        return residuals.astype(np.float32)
 
     def __init_model_functions__(self):
         """ initiates the simulation function used in

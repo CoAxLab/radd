@@ -116,7 +116,7 @@ def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65):
         rvinits = np.abs(rvinits)
     return rvinits
 
-def get_bounds(kind='dpm', a=(.1, 1.5), tr=(.01, .5), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5), si=(.001, .2), sso=(.01, .3), vd=(.1, 5.0), vi=(.01, .1)):
+def get_bounds(kind='dpm', a=(.05, 1.5), tr=(.01, .5), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5.), si=(.001, .2), sso=(.01, .5), vd=(.1, 5.0), vi=(.01, .1)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """

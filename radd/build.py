@@ -139,6 +139,14 @@ class Model(RADDCore):
             for i in range(nl):
                 data_series = pd.Series(data[i], index=keys)
                 self.yhatDF.loc[next_row+i, keys] = data_series
+        if self.fit_on=='average':
+            yhat_df = self.yhatDF.dropna()
+            yhat_df.idx='average'
+            self.yhatDF = yhat_df.copy()
+            fit_df = dpm.fitDF.dropna().copy()
+            fit_df.idx='average'
+            self.fitDF = fit_df.set_index('idx').T
+
 
     def log_fit_info(self, finfo, popt, fitparams):
         """ write meta-information about latest fit

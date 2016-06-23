@@ -121,10 +121,11 @@ class RADDCore(object):
             y = self.observed_flat[0]
             wts = self.flat_wts[0]
             # initialize with default values and first arrays in observed_flat, flat_wts
-            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 20000, 'maxfev': 2000, 'disp':True,
-                'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
-                'clmap': self.clmap, 'dynamic':self.dynamic, 'quantiles': self.quantiles, 'flat': True,
-                'depends_on': self.depends_on, 'kind': self.kind}
+            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 20000, 'maxfev': 2000,
+            'disp':True, 'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1,
+            'fit_on': self.fit_on, 'clmap': self.clmap, 'dynamic':self.dynamic,
+            'quantiles': self.quantiles, 'flat': True, 'depends_on': self.depends_on,
+            'kind': self.kind}
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -139,8 +140,8 @@ class RADDCore(object):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'nrand_inits': 5, 'nrand_samples': 5000, 'interval': 10, 'disp': True,
-                'stepsize': .05, 'niter_success': 30, 'tol': 1.e-5, 'method': 'TNC'}
+            self.basinparams =  {'nrand_inits': 5, 'nrand_samples': 5000, 'interval': 10,
+            'disp': True, 'stepsize': .05, 'niter_success': 30, 'tol': 1.e-5, 'method': 'TNC'}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -150,8 +151,11 @@ class RADDCore(object):
     def __set_ssd_info__(self):
         """ set ssd_info for upcoming fit and store in fitparams dict
         """
-        # get ssd vector for fit number idx
-        ssd = self.ssd[self.fitparams['idx']]
+        if self.fit_on=='average':
+            ssd = np.array(self.ssd).mean(axis=0)
+        else:
+            # get ssd vector for fit number idx
+            ssd = self.ssd[self.fitparams['idx']]
         if self.fitparams['flat']:
             # single vector (nlevels=1), don't squeeze
             ssd = np.mean(ssd, axis=0, keepdims=True)

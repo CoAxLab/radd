@@ -83,7 +83,7 @@ class Optimizer(object):
             pkeys = np.sort(list(self.inits))
         rinits = theta.random_inits(pkeys, ninits=nrand_samples, kind=self.kind)
         all_inits = [{pk: rinits[pk][i] for pk in pkeys} for i in range(nrand_samples)]
-        fmin_all = [self.simulator.cost_fx(inits_i) for inits_i in all_inits]
+        fmin_all = [self.simulator.cost_fx(inits_i, sse=True) for inits_i in all_inits]
         fmin_series = pd.Series(fmin_all)
         best_inits_index = fmin_series.sort_values().index[:nbest]
         best_inits = [all_inits[i] for i in best_inits_index]
@@ -101,9 +101,9 @@ class Optimizer(object):
         bp = self.basinparams
         pkeys = np.sort(list(p))
         # get cost fmin for default inits
-        p0 = dict(deepcopy(p))
-        fmin0 = self.simulator.cost_fx(deepcopy(p))
-        print("default inits: fmin0=%.9f" % (fmin0))
+        p0 = theta.scalarize_params(p)
+        fmin0 = self.simulator.cost_fx(deepcopy(p0), sse=True)
+        print("default inits: fmin = %.9f" % (fmin0))
         if best_inits is None:
             # sample random inits and select best of
             best_inits = self.get_best_inits(pkeys, nbest=bp['nrand_inits'], nrand_samples=bp['nrand_samples'])
@@ -112,8 +112,6 @@ class Optimizer(object):
             popt, fmin = self.run_basinhopping(p=params, is_flat=True)
             xpopt.append(popt)
             xfmin.append(fmin)
-            if fmin<=.001:
-                break
         # get the global basin and
         # corresponding parameter estimates
         ix_min = np.argmin(xfmin)
@@ -181,6 +179,7 @@ class Optimizer(object):
         # parameter names and dependencies during fir
         lmParams = theta.loadParameters(inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
         lmMinimizer = minimize(self.simulator.cost_fx, lmParams, method=fp['method'], options=optkws)
+        self.lmMinimizer = lmMinimizer
         #self.lmMinimizer = deepcopy(lmMinimizer)
         self.param_report = fit_report(lmMinimizer.params)
         # gen dict of lmfit optimized Parameters object
@@ -190,7 +189,8 @@ class Optimizer(object):
         finfo['nfev'] = lmMinimizer.nfev
         finfo['nvary'] = len(lmMinimizer.var_names)
         # get model-predicted yhat vector
-        yhat = np.mean([self.simulator.sim_fx(p) for i in range(20)], axis=0)
+        # yhat = np.mean([self.simulator.sim_fx(p) for i in range(20)], axis=0)
+        yhat = (lmMinimizer.residual / self.simulator.wts) + self.simulator.y
         # un-vectorize all parameters except conditionals
-        popt = theta.scalarize_params(p, exclude=list(self.pc_map))
+        popt = theta.scalarize_params(p, exclude=list(np.sort(self.pc_map)))
         return finfo, popt, yhat
