@@ -4,6 +4,7 @@ This repository is associated with the manuscript [Competing basal-ganglia pathw
 
 #### Interactive Demo
 [![Binder](http://mybinder.org/badge.svg)](http://mybinder.org/repo/CoAxLab/radd)
+
 (static version [**here**](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb) if binder is down)
 
 #### Install with pip
