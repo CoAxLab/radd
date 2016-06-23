@@ -1,5 +1,9 @@
 /*
+<<<<<<< HEAD
+    Name:       Happy16 Light
+=======
     Name:       grade3
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
     Author:     Kyle Dunovan (http://github.com/dunovank)
 */
 <style>
@@ -67,7 +71,11 @@
     }
     ul#selector-menu.dropdown-menu > li > a:hover {
         background: #efefef;
+<<<<<<< HEAD
+        background-color: rgba(184, 184, 184, 0.30);
+=======
         background-color: rgba(184, 184, 184, 0.10);
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
     }
 
     /* PANELS // LISTS // DROPDOWN MENUS*/
@@ -283,13 +291,21 @@
     .btn:hover {
         color: #222222;
         background: transparent;
+<<<<<<< HEAD
+        background-color: #dddddd;
+=======
         background-color: #efefef;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         background-image: none;
     }
     .btn-group > .btn-mini:hover {
         color: #222222;
         background: transparent;
+<<<<<<< HEAD
+        background-color: #dddddd;
+=======
         background-color: #efefef;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         background-image: none;
     }
     .btn-group > .btn-group-vertical {
@@ -309,7 +325,11 @@
     .btn-group > .btn-default.btn-xs:hover {
         color: #222222;
         background: transparent;
+<<<<<<< HEAD
+        background-color: #dddddd;
+=======
         background-color: #efefef;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         background-image: none;
     }
     .alternate_upload .btn-upload {
@@ -322,7 +342,11 @@
     .alternate_upload .btn-upload:hover {
         color: #222222;
         background: transparent;
+<<<<<<< HEAD
+        background-color: #dddddd;
+=======
         background-color: #efefef;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         background-image: none;
     }
     .btn-default.active:hover, .open > .dropdown-toggle.btn-default:hover, .btn-default:active:focus, .btn-default.active:focus, .open > .dropdown-toggle.btn-default:focus, .btn-default:active.focus, .btn-default.active.focus, .open > .dropdown-toggle.btn-default.focus {
@@ -379,7 +403,11 @@
     div.text_cell_render h5,
     div.text_cell_render h6 {
         font-family: 'Helvetica', sans-serif;
+<<<<<<< HEAD
+        background: #ececed;
+=======
         background: #ededed;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         font-weight: 300;
         color: #4c4c4c;
         line-height: 90%;
@@ -392,7 +420,11 @@
     .rendered_html table, .rendered_html th, .rendered_html tr, .rendered_html td {
       border: 1px #4c4c4c solid;
       color: #4c4c4c;
+<<<<<<< HEAD
+      background-color: #ececed !important;
+=======
       background-color: #ededed !important;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
       align-content: left !important;
     }
 
@@ -424,7 +456,11 @@
         font-size: 13pt;
         line-height: 1.6;
         color: #4c4c4c;
+<<<<<<< HEAD
+        background-color: #ececed;
+=======
         background-color: #ededed;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         background-image: none;
         border: 1px solid rgba(240, 147, 43, .8);
         border-radius: 2px;
@@ -487,18 +523,30 @@
 
     /* Set CodeCell font-size*/
     /*div.CodeMirror pre {font-size: 11pt !important;}*/
+<<<<<<< HEAD
+    div.CodeMirror pre {line-height: 1.5 !important;  background-color: #ededed; }
+=======
     div.CodeMirror pre {line-height: 1.5 !important;}
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
     div.CodeMirror pre {font-family: 'Hack', monospace; font-size: 11pt;}
 
     div.CodeMirror span.CodeMirror-matchingbracket { color: #000000; background: rgba(53, 114, 198, .4) !important ; height: 120%; line-height: 1.5 !important; padding-top: 1px;}
     div.CodeMirror span.CodeMirror-nonmatchingbracket { color: #000000; background: rgba(191, 97, 106, .3) !important ; height: 120%; line-height: 1.5 !important; padding-top: 1px;}
 
+<<<<<<< HEAD
+    div.cell { background-color: #ededed; border: medium solid #ffffff; padding: 0px; border-radius: 0px; }
+    div.cell.selected { background-color: #ededed; border: medium solid #ff8132; padding: 0px; border-radius: 0px; }
+    .edit_mode div.cell.selected {border: medium solid #ffd5bb !important; padding: 0px; border-radius: 0px; }
+    div.cell.edit_mode { background-color: #ededed; border: medium solid #ffd5bb !important; padding: 0px; border-radius: 0px;}
+
+=======
     div.cell { border: medium solid #ffffff; padding: 0px; border-radius: 0px; }
     div.cell.selected { border: medium solid #ff8132; padding: 0px; border-radius: 0px; }
     .edit_mode div.cell.selected {border: medium solid #ffd5bb !important; padding: 0px; border-radius: 0px; }
     div.cell.edit_mode {border: medium solid #ffd5bb !important; padding: 0px; border-radius: 0px;}
     div.cell_render {background-color: #ededed}
     div.cell {background-color: #ededed}
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
     div.prompt {
         padding: 0.3em;
         margin: 0px;
@@ -508,10 +556,15 @@
         min-width: 11ex;
         font-size: 9.5pt;
     }
+<<<<<<< HEAD
+    div.input_area {
+        background-color: #ededed;
+=======
 
     div.input_area {
         background-color: #ededed;
         background: #ededed;
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
         margin-bottom: 0px;
         border: 0px;
         border-radius: 0px;
@@ -528,7 +581,10 @@
         padding-bottom: 0px;
         margin-bottom: 0px;
     }
+<<<<<<< HEAD
+=======
 
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
     div.prompt.output_prompt {
         font-family: 'Hack', monospace;
         font-weight: bold;
@@ -593,5 +649,8 @@
         flex: 1;
         max-width: calc(100% - 14ex);
     }
+<<<<<<< HEAD
+=======
 
+>>>>>>> 37f3f3b3505748599859a693d2868ea7e034059f
 </style>
