@@ -62,11 +62,15 @@ def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
             ParamsObj.add(pk, value=inits[pk], vary=False)
     return ParamsObj
 
-def scalarize_params(params, params_list=None, exclude=[]):
+def scalarize_params(params, pc_map=None, is_flat=True):
     """ scalarize all parameters in params dict """
-    if params_list is None:
-        params_list = list(params)
-    for pk in params_list:
+    exclude = []
+    if pc_map is not None and not is_flat:
+        exclude = np.sort(list(pc_map))
+        p_conds = np.sort(listvalues(pc_map)).squeeze()
+        for pkc in exclude:
+            params[pkc] = array([params[pc] for pc in p_conds])
+    for pk in list(params):
         if pk in exclude:
             continue
         if hasattr(params[pk], '__iter__'):
@@ -74,8 +78,6 @@ def scalarize_params(params, params_list=None, exclude=[]):
                 params[pk] = np.asscalar(params[pk])
             except ValueError:
                 params[pk] = np.mean(params[pk])
-    for exc in exclude:
-        params[exc] = np.asarray(params[exc], dtype=float)
     return params
 
 def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65):

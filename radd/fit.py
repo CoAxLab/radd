@@ -189,8 +189,7 @@ class Optimizer(object):
         finfo['nfev'] = lmMinimizer.nfev
         finfo['nvary'] = len(lmMinimizer.var_names)
         # get model-predicted yhat vector
-        # yhat = np.mean([self.simulator.sim_fx(p) for i in range(20)], axis=0)
         yhat = (lmMinimizer.residual / self.simulator.wts) + self.simulator.y
         # un-vectorize all parameters except conditionals
-        popt = theta.scalarize_params(p, exclude=list(np.sort(self.pc_map)))
+        popt = theta.scalarize_params(p, pc_map=self.pc_map, is_flat=is_flat)
         return finfo, popt, yhat
