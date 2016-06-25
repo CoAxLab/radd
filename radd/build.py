@@ -131,6 +131,10 @@ class Model(RADDCore):
             next_row = np.argmax(self.fitDF.isnull().any(axis=1))
             keys = self.handler.f_cols
             self.fitDF.loc[next_row, keys] = data
+            if self.fit_on=='average':
+                fit_df = self.fitDF.dropna().copy()
+                fit_df.idx='average'
+                self.fitDF = fit_df.set_index('idx').T
         elif dftype=='yhat':
             nl = fitparams['nlevels']
             data = data.reshape(nl, int(data.size/nl))
@@ -139,6 +143,10 @@ class Model(RADDCore):
             for i in range(nl):
                 data_series = pd.Series(data[i], index=keys)
                 self.yhatDF.loc[next_row+i, keys] = data_series
+            if self.fit_on=='average':
+                yhat_df = self.yhatDF.dropna()
+                yhat_df.idx='average'
+                self.yhatDF = yhat_df.copy()
 
     def log_fit_info(self, finfo, popt, fitparams):
         """ write meta-information about latest fit

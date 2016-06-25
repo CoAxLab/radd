@@ -32,7 +32,12 @@ def unpack_vector(vector, fitparams, kde_quant=False):
     unpacked = []
     vector = vector.reshape(nlevels, int(vector.size/nlevels))
     for v in vector:
-        presp = v[1:1+nssd]
+        if nssd>1:
+            # get accuracy at each SSD
+            presp = v[1:1+nssd]
+        else:
+            # get go, stop accuracy
+            presp = v[:2]
         quant = v[-nquant*2:]
         quant_cor = quant[:nquant]
         quant_err = quant[-nquant:]
@@ -43,23 +48,33 @@ def unpack_vector(vector, fitparams, kde_quant=False):
     return unpacked
 
 def plot_model_fits(y, yhat, fitparams, kde_quant=True, palette=bpal, save=False, cdf=True):
-    nlevels = fitparams['nlevels']
-    f, axes = plt.subplots(nlevels, 3, figsize=(14, 10))
+    nlevels = y.ndim
+    fitparams['nlevels'] = nlevels
+    f, axes = plt.subplots(nlevels, 3, figsize=(12, 4*nlevels))
     axes = np.asarray(axes)
     clrs_lvl = palette(nlevels)
     y_data = unpack_vector(y, fitparams, kde_quant=kde_quant)
     yhat_data = unpack_vector(yhat, fitparams, kde_quant=kde_quant)
     ssd, nssd, nss, nss_per, ssd_ix = fitparams['ssd_info']
-    scx = np.array([np.float(d) for d in ssd.mean(axis=0).squeeze()*1000])[::-1]
+    if nssd>1:
+        ssds = ssd.mean(axis=0).squeeze()*1e3
+        scx = np.array([np.float(d) for d in ssds])[::-1]
+        plot_func = scurves
+    else:
+        scx = np.array([0, 1])
+        plot_func = plot_accuracy
     labels = get_plot_labels(fitparams)
     for i in range(nlevels):
-        ax1, ax2, ax3 = axes[i]
+        if nlevels>1:
+            ax1, ax2, ax3 = axes[i]
+        else:
+            ax1, ax2, ax3 = axes
         stop_acc = [y_data[i][0], yhat_data[i][0]]
         qc, qc_hat = [y_data[i][1], yhat_data[i][1]]
         qe, qe_hat = [y_data[i][2], yhat_data[i][2]]
         c = clrs_lvl[i]
         lemp, lhat = labels[i]
-        scurves(stop_acc, x=scx, colors=[c, c], markers=False, labels=labels[i], linestyles=['-', '--'], ax=ax1)
+        plot_func(stop_acc, x=scx, colors=[c, c], markers=False, labels=labels[i], linestyles=['-', '--'], ax=ax1)
         if kde_quant:
             sns.kdeplot(qc, cumulative=cdf, color=c, ax=ax2, linewidth=2, bw=.01)
             sns.kdeplot(qc_hat, cumulative=cdf, color=c, ax=ax2, linewidth=2, linestyle='--', bw=.01)
@@ -70,22 +85,20 @@ def plot_model_fits(y, yhat, fitparams, kde_quant=True, palette=bpal, save=False
             ax2.plot(qc_hat, color=c, linewidth=2, linestyle='--',)
             ax3.plot(qe, color=c, linewidth=2)
             ax3.plot(qe_hat, color=c, linewidth=2, linestyle='--',)
-    axes[0,0].set_title('Stop Accuracy')
-    axes[0,1].set_title('Correct RT Quantiles')
-    axes[0,2].set_title('Error RT Quantiles')
-    for ax in axes[-1, 1:]:
+        if i==0:
+            ax1.set_title('Stop Accuracy', position=(.5, 1.02))
+            ax2.set_title('Correct RT Quantiles', position=(.5, 1.02))
+            ax3.set_title('Error RT Quantiles', position=(.5, 1.02))
+            if nlevels>1:
+                for ax in axes[0, :]:
+                    ax.set_xticklabels([])
+    for ax in axes.flatten()[-3:]:
         ax.set_xlabel('RT (s)')
-    for ax in axes[:, 1:].flatten():
-        if kde_quant:
-            break
-        ax.set_ylim(.4, .7)
     if save:
         savestr = '_'.join([fitparams['kind'], str(fitparams['idx'])+'.png'])
         plt.savefig(savestr, dpi=600)
 
-
-def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, markers=False, labels=None, mc=None, x=None, pse=[], scl=100):
-
+def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None, labels=None, mc=None, x=None, pse=[], **kwargs):
     if ax is None:
         f, ax = plt.subplots(1, figsize=(5.5, 6))
     if colors is None:
@@ -97,13 +110,8 @@ def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None,
     lines = [(line) if type(line) == list else line for line in lines]
     if x is None:
         x = np.arange(len(lines[0]), dtype='float')[::-1]*50
-        #x = array([400, 350, 300, 250, 200], dtype='float')
-
     xtls = x.copy()
     xsim = np.linspace(x.min()-20, x.max()+20, 10000)
-    yylabel = 'P(Stop)'
-    xxlabel = 'SSD (ms)'
-    mclinealpha = [.7, 1] * len(lines)
     x = analyze.res(-x, lower=x[0], upper=x[-1])
     xxlim = (x[0]-20, x[-1]+20)
 
@@ -120,22 +128,43 @@ def scurves(lines=[],  yerr=[], pstop=.5, ax=None, linestyles=None, colors=None,
         if yerr != []:
             ax.errorbar(x, yi, yerr=yerr[i], color=colors[i], lw=0, marker='o', elinewidth=2, ecolor=colors[i])
             ax.plot(xsim, pxp, linestyle=linestyles[i], lw=2., color=colors[i], label=labels[i])
-            #ax.errorbar(xp, pxp, yerr=yerr, color=color, ecolor=color, capsize=0, lw=0, elinewidth=3)
-        if markers:
-            a = mclinealpha[i]
-            ax.plot(xsim, pxp, linestyle=linestyles[i], lw=2.1, color=color, label=labels[i], alpha=a)
-            for ii in range(len(y)):
-                ax.plot(x[ii], y[ii], lw=0, marker='o', ms=9, color=color, markerfacecolor='none', mec=color, mew=1.5, alpha=.8)
         else:
             ax.plot(xsim, pxp, linestyle=linestyles[i], lw=2.1, color=colors[i], label=labels[i])
         pse.append(xsim[idx])
     plt.setp(ax, xticks=x, ylim=(-.01, 1.05), yticks=np.arange(0,1.2,.2))#[0,  1])
-    ax.set_xlabel(xxlabel)
-    ax.set_ylabel(yylabel)
+    ax.set_xlabel('SSD (ms)')
+    ax.set_ylabel('P(Stop)')
     ax.legend(loc=0)
     plt.tight_layout()
     sns.despine()
     return (pse)
+
+def plot_accuracy(lines=[], yerr=None, x=np.array([0, 1]), ax=None, linestyles=None, colors=None, labels=None, **kwargs):
+    if ax is None:
+        f, ax = plt.subplots(1, figsize=(5.5, 6))
+    if colors is None:
+        colors = slate(len(lines))
+    if labels is None:
+        labels = [''] * len(lines)
+    if linestyles is None:
+        linestyles = ['-'] * len(lines)
+    lines = [(line) if type(line) == list else line for line in lines]
+    if x is None:
+        x = np.arange(len(lines[0]), dtype='float')
+    for i, yi in enumerate(lines):
+        xjitter = x + (i*.05)
+        color = colors[i]
+        if yerr is not None:
+            ax.errorbar(xjitter, yi, yerr=yerr[i], color=color, lw=2, elinewidth=2, ecolor=color)
+        else:
+            ax.plot(xjitter, yi, linestyle=linestyles[i], lw=2, color=color, label=labels[i])
+
+    plt.setp(ax, xticks=x, xlim=(-0.25, 1.25), ylim=(.25, 1.05), yticks=(.3, 1))
+    ax.set_ylabel('Percent Correct'); ax.legend(loc=0)
+
+    ax.set_xticklabels(['Go', 'Stop'])
+    plt.tight_layout()
+    sns.despine()
 
 def get_plot_labels(fitparams):
     lbls = np.hstack(fitparams['clmap'].values())
@@ -215,7 +244,6 @@ def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
     w = tb + 40
     h = bound
     start = onset - 80
-    # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
     for i, ax in enumerate(axes):
         plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
         ax.vlines(x=ssd[i], ymin=0, ymax=h, color="#e74c3c", lw=2.5, alpha=.5)

@@ -4,7 +4,7 @@ import os
 
 setup(
     name='RADD',
-    version='0.0.15',
+    version='0.0.16',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
