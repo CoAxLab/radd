@@ -141,7 +141,7 @@ class RADDCore(object):
         """
         if not hasattr(self, 'basinparams'):
             self.basinparams =  {'nrand_inits': 5, 'nrand_samples': 5000, 'interval': 10,
-            'disp': True, 'stepsize': .05, 'niter_success': 30, 'tol': 1.e-5, 'method': 'TNC'}
+            'disp': False, 'stepsize': .05, 'niter_success': 30, 'tol': 1.e-5, 'method': 'TNC'}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
