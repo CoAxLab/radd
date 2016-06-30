@@ -42,8 +42,7 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
         ax.text(x[0]-50, np.mean(p['a'])-.06, text_str, fontsize=15)
 
 
-def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)',
-    'Change in P(card)', '$v^G_t$', '$v^N_t$'], plot_traces=False, p=None, tb=1000):
+def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)', 'Change in P(card)', '$v^G_t$', '$v^N_t$'], plot_traces=False, p=None, tb=1000):
 
     sns.set_palette('muted')
     f, axes = plt.subplots(3, 2, figsize=(14,16))
@@ -116,19 +115,19 @@ def gen_mappable(vals_to_map, cm='rainbow'):
 def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
 
     if pq=='P':
-        measure = 'Payoff ("P")'
+        measure = 'Payoff'
     else:
-        measure = 'Sensitivity ("Q")'
+        measure = 'Sensitivity'
 
-    n = trialsdf.agroup.unique().size
+    n = trialsdf.a_go.unique().size
     a_go = np.sort(trialsdf.a_go.unique())
     sm, vmin, vmax = gen_mappable(vals_to_map=a_go, cm=cm)
 
     f, axes = plt.subplots(2,2, figsize=(14, 10))
     ax1, ax2, ax3, ax4 = axes.flatten()
 
-    for grp, grpdf in trialsdf.groupby('agroup'):
-        colr = sm.to_rgba(a_go[int(grp)-1])
+    for grp, grpdf in trialsdf.groupby('a_go'):
+        colr = sm.to_rgba(grp)
         ax1.plot(grpdf.vdiff.values, color=colr)
         ax2.plot(grpdf.v_opt_diff.values, color=colr)
         sns.despine()
@@ -139,9 +138,9 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
     sm.colorbar.set_ticks([vmin, vmax])
     cax.set_yticklabels([vmin, vmax])
 
-    pvals_by_group = igtdf.groupby('agroup').mean().loc[:, pq].values
-    reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('agroup')])
-    strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('agroup')])
+    pvals_by_group = igtdf.groupby('a_go').mean().loc[:, pq].values
+    reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('a_go')])
+    strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('a_go')])
 
     for i in range(n):
         colr = sm.to_rgba(a_go[i])
@@ -154,15 +153,15 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
     ax2.set_ylabel('Optimal-Subopt Ch. Strength ($\Delta_{OS}$)', fontsize=17)
     ax3.set_ylabel('$\mu \Delta_{card}$', fontsize=22)
     ax4.set_ylabel('$\mu \Delta_{OS}$', fontsize=22)
-
-    plt.tight_layout()
     for ax in [ax1, ax2]:
         ax.set_xlabel('Trials', fontsize=22)
     for ax in [ax3, ax4]:
         ax.set_xlabel(measure, fontsize=22)
     f.subplots_adjust(wspace=.4, hspace=.3)
+    plt.tight_layout()
     if save:
-        f.savefig('.'.join(['reactivity_strategy_', measure, 'png']), dpi=400)
+        savestr = "_aN" + str(trialsdf.a_no.unique()[0])
+        f.savefig(''.join(['reactivity_strategy_', measure, savestr, '.png']), dpi=400)
 
 
 def build_multi_axis(p, nresp=4, tb=1000):

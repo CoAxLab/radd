@@ -23,13 +23,14 @@ def igt_scores(choices):
     return P, Q
 
 
-def analyze_learning_dynamics(fd):
+def analyze_learning_dynamics(fd, broadcast=True):
 
     choices = fd['choices']
     vd_all = fd['vd_all']
     vi_all = fd['vi_all']
     vdiff_all = vd_all - vi_all
     qdict = fd['qdict']
+    nrows = len(choices)
 
     choice_vec = [np.sort(qdict.keys())[i] for i in choices]
     fd['choice']=choice_vec
@@ -49,6 +50,7 @@ def analyze_learning_dynamics(fd):
     vnon = vdiff_all['a'].values + vdiff_all['c'].values
     fd['v_opt_diff'] = vopt - vsub
     fd['v_imp_diff'] = vimp - vnon
+    #fd['agent'] = [fd['agent']*nrows]
 
     #q_go = fd['qdict_go']
     #q_no = fd['qdict_no']
@@ -61,15 +63,20 @@ def analyze_learning_dynamics(fd):
 
 
 def format_dataframes(fd):
-
+    from copy import deepcopy
     from collections import OrderedDict
-
-    agdf_cols = ['agent', 'trial', 'agroup', 'bgroup', 'group', 'qval', 'vd', 'vi', 'vdiff',
-                 'v_opt_diff', 'v_imp_diff', 'choice', 'rt', 'a_go', 'a_no', 'adiff', 'beta'] #'q_go', 'q_no',
-    agdf = pd.DataFrame(OrderedDict((col, fd[col]) for col in agdf_cols))
-
-    igtdf_cols=['agent', 'bgroup', 'agroup', 'group', 'a_go', 'a_no', 'beta', 'P', 'Q']
+    agdf_cols = ['agent', 'trial', 'agroup', 'qval', 'vd', 'vi', 'vdiff',
+                 'v_opt_diff', 'v_imp_diff', 'choice', 'rt', 'a_go', 'a_no', 'adiff', 'beta']
+    nrows = len(fd['choices'])
+    fdbroad = dict(deepcopy(fd))
+    for key in ['agroup', 'agent', 'a_go', 'a_no', 'adiff', 'beta']:
+        fdbroad[key] = [fd[key]]*nrows
+    # agdf_cols = ['agent', 'trial', 'agroup', 'bgroup', 'group', 'qval', 'vd', 'vi', 'vdiff',
+    #              'v_opt_diff', 'v_imp_diff', 'choice', 'rt', 'a_go', 'a_no', 'adiff', 'beta']
+    agdf = pd.DataFrame(OrderedDict((col, fdbroad[col]) for col in agdf_cols))
+    igtdf_cols=['agent', 'agroup', 'a_go', 'a_no', 'beta', 'P', 'Q']
     fd['P'], fd['Q'] = igt_scores(np.asarray(fd['choices']))
+
     igtdf = pd.Series(OrderedDict((col, fd[col]) for col in igtdf_cols))
 
     return igtdf, agdf

@@ -1,6 +1,7 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import os
+import sys
 from copy import deepcopy
 import pandas as pd
 import numpy as np
@@ -13,6 +14,8 @@ from scipy.stats.mstats import mquantiles as mq
 from numpy import cumsum as cs
 from numpy import append as app
 from radd.tools.analyze import kde_fit_quantiles
+from IPython.display import HTML, Javascript, display
+
 
 sns.set(style='white', context='notebook', rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'}, font_scale=1.5)
 
@@ -152,7 +155,7 @@ def plot_accuracy(lines=[], yerr=None, x=np.array([0, 1]), ax=None, linestyles=N
     if x is None:
         x = np.arange(len(lines[0]), dtype='float')
     for i, yi in enumerate(lines):
-        xjitter = x + (i*.05)
+        xjitter = x + (i*.02)
         color = colors[i]
         if yerr is not None:
             ax.errorbar(xjitter, yi, yerr=yerr[i], color=color, lw=2, elinewidth=2, ecolor=color)
@@ -286,3 +289,76 @@ def anim_to_html(anim):
             video = open(f.name, "rb").read()
         anim._encoded_video = video.encode("base64")
     return VIDEO_TAG.format(anim._encoded_video)
+
+
+class PBinJ(object):
+    """ animated ProgressBar (PB) to be used (inJ)upyter notebooks
+    """
+    def __init__(self, n, color_n=0, disp=False, progbar=True, infobar=False, ptitle='globalfmin', infotitle='fmin'):
+
+        colors = ['seagreen', '#4f8bef', "#0b559f", "#de2b25"]
+        self.color = colors[color_n]
+        self.n=n
+        self.displayed=False
+        self.bars=[]
+        self.infobar=infobar
+        self.progbar=progbar
+        try:
+            from IPython.display import clear_output
+            self.animate = self.animate_ipython
+            self.init_ipython_bars(infotitle=infotitle, ptitle=ptitle)
+        except Exception:
+            import sys
+            self.init_bars(infotitle=infotitle, ptitle=ptitle)
+
+    def update(self, i=None, new_info=None, new_progress=None): 
+        self.animate(i=i, new_info=new_info, new_progress=new_progress)
+
+    def init_ipython_bars(self, infotitle=None, ptitle=None):
+        import uuid
+        if self.infobar:
+            self.infoid=str(uuid.uuid4())
+            self.ibar="""<div<p>{0}</p> <div style="border: none; width:500px"> <div id="{1}" style="background-color:#FFF; color:#000; text:{2}; width:100.">&nbsp;</div> </div> </div>""".format(infotitle, self.infoid, 'fmin')
+            self.bars.append(self.ibar)
+        if self.progbar:
+            self.pbid=str(uuid.uuid4())
+            self.pbar="""<div<p>{0}</p> <div style="border: 1px solid #111; width:500px">
+                <div id="{1}" style="background-color:{2}; width:0%%; text:'fmin={3}'; color:#fff;">
+                &nbsp;</div> </div> </div>""".format(ptitle, self.pbid, self.color, 'fmin')
+            self.bars.append(self.pbar)
+
+    def init_bars(self, infotitle=None, ptitle=None):
+        import progressbar
+        if self.progbar:
+            self.new_prog_string = ''.join([ptitle, ': {0}'])
+            self.pbar = progressbar.ProgressBar(maxval=self.n)
+            self.bars.append(self.pbar)
+        if self.infobar:
+            self.new_info_string = ''.join([infotitle, ': {0}'])
+
+    def display_bars(self):
+        for bar in self.bars:
+            display(HTML(bar))
+        self.displayed=True
+
+    def animate_ipython(self, i=None, new_info=None, new_progress=None):
+        if self.displayed==False:
+            self.display_bars()
+        if new_info is not None and self.infobar:
+            display(Javascript("$('div#%s').text(%s)" % (self.infoid, str(new_info))))
+        if new_progress is not None and self.progbar:
+            display(Javascript("$('div#%s').text(%s)" % (self.pbid, str(new_progress))))
+        if i is not None and self.progbar:
+            display(Javascript("$('div#%s').width('%.2f%%')" % (self.pbid, (i*1./self.n)*100)))
+
+    def animate(self, i=None, new_info=None, new_progress=None):
+        if self.displayed==False and self.progbar:
+            self.pbar.start()
+        if new_info is not None and self.infobar:
+            sys.stdout.write('\r'+self.new_info_string.format(str(new_info)))
+            sys.stdout.flush()
+        if new_progress is not None and self.progbar:
+            sys.stdout.write('\r'+self.new_prog_string.format(str(new_progress)))
+            sys.stdout.flush()
+        if i is not None and self.progbar:
+            self.pbar.update(i+1)

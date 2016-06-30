@@ -37,9 +37,10 @@ def run_full_sims(p, env=pd.DataFrame, alphas_go=[], alphas_no=None, betas=[], n
         sim_out = run_trials(pcopy, env, nblocks=nblocks, si=si, a_go=a_go, a_no=a_no, beta=beta)
         choices, rts, all_traces, qdict, choicep, vd_all, vi_all = sim_out
 
-        format_dict = {'agent':agent_i+1, 'trial':trials, 'a_go':a_go, 'a_no':a_no, 'adiff':a_go-a_no,
-        'choices':choices, 'rts':rts, 'group': group, 'agroup': agroup+1, 'bgroup': bgroup+1,
-        'qdict': qdict, 'choicep':choicep, 'vd_all':vd_all, 'vi_all':vi_all, 'beta':beta}
+        format_dict = {'agent': agent_i+1, 'trial': trials, 'a_go': a_go, 'a_no': a_no,
+        'adiff': a_go-a_no, 'choices':choices, 'rts': rts, 'group': group, 'agroup': agroup+1,
+        'bgroup': bgroup+1, 'qdict': qdict, 'choicep':choicep, 'vd_all':vd_all, 'vi_all':vi_all,
+        'beta': beta}
 
         format_dict_updated = analyzer.analyze_learning_dynamics(format_dict)
         igtdf, agdf = analyzer.format_dataframes(format_dict_updated)
@@ -85,8 +86,8 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
         all_traces (list): execution process traces truncated to length of winner
         qdict (dict): sequence of Q-value updates for each alt
     """
-
-    trials = cards.append([cards]*(nblocks-1)).reset_index()
+    trials = cards.copy()
+    trials = trials.append([trials]*(nblocks-1)).reset_index()
     trials.rename(columns={'index':'t'}, inplace=True)
     ntrials=len(trials)
     choices, all_traces = [], []
@@ -102,14 +103,21 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
         vals = trials.iloc[i, 1:].values
         winner=np.nan
         iquit=0
-        while np.isnan(winner) and iquit<20:
+        while np.isnan(winner) and iquit<35:
             execution = simulate_race(p, si=si)
             winner, rt, traces, p, qdict, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, vals=vals, names=names, a_go=a_go, a_no=a_no, beta=beta, choice_prob=choice_prob)
             iquit+=1
             if np.isnan(np.mean(p['xb'])):
-                iquit=30
-        if winner>=len(names):
+                iquit=36
+        if winner>=len(names) or np.isnan(winner):
             winner = int(np.random.choice(np.arange(len(names))))
+        choice_name = names[winner]
+        oldval = trials.loc[i, choice_name]
+        new_col = trials[choice_name].shift(-1)
+        new_col.set_value(new_col.index[-1], oldval)
+        trials=trials.copy()
+        trials.loc[:, choice_name] = new_col
+
         vdhist.iloc[i, :] = p['vd']
         vihist.iloc[i, :] = p['vi']
         choice_name = names[winner]
@@ -130,7 +138,6 @@ def simulate_race(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_
     if single_process:
         Pe = 0.5*(1 + (p['vd']-p['vi'])*dx/si)
         execution = xtb[0] * np.cumsum(np.where((rs((nresp, Tex.max())).T < Pe), dx, -dx).T, axis=1)
-
     else:
         Pd = 0.5*(1 + p['vd']*dx/si)
         Pi = 0.5*(1 + p['vi']*dx/si)
@@ -198,14 +205,12 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_go=.06, a
 
 
 def reweight_drift(p, alt_i, delta_prob, a_go, a_no):
-    """ update direct & indirect drift-rates for multirace winner """
-
+    """ update direct & indirect drift-rates for multirace winner
+    """
     vd_exp = p['vd'][alt_i]
     vi_exp = p['vi'][alt_i]
-
     p['vd'][alt_i] = vd_exp + (a_go*delta_prob)
     p['vi'][alt_i] = vi_exp + (a_no*-delta_prob)
-
     #p['vd'][alt_i] = vd_exp + (vd_exp*a_go)*delta_prob
     #p['vi'][alt_i] = vi_exp + (vi_exp*a_no)*-delta_prob
 

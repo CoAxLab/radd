@@ -42,7 +42,7 @@ class Model(RADDCore):
 
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, best_inits=None, plot_fits=False, saveplot=False, kde_quant_plots=True):
+    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, best_inits=None, progress=False, plot_fits=False, saveplot=False, kde_quant_plots=True):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
@@ -52,7 +52,7 @@ class Model(RADDCore):
             if fit_flat or self.is_flat:
                 y, wts = self.iter_flat[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
-                finfo, popt, yhat = self.optimize_flat(popt, multiopt, best_inits)
+                finfo, popt, yhat = self.optimize_flat(popt, multiopt=multiopt, best_inits=best_inits, progress=progress)
             if fit_cond and not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
@@ -61,7 +61,7 @@ class Model(RADDCore):
             if plot_fits:
                 self.plot_model_fits(y=y, yhat=yhat, kde_quant=kde_quant_plots, save=saveplot)
 
-    def optimize_flat(self, p, multiopt=True, best_inits=None):
+    def optimize_flat(self, p, multiopt=True, best_inits=None, progress=False):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -76,7 +76,7 @@ class Model(RADDCore):
             # Global Optimization w/ Basinhopping (+TNC)
             ntrials = self.fitparams['ntrials']
             self.set_fitparams(ntrials=10000)
-            p = self.opt.hop_around(p, best_inits)
+            p = self.opt.hop_around(p, best_inits=best_inits, progress=progress)
             self.set_fitparams(ntrials=ntrials)
             print('Finished Hopping Around')
         # Flat Simplex Optimization of Parameters at Global Minimum
@@ -122,8 +122,12 @@ class Model(RADDCore):
         self.finfo = finfo
         self.popt = popt
         self.yhat = yhat
-        self.fill_df(data=yhat, fitparams=fp, dftype='yhat')
-        self.fill_df(data=finfo, fitparams=fp, dftype='fit')
+        try:
+            self.fill_df(data=yhat, fitparams=fp, dftype='yhat')
+            self.fill_df(data=finfo, fitparams=fp, dftype='fit')
+        except Exception:
+            print('fill_df error, already optimized? try new model')
+            print('self.finfo, self.popt, and self.yhat still accessible from last fit')
 
     def fill_df(self, data, fitparams, dftype='fit'):
         if dftype=='fit':
@@ -140,11 +144,12 @@ class Model(RADDCore):
             data = data.reshape(nl, int(data.size/nl))
             next_row = np.argmax(self.yhatDF.isnull().any(axis=1))
             keys = self.handler.idx_cols[next_row]
+            yhat_df = self.yhatDF.copy()
             for i in range(nl):
                 data_series = pd.Series(data[i], index=keys)
-                self.yhatDF.loc[next_row+i, keys] = data_series
+                yhat_df.loc[next_row+i, keys] = data_series
             if self.fit_on=='average':
-                yhat_df = self.yhatDF.dropna()
+                yhat_df = yhat_df.dropna()
                 yhat_df.idx='average'
                 self.yhatDF = yhat_df.copy()
 
