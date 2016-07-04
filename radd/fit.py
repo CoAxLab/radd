@@ -16,25 +16,19 @@ from radd.tools.vis import PBinJ
 class BasinFeedback(object):
     """ tracks BasinHopping progress with tqdm bars
     Arguments:
-        niter_success:
+        nsuccess:
             Stop the run if the global minimum candidate remains the
             same for this number of iterations.
     """
-    def __init__(self, ninits, nsuccess, fmin0=0):
-        self.ninits = ninits
-        self.nsuccess = nsuccess+1
-        self.inits_bar = PBinJ(ninits, color_n=1)
-        self.success_bar = PBinJ(nsuccess+1, infobar=True, progbar=False)
-        self.inits_bar.update(1, new_progress=fmin0)
-        self.basins = [fmin0]
-        self.reset_counter()
+    def __init__(self, ninits, fmin0=None):
+        self.inits_bar = PBinJ(bartype='colorbar', n=ninits+1, color='blue', title='global fmin')
+        self.success_bar = PBinJ(bartype='infobar', title='current fmin')
+        self.basins = []
+        if fmin0 is not None:
+            self.inits_bar.update(new_progress=fmin0)
+            self.basins.append(fmin0)
 
-    def reset_counter(self):
-        """ initiate new progress bar
-        """
-        self.counter = 0
-
-    def callback_fx(self, x, fmin, accept):
+    def callback(self, x, fmin, accept):
         """ A callback function which will be called for all minima found
         Arguments:
             x (array):
@@ -44,26 +38,15 @@ class BasinFeedback(object):
             accept (bool):
                 whether or not that minimum was accepted
         """
-        if accept and self.counter<self.nsuccess:
-            self.counter+=1
-            if fmin<np.min(self.basins):
-                self.inits_bar.update(new_progress=fmin)
+        if fmin <= np.min(self.basins):
+            self.inits_bar.update(new_progress=fmin)
+        if accept:
             self.basins.append(fmin)
-            self.success_bar.update(self.counter, new_info=fmin)
-        elif accept:
-            globalbasin = np.min(self.basins)
-            self.success_bar.update(self.nsuccess, new_info=globalbasin)
-        else:
-            # reset counter if accept==False
-            self.reset_counter()
+            self.success_bar.update(new_progress=fmin)
 
     def clear(self):
-        try:
-            from IPython.display import clear_output
-            clear_output()
-        except Exception:
-            import sys
-            sys.stdout.flush()
+        self.inits_bar.clear()
+        self.success_bar.clear()
 
 class BasinBounds(object):
     """ sets conditions for step acceptance during
@@ -81,7 +64,6 @@ class BasinBounds(object):
         tmin = bool(np.all(x >= self.xmin))
         tmax = bool(np.all(x <= self.xmax))
         return tmin and tmax
-
 
 class HopStep(object):
     """ scale stepsize of basinhopping optimization according to
@@ -102,7 +84,6 @@ class HopStep(object):
         ss = self.stepsize_scalars
         x = np.array([x[i] + uniform(-ss[i]*s, ss[i]*s) for i in range(self.np)])
         return x
-
 
 class Optimizer(object):
     """ Optimizer class acts as interface between Model and Simulator objects.
@@ -127,22 +108,45 @@ class Optimizer(object):
         self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
         self.constants = deepcopy(['a', 'tr', 'v', 'xb'])
 
-    def get_best_inits(self, pkeys=None, nbest=10, nrand_samples=500):
+    def sample_inits(self, pkeys=None):
         """ test a large sample of random parameter values
-        and submit <nbest> to hop_around() global optimization
+        and submit <nkeep> to hop_around() global optimization
         """
+        bp = self.basinparams
+        nkeep = bp['ninits']
+        nsamples = bp['nsamples']
+        keep_method = bp['init_sample_method']
         if pkeys is None:
             pkeys = np.sort(list(self.inits))
-        rinits = theta.random_inits(pkeys, ninits=nrand_samples, kind=self.kind)
-        all_inits = [{pk: rinits[pk][i] for pk in pkeys} for i in range(nrand_samples)]
+        rinits = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind)
+        all_inits = [{pk: rinits[pk][i] for pk in pkeys} for i in range(nsamples)]
         fmin_all = [self.simulator.cost_fx(inits_i, sse=True) for inits_i in all_inits]
+        # rank inits by costfx error low-to-high
         fmin_series = pd.Series(fmin_all)
-        best_inits_index = fmin_series.sort_values().index[:nbest]
-        best_fmin_values = fmin_series.sort_values().values[:nbest]
-        best_inits = [all_inits[i] for i in best_inits_index]
-        return best_inits, best_fmin_values
+        rankorder = fmin_series.sort_values()
+        # eliminate extremely bad parameter sets
+        rankorder = rankorder[rankorder<=5.0]
+        if keep_method=='random':
+            # return nkeep from randomly sampled inits
+            inits = all_inits[:nkeep]
+            inits_err = fmin_all[:nkeep]
+        elif keep_method=='best':
+            # return nkeep from inits with lowest err
+            inits = [all_inits[i] for i in rankorder.index[:nkeep]]
+            inits_err = rankorder.values[:nkeep]
+        elif keep_method=='lmh':
+            # split index for low, med, and high err inits
+            # if nkeep is odd, will sample more low than high
+            if nkeep<3: nkeep=3
+            ix = rankorder.index.values
+            nl, nm, nh = [arr.size for arr in np.array_split(np.arange(nkeep), 3)]
+            # extract indices roughly equal numbers of parameter sets with low, med, hi err
+            keep_ix = np.hstack([ix[:nl], np.array_split(ix,2)[0][-nm:], ix[-nh:]])
+            inits = [all_inits[i] for i in keep_ix]
+            inits_err = [fmin_series[i] for i in keep_ix]
+        return inits, inits_err
 
-    def hop_around(self, p, best_inits=None, progress=False, callback_fx=None):
+    def hop_around(self, p, inits_list=None, progress=False, callback=None):
         """ initialize model with niter randomly generated parameter sets
         and perform global minimization using basinhopping algorithm
         ::Arguments::
@@ -151,50 +155,31 @@ class Optimizer(object):
         ::Returns::
             parameter set with the best fit
         """
-        xpopt, xfmin = [], []
         bp = self.basinparams
-        pkeys = np.sort(list(p))
-        # get cost fmin for default inits
-        p0 = theta.scalarize_params(p)
-        fmin0 = self.simulator.cost_fx(deepcopy(p0), sse=True)
-        #print("default inits: fmin = %.9f" % (fmin0))
-        ninits = bp['nrand_inits']
-        nsamples = bp['nrand_samples']
-        if best_inits is None:
+        if inits_list is None:
             # sample random inits and select best of
-            best_inits, fmins = self.get_best_inits(pkeys, nbest=ninits, nrand_samples=nsamples)
+            inits_list, fmins = self.sample_inits(pkeys=np.sort(list(p)))
             f0 = np.min(fmins)
         else:
-            f0=np.min([self.simulator.cost_fx(init, sse=True) for init in best_inits])
+            f0=np.min([self.simulator.cost_fx(inits, sse=True) for inits in inits_list])
         if progress and not bp['disp']:
-            pbars = BasinFeedback(ninits=ninits, nsuccess=bp['niter_success'], fmin0=f0)
-            pbars.inits_bar.update(new_progress=np.min(pbars.basins))
-        for i, params in enumerate(best_inits):
+            pbars = BasinFeedback(ninits=len(inits_list), fmin0=f0)
+        xpopt, xfmin = [], []
+        for i, inits in enumerate(inits_list):
             if progress and not bp['disp']:
                 pbars.inits_bar.update(i+1)
-                callback_fx = pbars.callback_fx
-            popt, fmin = self.run_basinhopping(p=params, is_flat=True, callback_fx=callback_fx)
+                callback = pbars.callback
+            popt, fmin = self.run_basinhopping(p=inits, is_flat=True, callback=callback)
             xpopt.append(popt)
             xfmin.append(fmin)
         if progress:
             pbars.clear()
-        # get the global basin and
-        # corresponding parameter estimates
-        ix_min = np.argmin(xfmin)
-        popt_best = xpopt[ix_min]
-        fmin_best = xfmin[ix_min]
-        # compare global basin (fmin_best) to
-        # fmin using default inits (fmin0)
-        if fmin_best > fmin0:
-            basin_decision = "USING DEFAULT INITS: fmin_inits=%.9f, next_best=%.9f" % (fmin0, fmin_best)
-            print(basin_decision)
-            return p0
-        else:
-            basin_decision = "NEW GLOBAL MINIMUM: fmin_new=%.9f; fmin_inits=%9f)" % (fmin_best, fmin0)
-            print(basin_decision)
-            return popt_best
+        # report global minimum
+        print("GLOBAL MIN = {:.9f}".format(np.min(xfmin)))
+        # return parameters at the global basin
+        return xpopt[np.argmin(xfmin)]
 
-    def run_basinhopping(self, p, is_flat=True, callback_fx=None):
+    def run_basinhopping(self, p, is_flat=True, callback=None):
         """ uses fmin_tnc in combination with basinhopping to perform bounded global
          minimization of multivariate model
         ::Arguments::
@@ -224,7 +209,7 @@ class Optimizer(object):
         accept_step = BasinBounds(xmin, xmax)
         custom_step = HopStep(basin_keys, nlevels=nl, stepsize=bp['stepsize'])
         # run basinhopping on simulator.basinhopping_minimizer func
-        out = basinhopping(self.simulator.global_cost_fx, x0=x0, minimizer_kwargs=mkwargs, take_step=custom_step, accept_test=accept_step, stepsize=bp['stepsize'], niter_success=bp['niter_success'], interval=bp['interval'], disp=bp['disp'], callback=callback_fx)
+        out = basinhopping(self.simulator.global_cost_fx, x0=x0, minimizer_kwargs=mkwargs, take_step=custom_step, accept_test=accept_step, T=bp['T'], stepsize=bp['stepsize'], niter_success=bp['nsuccess'], interval=bp['interval'], disp=bp['disp'], callback=callback)
         xopt = out.x
         funcmin = out.fun
         if nl > 1:

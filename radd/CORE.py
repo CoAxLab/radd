@@ -122,10 +122,9 @@ class RADDCore(object):
             wts = self.flat_wts[0]
             # initialize with default values and first arrays in observed_flat, flat_wts
             self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 20000, 'maxfev': 2000,
-            'disp':True, 'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1,
-            'fit_on': self.fit_on, 'clmap': self.clmap, 'dynamic':self.dynamic,
-            'quantiles': self.quantiles, 'flat': True, 'depends_on': self.depends_on,
-            'kind': self.kind}
+                'disp':True, 'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1,
+                'fit_on': self.fit_on, 'dynamic':self.dynamic, 'kind': self.kind, 'clmap': self.clmap,
+                'quantiles': self.quantiles, 'flat': True, 'depends_on': self.depends_on}
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -140,8 +139,9 @@ class RADDCore(object):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'nrand_inits': 5, 'nrand_samples': 5000, 'interval': 10,
-            'disp': False, 'stepsize': .05, 'niter_success': 30, 'tol': 1.e-5, 'method': 'TNC'}
+            self.basinparams =  {'ninits': 5, 'nsamples': 5000, 'interval': 10, 'T': 1.,
+            'disp': False, 'stepsize': .05, 'nsuccess': 40, 'tol': 1.e-4, 'method': 'TNC',
+            'init_sample_method': 'best'}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -162,7 +162,7 @@ class RADDCore(object):
         nssd = ssd.shape[-1]
         nss = int((.5 * self.fitparams['ntrials']))
         nss_per_ssd = int(nss/nssd)
-        ssd_ix = np.arange(nssd)
+        ssd_ix = np.arange(nssd) * np.ones((ssd.shape[0], ssd.shape[-1])).astype(np.int)
         # store all ssd_info in fitparams, accessed by Simulator
         self.fitparams['ssd_info'] = [ssd, nssd, nss, nss_per_ssd, ssd_ix]
 

@@ -42,7 +42,7 @@ class Model(RADDCore):
 
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, best_inits=None, progress=False, plot_fits=False, saveplot=False, kde_quant_plots=True):
+    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, inits_list=None, progress=False, plot_fits=False, saveplot=False, kde_quant_plots=True):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
@@ -52,7 +52,7 @@ class Model(RADDCore):
             if fit_flat or self.is_flat:
                 y, wts = self.iter_flat[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
-                finfo, popt, yhat = self.optimize_flat(popt, multiopt=multiopt, best_inits=best_inits, progress=progress)
+                finfo, popt, yhat = self.optimize_flat(popt, multiopt=multiopt, inits_list=inits_list, progress=progress)
             if fit_cond and not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
@@ -61,7 +61,7 @@ class Model(RADDCore):
             if plot_fits:
                 self.plot_model_fits(y=y, yhat=yhat, kde_quant=kde_quant_plots, save=saveplot)
 
-    def optimize_flat(self, p, multiopt=True, best_inits=None, progress=False):
+    def optimize_flat(self, p, multiopt=True, inits_list=None, progress=False):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -75,8 +75,8 @@ class Model(RADDCore):
         if multiopt:
             # Global Optimization w/ Basinhopping (+TNC)
             ntrials = self.fitparams['ntrials']
-            self.set_fitparams(ntrials=10000)
-            p = self.opt.hop_around(p, best_inits=best_inits, progress=progress)
+            self.set_fitparams(ntrials=15000)
+            p = self.opt.hop_around(p, inits_list=inits_list, progress=progress)
             self.set_fitparams(ntrials=ntrials)
             print('Finished Hopping Around')
         # Flat Simplex Optimization of Parameters at Global Minimum
@@ -94,7 +94,7 @@ class Model(RADDCore):
         """
         if multiopt:
             ntrials = self.fitparams['ntrials']
-            self.set_fitparams(ntrials=10000)
+            self.set_fitparams(ntrials=15000)
             # Pretune Conditional Parameters
             p, funcmin = self.opt.run_basinhopping(p, is_flat=False)
             self.set_fitparams(ntrials=ntrials)
