@@ -293,72 +293,69 @@ def anim_to_html(anim):
 
 class PBinJ(object):
     """ animated ProgressBar (PB) to be used (inJ)upyter notebooks
+    (set bartype to 'uglybar' if running from terminal)
     """
-    def __init__(self, n, color_n=0, disp=False, progbar=True, infobar=False, ptitle='globalfmin', infotitle='fmin'):
-
-        colors = ['seagreen', '#4f8bef', "#0b559f", "#de2b25"]
-        self.color = colors[color_n]
+    def __init__(self, bartype='colorbar', n=None, color='blue', title='Progress'):
+        colors = {'green': '#27ae60', 'blue': '#4f8bef', 'red': "#de2b25"}
+        self.color = colors[color]
         self.n=n
         self.displayed=False
-        self.bars=[]
-        self.infobar=infobar
-        self.progbar=progbar
-        try:
-            from IPython.display import clear_output
-            self.animate = self.animate_ipython
-            self.init_ipython_bars(infotitle=infotitle, ptitle=ptitle)
-        except Exception:
-            import sys
-            self.init_bars(infotitle=infotitle, ptitle=ptitle)
+        self.bartype=bartype
+        self.title=title
+        self.init_bars()
 
-    def update(self, i=None, new_info=None, new_progress=None): 
-        self.animate(i=i, new_info=new_info, new_progress=new_progress)
-
-    def init_ipython_bars(self, infotitle=None, ptitle=None):
-        import uuid
-        if self.infobar:
-            self.infoid=str(uuid.uuid4())
-            self.ibar="""<div<p>{0}</p> <div style="border: none; width:500px"> <div id="{1}" style="background-color:#FFF; color:#000; text:{2}; width:100.">&nbsp;</div> </div> </div>""".format(infotitle, self.infoid, 'fmin')
-            self.bars.append(self.ibar)
-        if self.progbar:
-            self.pbid=str(uuid.uuid4())
-            self.pbar="""<div<p>{0}</p> <div style="border: 1px solid #111; width:500px">
-                <div id="{1}" style="background-color:{2}; width:0%%; text:'fmin={3}'; color:#fff;">
-                &nbsp;</div> </div> </div>""".format(ptitle, self.pbid, self.color, 'fmin')
-            self.bars.append(self.pbar)
-
-    def init_bars(self, infotitle=None, ptitle=None):
-        import progressbar
-        if self.progbar:
-            self.new_prog_string = ''.join([ptitle, ': {0}'])
-            self.pbar = progressbar.ProgressBar(maxval=self.n)
-            self.bars.append(self.pbar)
-        if self.infobar:
-            self.new_info_string = ''.join([infotitle, ': {0}'])
+    def init_bars(self):
+        if self.bartype=='uglybar':
+            import progressbar
+            if self.n is not None:
+                self.bar = progressbar.ProgressBar(0, self.n)
+            self.new_prog_string = ''.join([self.title, ': {0}'])
+            self.update = self.update_uglybar
+        else:
+            import uuid
+            self.barid=str(uuid.uuid4())
+            if self.bartype=='colorbar':
+                args = [self.title, "1px solid %s"%self.color, self.barid, self.color, '0%', "#fff"]
+                self.update = self.update_colorbar
+            else:
+                args = [self.title, "none", self.barid, "#fff", '100%', "#000"]
+                self.update = self.update_progress
+            self.bar="""<div<p>{0}</p> <div style="border: {1}; width:500px">
+            <div id="{2}" style="background-color:{3}; width:{4}; text:''; color:{5};">
+            &nbsp;</div> </div> </div>""".format(*args)
 
     def display_bars(self):
-        for bar in self.bars:
-            display(HTML(bar))
+        if self.bartype=='uglybar':
+            self.bar.start()
+        else:
+            display(HTML(self.bar))
         self.displayed=True
 
-    def animate_ipython(self, i=None, new_info=None, new_progress=None):
+    def update_progress(self, new_progress=None):
         if self.displayed==False:
             self.display_bars()
-        if new_info is not None and self.infobar:
-            display(Javascript("$('div#%s').text(%s)" % (self.infoid, str(new_info))))
-        if new_progress is not None and self.progbar:
-            display(Javascript("$('div#%s').text(%s)" % (self.pbid, str(new_progress))))
-        if i is not None and self.progbar:
-            display(Javascript("$('div#%s').width('%.2f%%')" % (self.pbid, (i*1./self.n)*100)))
+        display(Javascript("$('div#{}').text({:.5f})".format(self.barid, new_progress)))
 
-    def animate(self, i=None, new_info=None, new_progress=None):
-        if self.displayed==False and self.progbar:
-            self.pbar.start()
-        if new_info is not None and self.infobar:
-            sys.stdout.write('\r'+self.new_info_string.format(str(new_info)))
-            sys.stdout.flush()
-        if new_progress is not None and self.progbar:
+    def update_colorbar(self, i=None, new_progress=None):
+        if self.displayed==False:
+            self.display_bars()
+        if i is not None:
+            display(Javascript("$('div#{}').width('{:.2f}%')".format(self.barid, (i*1./self.n)*100)))
+        if new_progress is not None:
+            self.update_progress(new_progress)
+
+    def update_uglybar(self, i=None, new_progress=None):
+        if self.displayed==False:
+            self.display_bars()
+        if new_progress is not None:
             sys.stdout.write('\r'+self.new_prog_string.format(str(new_progress)))
             sys.stdout.flush()
-        if i is not None and self.progbar:
-            self.pbar.update(i+1)
+        if i is not None:
+            self.bar.update(i)
+
+    def clear(self):
+        if self.bartype=='uglybar':
+            sys.stdout.flush
+        else:
+            from IPython.display import clear_output
+            clear_output()

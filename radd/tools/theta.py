@@ -8,7 +8,7 @@ from numpy import array
 from scipy.stats.distributions import norm, gamma, uniform
 from lmfit import Parameters
 
-def random_inits(pkeys, ninits=1, kind='dpm'):
+def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None):
     """ random parameter values for initiating model across range of
     parameter values.
     ::Arguments::
@@ -24,7 +24,7 @@ def random_inits(pkeys, ninits=1, kind='dpm'):
         pkeys = list(pkeys)
     params = {}
     for pk in pkeys:
-        params[pk] = init_distributions(pk, nrvs=ninits, kind=kind)
+        params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, mu=mu, sigma=sigma)
     if 'vd' in params.keys():
         # vi_perc ~ U(.05, .95) --> vi = vi_perc*vd
         params['vi'] = params['vi']*params['vd']
@@ -80,22 +80,22 @@ def scalarize_params(params, pc_map=None, is_flat=True):
                 params[pk] = np.mean(params[pk])
     return params
 
-def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65):
+def init_distributions(pkey, kind='dpm', mu = None, sigma = None, nrvs=25, tb=.65):
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
     """
-    mu_defaults = {'a': .15, 'tr': .02, 'v': 1., 'ssv': -1., 'z': .1, 'xb': 1., 'sso': .15, 'vi': .15, 'vd': 1.}
-    sigma_defaults = {'a': .3, 'tr': .2, 'v': .3, 'ssv': .3, 'z': .05, 'xb': .5, 'sso': .01, 'vi': .7, 'vd': .2}
+    if mu is None:
+        mu = {'a': .2, 'tr': .02, 'v': 1., 'ssv': -1., 'z': .1, 'xb': 1., 'sso': .15, 'vi': .35, 'vd': .5}
+    if sigma is None:
+        sigma = {'a': .3, 'tr': .2, 'v': .3, 'ssv': .3, 'z': .05, 'xb': .5, 'sso': .01, 'vi': .4, 'vd': .5}
     normal_params = ['tr', 'v', 'vd', 'ssv', 'z', 'xb', 'sso']
     gamma_params = ['a', 'tr']
-    uniform_params = ['vi']
+    uniform_params = ['vd', 'vi']
     if 'race' in kind:
-        mu_defaults['ssv'] = abs(mu_defaults['ssv'])
-
+        sigma['ssv'] = abs(mu['ssv'])
     bounds = get_bounds(kind=kind)[pkey]
-    loc = mu_defaults[pkey]
-    scale = sigma_defaults[pkey]
-
+    loc = mu[pkey]
+    scale = sigma[pkey]
     # init and freeze dist shape
     if pkey in normal_params:
         dist = norm(loc, scale)
@@ -103,7 +103,6 @@ def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65):
         dist = gamma(.8, loc, scale)
     elif pkey in uniform_params:
         dist = uniform(loc, scale)
-
     # generate random variates
     rvinits = dist.rvs(nrvs)
     while rvinits.min() < bounds[0]:
@@ -118,7 +117,7 @@ def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65):
         rvinits = np.abs(rvinits)
     return rvinits
 
-def get_bounds(kind='dpm', a=(.05, 1.5), tr=(.01, .5), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5.), si=(.001, .2), sso=(.01, .5), vd=(.1, 5.0), vi=(.01, .1)):
+def get_bounds(kind='dpm', a=(.05, 1.5), tr=(.01, .5), v=(.1, 5.0), z=(.01, .79), ssv=(-5.0, -.1), xb=(.1, 5.), si=(.001, .2), sso=(.01, .5), vd=(.6, 1.1), vi=(.4, .8)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
@@ -193,7 +192,6 @@ def check_inits(inits={}, depends_on={}, kind='dpm'):
     return {pk: inits[pk] for pk in pfit}
 
 def update_params(theta):
-
     if 't_hi' in theta.keys():
         theta['tr'] = theta['t_lo'] + np.random.uniform() * (theta['t_hi'] - theta['t_lo'])
     if 'z_hi' in theta.keys():
@@ -202,7 +200,6 @@ def update_params(theta):
         theta['v'] = theta['sv'] * np.random.randn() + theta['v']
 
     return theta
-
 
 def get_intervar_ranges(theta):
     """ theta (dict): parameters dictionary

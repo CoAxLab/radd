@@ -98,7 +98,7 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
 
     vdhist = pd.DataFrame(data=np.zeros((ntrials, len(names))), columns=names, index=np.arange(ntrials))
     vihist = vdhist.copy()
-
+    needsfixed = 0
     for i in xrange(ntrials):
         vals = trials.iloc[i, 1:].values
         winner=np.nan
@@ -110,6 +110,7 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
             if np.isnan(np.mean(p['xb'])):
                 iquit=36
         if winner>=len(names) or np.isnan(winner):
+            needsfixed+=1
             winner = int(np.random.choice(np.arange(len(names))))
         choice_name = names[winner]
         oldval = trials.loc[i, choice_name]
@@ -122,7 +123,9 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.06, a_no=.06, beta=5):
         vihist.iloc[i, :] = p['vi']
         choice_name = names[winner]
         choices.append(winner); rts[choice_name].append(rt[winner]); all_traces.append(traces)
-
+    percent_random_choice = (needsfixed*100.)/ntrials
+    if percent_random_choice>=10.:
+        print("trials with no winner {:.2f}%".format(percent_random_choice))
     return choices, rts, all_traces, qdict, choice_prob, vdhist, vihist
 
 

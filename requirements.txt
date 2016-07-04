@@ -4,5 +4,5 @@ seaborn>=0.5.1
 matplotlib>=1.4.3
 scipy>=0.16.1
 lmfit>=0.9.1
-progressbar>=2.3
+progressbar2>=3.9.3
 future

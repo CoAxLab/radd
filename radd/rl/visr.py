@@ -112,19 +112,17 @@ def gen_mappable(vals_to_map, cm='rainbow'):
     return scalar_mappable, vmin, vmax
 
 
-def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
-
-    if pq=='P':
-        measure = 'Payoff'
-    else:
-        measure = 'Sensitivity'
+def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P', plot_scatter=False):
 
     n = trialsdf.a_go.unique().size
     a_go = np.sort(trialsdf.a_go.unique())
     sm, vmin, vmax = gen_mappable(vals_to_map=a_go, cm=cm)
-
-    f, axes = plt.subplots(2,2, figsize=(14, 10))
-    ax1, ax2, ax3, ax4 = axes.flatten()
+    if plot_scatter:
+        f, axes = plt.subplots(2,2, figsize=(12, 9))
+        ax1, ax2, ax3, ax4 = axes.flatten()
+    else:
+        f, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+        ax1, ax2 = axes.flatten()
 
     for grp, grpdf in trialsdf.groupby('a_go'):
         colr = sm.to_rgba(grp)
@@ -132,32 +130,37 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P'):
         ax2.plot(grpdf.v_opt_diff.values, color=colr)
         sns.despine()
 
-    divider = make_axes_locatable(ax1)
-    cax = divider.append_axes("right", size="5%", pad=0.2)
+    divider = make_axes_locatable(ax2)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
     cb = plt.colorbar(sm, cax)
     sm.colorbar.set_ticks([vmin, vmax])
-    cax.set_yticklabels([vmin, vmax])
+    cax.set_yticklabels(['{:.3f}'.format(vmin), '{:.3f}'.format(vmax)])
 
-    pvals_by_group = igtdf.groupby('a_go').mean().loc[:, pq].values
-    reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('a_go')])
-    strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('a_go')])
+    ax1.set_title('$\Delta_{card} = V_{D}(t)-V_{I}(t)$', fontsize=15)
+    ax2.set_title('$\Delta_{OS} = (\Delta_C + \Delta_D) - (\Delta_A + \Delta_B)$', fontsize=14)
+    ax1.set_ylabel('Selected Channel Strength ($\Delta_{card}$)', fontsize=12)
+    ax2.set_ylabel('Optimal-Subopt Ch. Strength ($\Delta_{OS}$)', fontsize=12)
 
-    for i in range(n):
-        colr = sm.to_rgba(a_go[i])
-        ax3.scatter(pvals_by_group[i], reactivity[i], color=colr, s=30)
-        ax4.scatter(pvals_by_group[i], strategy[i], color=colr, s=30)
-
-    ax1.set_title('$\Delta_{card} = V_{D}(t)-V_{I}(t)$', fontsize=19)
-    ax2.set_title('$\Delta_{OS} = (\Delta_C + \Delta_D) - (\Delta_A + \Delta_B)$', fontsize=19)
-    ax1.set_ylabel('Selected Channel Strength ($\Delta_{card}$)', fontsize=17)
-    ax2.set_ylabel('Optimal-Subopt Ch. Strength ($\Delta_{OS}$)', fontsize=17)
-    ax3.set_ylabel('$\mu \Delta_{card}$', fontsize=22)
-    ax4.set_ylabel('$\mu \Delta_{OS}$', fontsize=22)
     for ax in [ax1, ax2]:
-        ax.set_xlabel('Trials', fontsize=22)
-    for ax in [ax3, ax4]:
-        ax.set_xlabel(measure, fontsize=22)
-    f.subplots_adjust(wspace=.4, hspace=.3)
+        ax.set_xlabel('Trials', fontsize=15)
+    if plot_scatter:
+        if pq=='P':
+            measure = 'Payoff'
+        else:
+            measure = 'Sensitivity'
+        pvals_by_group = igtdf.groupby('a_go').mean().loc[:, pq].values
+        reactivity = np.array([grpdf.vdiff.mean() for grp, grpdf in trialsdf.groupby('a_go')])
+        strategy = np.array([grpdf.v_opt_diff.mean() for grp, grpdf in trialsdf.groupby('a_go')])
+        for i in range(n):
+            colr = sm.to_rgba(a_go[i])
+            ax3.scatter(pvals_by_group[i], reactivity[i], color=colr, s=15)
+            ax4.scatter(pvals_by_group[i], strategy[i], color=colr, s=15)
+        ax3.set_ylabel('$\mu \Delta_{card}$', fontsize=15)
+        ax4.set_ylabel('$\mu \Delta_{OS}$', fontsize=15)
+        ax3.set_xlabel(measure, fontsize=15)
+        ax4.set_xlabel(measure, fontsize=15)
+
+    f.subplots_adjust(wspace=.3, hspace=.2)
     plt.tight_layout()
     if save:
         savestr = "_aN" + str(trialsdf.a_no.unique()[0])

@@ -8,7 +8,7 @@ This repository is associated with the manuscript [Competing basal-ganglia pathw
 
 (static version [**here**](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb) if binder is down)
 
-#### Install with pip
+#### Install with pip (NOTE: Python 2.7.* only)
 ```sh
 pip install radd
 ```
