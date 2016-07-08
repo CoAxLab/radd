@@ -122,7 +122,7 @@ class RADDCore(object):
             y = self.observed_flat[0]
             wts = self.flat_wts[0]
             # initialize with default values and first arrays in observed_flat, flat_wts
-            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 30000, 'maxfev': 2000,
+            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 50000, 'maxfev': 2000,
                 'disp':True, 'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1,
                 'fit_on': self.fit_on, 'dynamic':self.dynamic, 'kind': self.kind, 'clmap': self.clmap,
                 'quantiles': self.quantiles, 'flat': True, 'depends_on': self.depends_on}

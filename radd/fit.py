@@ -6,8 +6,6 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd import theta
-from radd.tools import messages
-from radd.tools.analyze import assess_fit
 from radd.models import Simulator
 from lmfit import minimize, fit_report
 from scipy.optimize import basinhopping
