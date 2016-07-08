@@ -222,7 +222,7 @@ class Simulator(object):
         ssd = self.ssd_info[0]
         if 'sso' in list(p):
             sso = p['sso']
-        Ps = 0.5 * (1 + p['ssv'][0] * self.dx / self.si)
+        Ps = 0.5 * (1 + p['ssv'] * self.dx / self.si)
         Ts = np.ceil((self.tb - (ssd + sso)) / self.dt).astype(int)
         return Ps, Ts
 
@@ -250,7 +250,7 @@ class Simulator(object):
         ssBase = ssDVg[np.arange(nl)[:,na], ssd_ix, :, ss_on][:,:,:,na]
         #self.rvector_ss=self.rvector[:, :nss, :].reshape(nl, nssd, nss_per, self.ntime)
         # add ssBaseline to SS traces (nlevels, nSSD, ntrials_perssd, ntimepoints)
-        DVs = ssBase + csum(np.where(self.rvector_ss < Ps, dx, -dx), axis=3)
+        DVs = ssBase + csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         return [DVg, DVs]
