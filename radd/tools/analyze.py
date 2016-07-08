@@ -10,6 +10,7 @@ from scipy.stats.mstats import mquantiles as mq
 from scipy.stats.mstats_extras import mjci
 from scipy import optimize
 import functools
+from scipy.interpolate import interp1d
 
 
 def assess_fit(finfo, lmMin=None, fitparams=None):
@@ -80,6 +81,31 @@ def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
     samples = kdefit.sample(n_samples=nsamples).flatten()
     return samples
 
+def scurve_interpolate(x, y, kind='cubic'):
+    interpol_fx = interp1d(x, y, kind=kind)
+    xsim = np.linspace(x[0], x[-1], 10000, endpoint=True)
+    ysim = interpol_fx(xsim)
+    return xsim, ysim
+
+def scurve_poly_fit(x, y, n=20):
+    polysim = lambda p, pi, x, xi: p[pi]*x**xi
+    ix = np.arange(n+1)
+    poly_ix = zip(ix, ix[::-1])
+    p = np.polyfit(x,y,n)
+    xsim = np.linspace(x.min(), x.max(), 10000, endpoint=True)
+    ysim = np.sum([polysim(p, pi, xsim, xi) for pi, xi in poly_ix],axis=0)
+    return xsim, ysim
+
+def fit_sigmoid(x, y):
+    x = resize(x, lower=x.max(), upper=x.min())
+    y = resize(y, lower=y.min(), upper=y.max())
+    p0 = (np.mean(x), np.mean(y), .5, .5)
+    p, pcov = optimize.leastsq(residuals, p0, args=(x, y), xtol=1.e-15, ftol=1.e-15, maxfev=20000)
+    x0, y0, c, k = p
+    xsim = np.linspace(x.min()-20, x.max()+20, 10000, endpoint=True)
+    ysim = sigmoid(p, xsim)
+    return xsim, ysim
+
 def sigmoid(p, x):
     x0, y0, c, k = p
     y = c / (1 + np.exp(k * (x - x0))) + y0
@@ -88,7 +114,7 @@ def sigmoid(p, x):
 def residuals(p, x, y):
     return y - sigmoid(p, x)
 
-def res(arr, lower=0.0, upper=1.0):
+def resize(arr, lower=0.0, upper=1.0):
     arr = arr.copy()
     if lower > upper:
         lower, upper = upper, lower

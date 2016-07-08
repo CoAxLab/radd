@@ -1,12 +1,7 @@
-/*
-    Name:       Grade3
-    Author:     Kyle Dunovan (http://github.com/dunovank)
-*/
 <style>
     body {background-color: #ffffff;}
-
     a {color: #303030; font-family: 'Helvetica', sans-serif; }
-    div#notebook, div.CodeMirror, div.output_area pre, div.output_wrapper, div.prompt, div.CodeMirror pre {font-family:'Hack', monospace; font-size: 11pt;}
+    div#notebook, div.CodeMirror, div.output_area pre, div.output_wrapper, div.prompt, div.CodeMirror pre {font-family:'Hack', monospace; font-size: 10pt;}
 
     /* Hiding the ipython log */
     div#ipython_notebook { display: none; }
@@ -52,6 +47,7 @@
     *****************************************
     <<<<<<<<<<<<<<<<<<<>>>>>>>>>>>>>>>>>>>> */
     div#maintoolbar {display: none !important;}
+
     .list_header {
         font-weight: normal;
         background-color: transparent;
@@ -59,7 +55,7 @@
     }
     div.list_container a:hover {color: #222222;}
     div.list_item:hover {
-        background-color: rgba(184, 184, 184, 0.10);
+        background-color: rgba(184, 184, 184, 0.14);
     }
     ul#selector-menu.dropdown-menu > li > a {
         background: #efefef;
@@ -259,6 +255,8 @@
         background-color: #e0e0e0;
         border-color: #e0e0e0;
     }
+
+    /* BUTTONS */
     .btn-default.active:hover, .open > .dropdown-toggle.btn-default:hover, .btn-default:active:focus, .btn-default.active:focus, .open > .dropdown-toggle.btn-default:focus, .btn-default:active.focus, .btn-default.active.focus, .open > .dropdown-toggle.btn-default.focus {
         color: #222222;
         background: #e0e0e0;
@@ -358,24 +356,14 @@
         height: 400px;
         width: 825px;
     }
+
     /* Formatting code in markdown cells */
-    div.text_cell_render {
-        font-size: 100%;
-        background: #eeeeee;
-        background-color: #eeeeee;
-        color: #4c4c4c;
-    }
-    /* Formatting code in markdown cells */
-    div.text_cell_render pre {
+    div.text_cell, div.text_cell_render pre, div.text_cell_render {
         color: #4c4c4c;
         background: #eeeeee;
         background-color: #eeeeee;
-    }
-    div.text_cell {
         max-width: 100%;
-        color: #4c4c4c;
-        background: #eeeeee;
-        background-color: #eeeeee;
+        border-radius: 2px;
     }
     div.cell.text_cell.rendered .input_prompt {
         font-family: 'Hack', monospace;
@@ -386,10 +374,18 @@
         padding-bottom: 0px;
         margin-bottom: 0px;
     }
+    div.cell.text_cell.unrendered .input_prompt {
+        border-right: 2px solid #e8565d;
+        color: #aaaaaa;
+        background-color: #eeeeee;
+        background-color: #eeeeee;
+        border-radius: 2px;
+    }
     div.cell.text_cell.rendered.selected {
         border: medium solid #e8565d;
         padding: 0px;
         border-radius: 2px;
+
     }
     div.text_cell_render h1,
     div.text_cell_render h2,
@@ -398,11 +394,11 @@
     div.text_cell_render h5,
     div.text_cell_render h6 {
         font-family: 'Helvetica', sans-serif;
+        font-weight: lighter;
         background: #eeeeee;
         background-color: #eeeeee;
         color: #4c4c4c;
-        font-weight: 300;
-        line-height: 110%;
+        line-height: 1;
     }
 
     /* text in output area (i.e. print some_list) */
@@ -478,11 +474,12 @@
 
     div.output_stderr {background-color: #ebb5b7;}
     div.output_stderr pre {color: #000000;}
+    div.js-error { color: #de143d; }
 
     .cm-s-ipython.CodeMirror {background: #eeeeee; color: #303030;  border-radius: 2px; }
-    .cm-s-ipython div.CodeMirror-selected {background: #e0e1e3 !important;}
-    .cm-s-ipython .CodeMirror-gutters {background: #e0e1e3; border: 0px; border-radius:0px;}
-    .cm-s-ipython .CodeMirror-linenumber {color: #aaaaaa !important; font-size: 11pt;}
+    .cm-s-ipython div.CodeMirror-selected {background: #e0e1e3 !important; }
+    .cm-s-ipython .CodeMirror-gutters {background: #e0e1e3; border: 0px; border-radius:0px; }
+    .cm-s-ipython .CodeMirror-linenumber {color: #aaaaaa !important; }
     .cm-s-ipython .CodeMirror-cursor {border-left: 2px solid #ff711a !important;}
     .cm-s-ipython span.cm-comment {color: #8d8d8d; font-style: italic !important;}
     .cm-s-ipython span.cm-atom {color: #055be0;}
@@ -491,7 +488,7 @@
     .cm-s-ipython span.cm-attribute {color: #de143d;}
     .cm-s-ipython span.cm-keyword {color: #713bc5; font-weight: normal;}
     .cm-s-ipython span.cm-string {color: #009e07; }
-    .cm-s-ipython span.cm-operator {color: #009fb7; }
+    .cm-s-ipython span.cm-operator {color: #055be0; }
     .cm-s-ipython span.cm-builtin {color: #e22978; }
     .cm-s-ipython span.cm-variable {color: #303030;}
 
@@ -504,19 +501,48 @@
     .cm-s-ipython span.cm-class {color: #e22978;}
     .cm-s-ipython span.cm-support {color: #de143d;}
     .cm-s-ipython span.cm-qualifier {color: #de143d;}
+    .cm-s-ipython span.cm-meta {color: #AA22FF; }
 
     /* Set CodeCell font-size*/
-    /*div.CodeMirror pre {font-size: 11pt !important;}*/
-    div.CodeMirror pre {line-height: 1.5 !important;}
-    div.CodeMirror pre {font-family: 'Hack', monospace; font-size: 11pt;}
+    div.CodeMirror pre {line-height: 1.6 !important;}
+    div.CodeMirror pre {font-family: 'Hack', monospace; font-size: 10pt;}
+    div.CodeMirror-lines { padding-bottom: .3em; }
 
-    div.CodeMirror span.CodeMirror-matchingbracket { color: #000000; background: rgba(53, 114, 198, .4) !important ; height: 120%; line-height: 1.5 !important; padding-top: 1px;}
-    div.CodeMirror span.CodeMirror-nonmatchingbracket { color: #000000; background: rgba(191, 97, 106, .3) !important ; height: 120%; line-height: 1.5 !important; padding-top: 1px;}
+    div.CodeMirror span.CodeMirror-matchingbracket { color: #000000; background: rgba(53, 114, 198, .4) !important ; height: 120%; line-height: 1.6 !important; padding-top: 1px;}
+    div.CodeMirror span.CodeMirror-nonmatchingbracket { color: #000000; background: rgba(191, 97, 106, .3) !important ; height: 120%; line-height: 1.6 !important; padding-top: 1px;}
 
-    div.cell { border: medium solid #ffffff; padding: 0px; border-radius: 2px; }
-    div.cell.selected { border: medium solid #ff8132; padding: 0px; border-radius: 2px; }
-    .edit_mode div.cell.selected {border: medium solid #ffd5bb !important; padding: 0px; border-radius: 2px; }
-    div.cell.edit_mode {border: medium solid #ffd5bb !important; padding: 0px; border-radius: 2px;}
+    div.cell {
+        background: #eeeeee;
+        background-color: #eeeeee;
+        border: medium solid #ffffff;
+        padding: 0px;
+        border-top-right-radius: 2px;
+        border-top-left-radius: 2px;
+    }
+    div.cell.selected {
+        background: #eeeeee;
+        background-color: #eeeeee;
+        border: medium solid #ff8132;
+        padding: 0px;
+        border-top-right-radius: 2px;
+        border-top-left-radius: 2px;
+    }
+    .edit_mode div.cell.selected {
+        background: #eeeeee;
+        background-color: #eeeeee;
+        border: medium solid #ffd5bb !important;
+        padding: 0px;
+        border-top-right-radius: 2px;
+        border-top-left-radius: 2px;
+    }
+    div.cell.edit_mode {
+        background: #eeeeee;
+        background-color: #eeeeee;
+        border: medium solid #ffd5bb !important;
+        padding: 0px;
+        border-top-right-radius: 2px;
+        border-top-left-radius: 2px;
+    }
 
     div.prompt {
         padding: 0.3em;
@@ -578,23 +604,27 @@
         background-color: #ffffff;
         box-shadow: #e8e8e8 2px 2px 3px 2px inset;
         border-bottom-left-radius: 2px;
-        -webkit-border-radius: 2px;
-        -moz-border-radius: 2px;
         border-top-right-radius: 0px;
         border-top-left-radius: 0px;
     }
-
     div.output_wrapper {
         background-color:#ffffff;
         margin-bottom: 0em;
         margin-top: 0em;
         border: 0px;
+        border-top-right-radius: 0px;
+        border-top-left-radius: 0px;
+        border-bottom-left-radius: 2px;
+        border-bottom-right-radius: 2px;
     }
     div.output_subarea.output_text.output_stream.output_stdout,div.output_subarea.output_text {
         background-color: #ffffff;
         color: #000000;
+        border-top-right-radius: 0px;
+        border-top-left-radius: 0px;
+        border-bottom-left-radius: 2px;
+        border-bottom-right-radius: 2px;
     }
-
     div.output_area pre {
         color: #000000;
         font-size: 10pt;
@@ -612,7 +642,23 @@
         flex: 1;
         max-width: calc(100% - 14ex);
     }
-
+    div.widget-area {
+        background-color: #ffffff;
+        background: #ffffff;
+        page-break-inside: avoid;
+        -moz-box-align: stretch;
+        box-orient: horizontal;
+        box-align: stretch;
+        flex-direction: row;
+        align-items: center;
+        align-self: auto;
+    }
+    audio, video {
+    display: inline;
+    vertical-align: middle;
+    align-content: center;
+    margin-left: 20%;
+    }
     /*
     Following courtesy of Sherif Soliman
     at http://sherifsoliman.com

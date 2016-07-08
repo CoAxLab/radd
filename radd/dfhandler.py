@@ -11,7 +11,7 @@ from scipy.stats.mstats_extras import mjci
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=3):
+    def __init__(self, model, max_wt=2.5):
         self.model = model
         self.data = model.data
         self.inits = model.inits
@@ -157,8 +157,8 @@ class DataHandler(object):
             idx_pwts = self.pwts_idx_error_calc()
         elif self.model.fit_on=='average':
             # repeat for all rows in wtsDF (idx x ncond x nlevels)
-            #idx_pwts = self.pwts_group_error_calc()
-            idx_pwts = self.pwts_idx_error_calc()
+            idx_pwts = self.pwts_group_error_calc()
+            #idx_pwts = self.pwts_idx_error_calc()
         return idx_qwts, idx_pwts
 
     def mj_quanterr(self):
@@ -339,6 +339,36 @@ class DataHandler(object):
             bootlist.append(bootdf)
         # concatenate and return all resampled conditions
         return self.model.rangl_data(pd.concat(bootlist))
+
+
+    def fill_df(self, data, dftype='fit', fitparams=None):
+        if fitparams is None:
+            fitparams = self.model.fitparams
+        if dftype=='fit':
+            fitDF = self.fitDF.copy()
+            data['idx'] = self.idx[fitparams['idx']]
+            next_row = np.argmax(self.fitDF.isnull().any(axis=1))
+            keys = self.f_cols
+            fitDF.loc[next_row, keys] = data
+            if self.fit_on=='average':
+                fit_df = fitDF.dropna().copy()
+                fit_df.idx='average'
+                fitDF = fit_df.set_index('idx').T
+            self.fitDF = fitDF
+        elif dftype=='yhat':
+            nl = fitparams['nlevels']
+            data = data.reshape(nl, int(data.size/nl))
+            next_row = np.argmax(self.yhatDF.isnull().any(axis=1))
+            keys = self.idx_cols[next_row]
+            yhatDF = self.yhatDF.copy()
+            for i in range(nl):
+                data_series = pd.Series(data[i], index=keys)
+                yhatDF.loc[next_row+i, keys] = data_series
+            if self.fit_on=='average':
+                yhat_df = yhatDF.dropna()
+                yhat_df.idx='average'
+                yhatDF = yhat_df.copy()
+            self.yhatDF = yhatDF
 
     def extract_popt_fitinfo(self, finfo=None):
         """ takes optimized dict or DF of vectorized parameters and

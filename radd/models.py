@@ -8,13 +8,13 @@ from numpy import hstack as hs
 from numpy import newaxis as na
 from numpy import cumsum as csum
 from scipy.stats.mstats import mquantiles as mq
-from radd.tools import theta
+from radd import theta
 
 class Simulator(object):
     """ Core code for simulating models. All cond, trials, &
     timepoints are simulated simultaneously
     """
-    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False):
+    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.002, si=.01, learn=False):
         self.learn = learn
         self.kind = kind
         self.pc_map = pc_map

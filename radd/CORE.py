@@ -8,7 +8,8 @@ import pandas as pd
 from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from lmfit import fit_report
-from radd.tools import theta, analyze, messages
+from radd.tools import analyze, messages
+from radd import theta
 
 class RADDCore(object):
     """ Parent class for constructing attributes and methods used by
@@ -177,6 +178,32 @@ class RADDCore(object):
         for p, cond in self.depends_on.items():
             levels = np.sort(self.data[cond].unique())
             self.pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
+
+    def sample_param_sets(self, pkeys=None, nsamples=None):
+        if pkeys is None:
+            pkeys = np.sort(list(self.inits))
+        if nsamples is None:
+            nsamples = self.basinparams['nsamples']
+        self.param_sets = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list_of_dicts=True)
+        self.param_yhats = [self.opt.simulator.sim_fx(params_i) for params_i in self.param_sets]
+
+    def filter_param_sets(self):
+        if not hasattr(self, 'param_sets'):
+            self.sample_param_sets()
+        nkeep = self.basinparams['ninits']
+        keep_method = self.basinparams['init_sample_method']
+        inits_list, globalmin = theta.filter_param_sets(self.param_sets, self.param_yhats, self.fitparams, nkeep=nkeep, keep_method=keep_method)
+        return inits_list, globalmin
+
+    def log_fit_info(self, finfo, popt, fitparams):
+        """ write meta-information about latest fit
+        to logfile (.txt) in working directory
+        """
+        fp = dict(deepcopy(fitparams))
+        # lmfit-structured fit_report to write in log file
+        param_report = self.opt.param_report
+        # log all fit and meta information in working directory
+        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF
