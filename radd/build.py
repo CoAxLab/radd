@@ -156,10 +156,19 @@ class Model(RADDCore):
         self.handler.fill_fitDF(data=finfo, fitparams=fitparams)
         self.fitDF = self.handler.fitDF.copy()
 
-    def plot_model_fits(self, y, yhat, fitparams=None, kde_quant=True, save=False):
+    def plot_model_fits(self, y=None, yhat=None, fitparams=None, kde_quant=True, save=False):
         """ wrapper for radd.tools.vis.plot_model_fits """
         if fitparams is None:
             fitparams=self.fitparams
+        if y is None:
+            y = fitparams['y']
+        if yhat is None:
+            if hasattr(self, 'yhat'):
+                yhat = self.yhat
+            else:
+                yhat = deepcopy(y)
+                print("model is unoptimized and no yhat array provided")
+                print("plotting with yhat as copy of y")
         plot_model_fits(y, yhat, fitparams, kde_quant=kde_quant, save=save)
 
     def make_progress_bars(self):

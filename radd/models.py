@@ -217,7 +217,7 @@ class Simulator(object):
 
     def __update_ss_trace_params__(self, p, sso=0):
         """ update Ps (probability of DVs +dx) and Ts (n timepoints)
-        for each SSD of stop process
+        for condition and each SSD of stop process
         """
         ssd = self.ssd_info[0]
         if 'sso' in list(p):
@@ -265,7 +265,7 @@ class Simulator(object):
         Pg, xtb, Ps, ss_on = self.__update_trace_params__(p, ss=True)
 
         DVg = xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
-        DVs = csum(np.where(self.rvector_ss < Ps, dx, -dx), axis=3)
+        DVs = csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         return [DVg, DVs]

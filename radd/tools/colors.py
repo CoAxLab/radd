@@ -1,12 +1,13 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import os
+from future.utils import listvalues
 import matplotlib.pyplot as plt
 import seaborn as sns
 
 sns.set(font="Helvetica")
 
-def get_cpals(name='all'):
+def get_cpals(name='all', aslist=False):
     rpal = lambda nc: sns.blend_palette(['#e88379', '#c0392b'], n_colors=nc)
     bpal = lambda nc: sns.blend_palette(['#81aedb', '#3A539B'], n_colors=nc)
     gpal = lambda nc: sns.blend_palette(['#65b88f', '#27ae60'], n_colors=nc)
@@ -14,8 +15,10 @@ def get_cpals(name='all'):
     heat = lambda nc: sns.blend_palette(['#f39c12', '#c0392b'], n_colors=nc)
     cool = lambda nc: sns.blend_palette(["#4168B7", "#27ae60"], n_colors=nc)
     slate = lambda nc: sns.blend_palette(['#95A5A6', "#6C7A89"], n_colors=nc)
-    color_dict = {'rpal': rpal, 'bpal': bpal, 'gpal': gpal, 'ppal': ppal, 'heat': heat, 'cool': cool, 'slate': slate}
-    if name == 'all':
+    color_dict = {'bpal': bpal, 'gpal': gpal, 'rpal': rpal, 'ppal': ppal, 'heat': heat, 'cool': cool, 'slate': slate}
+    if name=='all':
+        if aslist:
+            return listvalues(color_dict)
         return color_dict
     else:
         return color_dict[name]
