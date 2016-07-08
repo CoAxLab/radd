@@ -130,22 +130,31 @@ class Model(RADDCore):
         if keep_log:
             self.log_fit_info(finfo, popt, fp)
         try:
-            self.fill_df(yhat=yhat, finfo=finfo, fitparams=fp)
+            self.fill_yhatDF(yhat=yhat, fitparams=fp)
+            self.fill_fitDF(finfo=finfo, fitparams=fp)
         except Exception:
             print('fill_df error, already optimized? try new model')
             print('self.finfo, self.popt, and self.yhat still accessible from last fit')
 
-    def fill_df(self, yhat=None, finfo=None, fitparams=None):
-        """ wrapper for filling handler DFs and updating model DFs
+    def fill_yhatDF(self, yhat=None, fitparams=None):
+        """ wrapper for filling & updating model yhatDF
         """
         if yhat is None:
             yhat = self.yhat
+        if fitparams is None:
+            fitparams = self.fitparams
+        self.handler.fill_yhatDF(data=yhat, fitparams=fitparams)
+        self.yhatDF = self.handler.yhatDF.copy()
+
+    def fill_fitDF(self, finfo=None, fitparams=None):
+        """ wrapper for filling & updating model fitDF
+        """
         if finfo is None:
             finfo = self.finfo
-        self.handler.fill_df(data=yhat, dftype='yhat', fitparams=fitparams)
-        self.handler.fill_df(data=finfo, dftype='fit', fitprams=fitparams)
-        self.yhatDF=self.handler.yhatDF.copy()
-        self.fitDF=self.handler.fitDF.copy()
+        if fitparams is None:
+            fitparams = self.fitparams
+        self.handler.fill_fitDF(data=finfo, fitparams=fitparams)
+        self.fitDF = self.handler.fitDF.copy()
 
     def plot_model_fits(self, y, yhat, fitparams=None, kde_quant=True, save=False):
         """ wrapper for radd.tools.vis.plot_model_fits """

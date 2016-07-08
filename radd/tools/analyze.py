@@ -3,53 +3,12 @@ from __future__ import division
 import pandas as pd
 import numpy as np
 import os
-import re
 from numpy import array
 from sklearn.neighbors import KernelDensity
 from scipy.stats.mstats import mquantiles as mq
-from scipy.stats.mstats_extras import mjci
 from scipy import optimize
 import functools
 from scipy.interpolate import interp1d
-
-
-def assess_fit(finfo, lmMin=None, fitparams=None):
-    """ calculate fit statistics
-    """
-    y, wts, yhat = fitparams['y'], fitparams['wts'], fitparams['yhat']
-    # fill finfo dict with goodness-of-fit info
-    finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
-    finfo['ndata'] = len(yhat)
-    finfo['cnvrg'] = lmMinimizer.success
-    finfo['nfev'] = lmMinimizer.nfev
-    finfo['nvary'] = len(lmMinimizer.var_names)
-    finfo = pd.Series(finfo)
-    chisqr = finfo.chi
-    finfo['df'] = finfo.ndata - finfo.nvary
-    finfo['rchi'] = chisqr / finfo.df
-    finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
-    finfo['AIC'] = finfo.logp + 2 * finfo.nvary
-    finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
-    return finfo
-
-def rangl_data(data, tb=.555, quantiles=([.1, .3, .5, .7, .9]), ssd_method='all'):
-    """ called by __make_dataframes__ to generate observed dataframes and iterables for
-    subject fits
-    """
-    gac = data.query('ttype=="go"').acc.mean()
-    grt = data.query('ttype=="go" & acc==1').rt.values
-    ert = data.query('response==1 & acc==0').rt.values
-    gq = mq(grt, prob=quantiles)
-    eq = mq(ert, prob=quantiles)
-    data_vector = [gac, gq, eq]
-    if 'ssd' in data.columns:
-        stopdf = data.query('ttype=="stop"')
-        if ssd_method=='all':
-            sacc=stopdf.groupby('ssd').mean()['acc'].values
-        elif ssd_method=='central':
-            sacc = np.array([stopdf.mean()['acc']])
-        data_vector.insert(1, sacc)
-    return np.hstack(data_vector)
 
 def remove_outliers(data, sd=1.5, verbose=False):
     df = data.copy()

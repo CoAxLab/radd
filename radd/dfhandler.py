@@ -118,6 +118,53 @@ class DataHandler(object):
             data_vector.insert(1, sacc)
         return np.hstack(data_vector)
 
+    def fill_fitDF(self, data, fitparams=None):
+        """ fill fitDF with fit statistics
+        ::Arguments::
+            data (Series):
+                fitinfo Series containing model statistics and
+                optimized parameters (see Model.assess_fit() method)
+            fitparams (dict):
+                model.fitparams dict w/ meta info for last fit
+        """
+        if fitparams is None:
+            fitparams = self.model.fitparams
+        fitDF = self.fitDF.copy()
+        data['idx'] = self.idx[fitparams['idx']]
+        next_row = np.argmax(fitDF.isnull().any(axis=1))
+        keys = self.f_cols
+        fitDF.loc[next_row, keys] = data
+        if self.fit_on=='average':
+            fit_df = fitDF.dropna().copy()
+            fit_df.idx='average'
+            fitDF = fit_df.set_index('idx').T
+        self.fitDF = fitDF.copy()
+
+    def fill_yhatDF(self, data, fitparams=None):
+        """ fill yhatDF with model predictions
+        ::Arguments::
+            data (ndarray):
+                array containing model predictions (nlevels x ncols)
+                where ncols is number of data columns in observedDF
+            fitparams (dict):
+                model.fitparams dict w/ meta info for last fit
+        """
+        if fitparams is None:
+            fitparams = self.model.fitparams
+        yhatDF = self.yhatDF.copy()
+        nl = fitparams['nlevels']
+        data = data.reshape(nl, int(data.size/nl))
+        next_row = np.argmax(yhatDF.isnull().any(axis=1))
+        keys = self.idx_cols[next_row]
+        for i in range(nl):
+            data_series = pd.Series(data[i], index=keys)
+            yhatDF.loc[next_row+i, keys] = data_series
+        if self.fit_on=='average':
+            yhat_df = yhatDF.dropna()
+            yhat_df.idx = 'average'
+            yhatDF = yhat_df.copy()
+        self.yhatDF = yhatDF.copy()
+
     def determine_ssd_method(self, stopdf):
         ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
         # test if equal # of trials per ssd & return ssd_n
@@ -305,113 +352,3 @@ class DataHandler(object):
             _ = [params.remove(pname) for pname in dep_keys]
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
         self.f_cols = np.hstack([['idx'], params, fit_cols]).tolist()
-
-    def rwr(self, X, get_index=False, n=None):
-        """
-        Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
-        """
-        if isinstance(X, pd.Series):
-            X = X.copy()
-            X.index = range(len(X.index))
-        if n == None:
-            n = len(X)
-        resample_i = np.floor(np.random.rand(n) * len(X)).astype(int)
-        X_resample = (X[resample_i])
-        if get_index:
-            return resample_i
-        else:
-            return X_resample
-
-    def resample_data(self, n=120, groups=['ssd']):
-        """ generates n resampled datasets using rwr()
-        for bootstrapping model fits
-        """
-        df = self.data.copy()
-        tb = self.tb
-        bootlist = list()
-        if n == None:
-            n = len(df)
-        for level, level_df in df.groupby(groups):
-            boots = level_df.reset_index(drop=True)
-            orig_ix = np.asarray(boots.index[:])
-            resampled_ix = self.rwr(orig_ix, get_index=True, n=n)
-            bootdf = level_df.irow(resampled_ix)
-            bootlist.append(bootdf)
-        # concatenate and return all resampled conditions
-        return self.model.rangl_data(pd.concat(bootlist))
-
-
-    def fill_df(self, data, dftype='fit', fitparams=None):
-        if fitparams is None:
-            fitparams = self.model.fitparams
-        if dftype=='fit':
-            fitDF = self.fitDF.copy()
-            data['idx'] = self.idx[fitparams['idx']]
-            next_row = np.argmax(self.fitDF.isnull().any(axis=1))
-            keys = self.f_cols
-            fitDF.loc[next_row, keys] = data
-            if self.fit_on=='average':
-                fit_df = fitDF.dropna().copy()
-                fit_df.idx='average'
-                fitDF = fit_df.set_index('idx').T
-            self.fitDF = fitDF
-        elif dftype=='yhat':
-            nl = fitparams['nlevels']
-            data = data.reshape(nl, int(data.size/nl))
-            next_row = np.argmax(self.yhatDF.isnull().any(axis=1))
-            keys = self.idx_cols[next_row]
-            yhatDF = self.yhatDF.copy()
-            for i in range(nl):
-                data_series = pd.Series(data[i], index=keys)
-                yhatDF.loc[next_row+i, keys] = data_series
-            if self.fit_on=='average':
-                yhat_df = yhatDF.dropna()
-                yhat_df.idx='average'
-                yhatDF = yhat_df.copy()
-            self.yhatDF = yhatDF
-
-    def extract_popt_fitinfo(self, finfo=None):
-        """ takes optimized dict or DF of vectorized parameters and
-        returns dict with only depends_on.keys() containing vectorized vals.
-        Is accessed by fit.Optimizer objects after optimization routine.
-        ::Arguments::
-        finfo (dict/DF):
-            finfo is dict if self.fit_on is 'average'
-            and DF if self.fit_on is 'subjects' or 'bootstrap'
-            contains optimized parameters
-        ::Returns::
-        popt (dict):
-            dict with only depends_on.keys() containing
-            vectorized vals
-        """
-        finfo = dict(deepcopy(finfo))
-        pc_map = self.model.pc_map
-        plist = list(self.inits)
-        popt = {pkey: finfo[pkey] for pkey in plist}
-        for pkey in list(self.depends_on):
-            popt[pkey] = np.array([finfo[pc] for pc in pc_map[pkey]])
-        return popt
-
-    def params_io(self, p={}, io='w', iostr='popt'):
-        """ read // write parameters dictionaries
-        """
-        if io == 'w':
-            pd.Series(p).to_csv(''.join([iostr, '.csv']))
-        elif io == 'r':
-            ps = pd.read_csv(''.join([iostr, '.csv']), header=None)
-            p = dict(zip(ps[0], ps[1]))
-            return p
-
-    def fits_io(self, fitparams, fits=[], io='w', iostr='fits'):
-        """ read // write y, wts, yhat arrays
-        """
-        y = fitparams['y'].flatten()
-        wts = fitparams['wts'].flatten()
-        fits = fits.flatten()
-        if io == 'w':
-            index = np.arange(len(fits))
-            df = pd.DataFrame({'y': y, 'wts': wts, 'yhat': fits}, index=index)
-            df.to_csv(''.join([iostr, '.csv']))
-        elif io == 'r':
-            df = pd.read_csv(''.join([iostr, '.csv']), index_col=0)
-            return df
