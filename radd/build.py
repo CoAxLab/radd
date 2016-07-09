@@ -12,8 +12,6 @@ from radd.vis import plot_model_fits
 class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
     Inherits from RADDCore parent class (see CORE module).
-    Many of the naming conventions as well as the logic behind constructing parameter
-    dependencies on task condition are taken from HDDM (http://ski.clps.brown.edu/hddm_docs/)
     ::Arguments::
         data (pandas DF):
             data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
@@ -31,25 +29,22 @@ class Model(RADDCore):
             (ex. depends_on={'v': 'Condition'})
         weighted (bool):
             if True (default), perform fits using a weighted least-squares approach
-        dynamic (str):
-            set dynamic bias signal to follow an exponential or hyperbolic
-            form when fitting models with 'x' included in <kind> attr
         quantiles (array):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, dynamic='hyp', quantiles=np.array([.1, .3, .5, .7, .9])):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
         self.track_subjects = False
         self.track_basins = False
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, inits_list=None, progress=True, plot_fits=True, saveplot=False, kde_quant_plots=True, keep_log=False):
+    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, inits_list=None, progress=True, plot_fits=True, save_plot=False, kde_quant_plots=True, keep_log=False, save_results=True, save_observed=False, custompath=None):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
+        if np.any([keep_log, save_plot, save_results]):
+            self.handler.make_output_dir(custompath=custompath)
         popt = self.__check_inits__(self.inits)
-        if multiopt and not hasattr(self, 'param_sets'):
-            self.sample_param_sets()
         if progress:
             self.make_progress_bars()
         nfits = len(self.observed)
@@ -66,9 +61,12 @@ class Model(RADDCore):
                 finfo, popt, yhat = self.optimize_conditional(popt, multiopt)
             self.assess_fit(finfo, popt, yhat, keep_log)
             if plot_fits:
-                self.plot_model_fits(y=y, yhat=yhat, kde_quant=kde_quant_plots, save=saveplot)
+                self.plot_model_fits(y=y, yhat=yhat, kde_quant=kde_quant_plots, save=save_plot)
         if progress:
             self.pbars.clear()
+        if save_results:
+            self.write_results(save_observed)
+
 
     def optimize_flat(self, inits_list=None, progress=False):
         """ optimizes flat model to data collapsing across all conditions
@@ -82,12 +80,14 @@ class Model(RADDCore):
             popt_flat (dict): optimized parameters dictionary
         """
         globalmin = 1.; pbars=None;
+        if not hasattr(self, 'param_yhats'):
+            self.sample_param_sets()
         if inits_list is None:
             inits_list, globalmin = self.filter_param_sets()
         if self.track_basins:
             pbars = self.pbars.reset_bar('glb_basin', init_state=globalmin)
         # Global Optimization w/ Basinhopping (+TNC)
-        p = self.opt.hop_around(inits_list=inits_list, pbars=self.pbars)
+        p = self.opt.hop_around(inits_list=inits_list, pbars=pbars)
         # Flat Simplex Optimization of Parameters at Global Minimum
         finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=True)
         return finfo, popt, yhat
@@ -155,6 +155,16 @@ class Model(RADDCore):
             fitparams = self.fitparams
         self.handler.fill_fitDF(data=finfo, fitparams=fitparams)
         self.fitDF = self.handler.fitDF.copy()
+
+    def write_results(self, save_observed=False):
+        """ wrapper for dfhandler.write_results saves yhatDF and fitDF
+        results to model output dir
+        ::Arguments::
+            save_observed (bool):
+                if True will write observedDF & wtsDF to
+                model output dir
+        """
+        self.handler.write_results(save_observed)
 
     def plot_model_fits(self, y=None, yhat=None, fitparams=None, kde_quant=True, save=False):
         """ wrapper for radd.tools.vis.plot_model_fits """

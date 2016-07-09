@@ -19,13 +19,12 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, dynamic='hyp', quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False):
 
         self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
         self.ssd_method = ssd_method
-        self.dynamic = dynamic
         self.weighted = weighted
         self.quantiles = quantiles
         self.tb = data[data.response == 1].rt.max()
@@ -69,6 +68,8 @@ class RADDCore(object):
         self.pc_map = {}
         if not self.is_flat:
             self.__format_pcmap__()
+        # create model_id string for naming output
+        self.generate_model_id()
         # initialize dataframe handler
         self.handler = DataHandler(self)
         # generate dataframes for observed data, popt, fitinfo, etc
@@ -85,7 +86,7 @@ class RADDCore(object):
         # initialize model simulator, mainly accessed by the model optimizer object
         self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
         if self.verbose:
-            self.is_prepared = messages.saygo(depends_on=self.depends_on, cond_map=self.cond_map, kind=self.kind, fit_on=self.fit_on, dynamic=self.dynamic)
+            self.is_prepared = messages.saygo(depends_on=self.depends_on, cond_map=self.cond_map, kind=self.kind, fit_on=self.fit_on)
         else:
             self.prepared = True
 
@@ -119,13 +120,12 @@ class RADDCore(object):
         """ dictionary of fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'fitparams'):
-            y = self.observed_flat[0]
-            wts = self.flat_wts[0]
             # initialize with default values and first arrays in observed_flat, flat_wts
-            self.fitparams = {'idx':0, 'y':y, 'wts':wts, 'ntrials': 20000, 'maxfev': 2000,
-                'disp':True, 'tol': 1.e-5, 'method': 'nelder', 'tb': self.tb, 'nlevels': 1,
-                'fit_on': self.fit_on, 'dynamic':self.dynamic, 'kind': self.kind, 'clmap': self.clmap,
-                'quantiles': self.quantiles, 'flat': True, 'depends_on': self.depends_on}
+            self.fitparams = {'idx':0, 'y': self.observed_flat[0], 'wts': self.flat_wts[0],
+                'ntrials': 20000, 'tol': 1.e-7, 'method': 'nelder', 'maxfev': 2000,
+                'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on, 'kind': self.kind,
+                'clmap': self.clmap, 'quantiles': self.quantiles, 'model_id': self.model_id,
+                'depends_on': self.depends_on, 'flat': True, 'disp':True}
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -205,6 +205,19 @@ class RADDCore(object):
         # log all fit and meta information in working directory
         messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
 
+    def generate_model_id(self, appendstr=None):
+        """ generate an identifying string with model information.
+        used for reading and writing model output
+        """
+        model_id = list(self.depends_on)
+        if 'all' in model_id:
+            model_id = ['flat']
+        model_id.append(self.fit_on)
+        model_id.insert(0, self.kind)
+        if appendstr is not None:
+            model_id.append(appendstr)
+        self.model_id = '_'.join(model_id)
+
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF
         """
@@ -214,7 +227,7 @@ class RADDCore(object):
         """ if inits not provided by user, initialize with default values
         see tools.theta.get_default_inits
         """
-        self.inits = theta.get_default_inits(kind=self.kind, dynamic=self.dynamic, depends_on=self.depends_on)
+        self.inits = theta.get_default_inits(kind=self.kind, depends_on=self.depends_on)
 
     def __check_inits__(self, inits):
         """ ensure inits dict is appropriate for Model kind

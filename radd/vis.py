@@ -11,8 +11,7 @@ from IPython.display import HTML, Javascript, display
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 
-sns.set(context='notebook',  font_scale=1.5) # rc={'text.color': 'black', 'axes.labelcolor': 'black', 'figure.facecolor': 'white'}, font_scale=1.5)
-
+sns.set(context='notebook',  font_scale=1.5)
 cdict = colors.get_cpals('all')
 rpal = cdict['rpal']
 bpal = cdict['bpal']
@@ -21,25 +20,6 @@ ppal = cdict['ppal']
 heat = cdict['heat']
 cool = cdict['cool']
 slate = cdict['slate']
-
-def unpack_vector(vector, nlevels=1, nquant=5, nssd=1, kde_quant=False):
-    unpacked = []
-    vector = vector.reshape(nlevels, int(vector.size/nlevels))
-    for v in vector:
-        if nssd>1:
-            # get accuracy at each SSD
-            presp = v[1:1+nssd]
-        else:
-            # get go, stop accuracy
-            presp = v[:2]
-        quant = v[-nquant*2:]
-        quant_cor = quant[:nquant]
-        quant_err = quant[-nquant:]
-        if kde_quant:
-            quant_cor = analyze.kde_fit_quantiles([quant_cor], bw=.005)
-            quant_err = analyze.kde_fit_quantiles([quant_err], bw=.005)
-        unpacked.append([presp, quant_cor, quant_err])
-    return unpacked
 
 def plot_model_fits(y, yhat, fitparams, kde_quant=True, palettes=[gpal, bpal], save=False, cdf=True):
     """ main plotting function for displaying model fit predictions over data
@@ -79,8 +59,7 @@ def plot_model_fits(y, yhat, fitparams, kde_quant=True, palettes=[gpal, bpal], s
     ax1.set_xlabel('SSD (ms)')
     plt.tight_layout()
     if save:
-        savestr = '_'.join([fitparams['kind'], str(fitparams['idx'])+'.png'])
-        plt.savefig(savestr, dpi=600)
+        plt.savefig(fitparams['model_id']+'.png', dpi=600)
         plt.close('all')
 
 def scurves(lines=[],  ax=None, colors=None, labels=None, x=None, get_pse=False, pretune_fx='interpolate'):
@@ -185,22 +164,26 @@ def plot_accuracy(lines=[], yerr=None, x=np.array([0, 1]), ax=None, linestyles=N
     plt.tight_layout()
     sns.despine()
 
+def unpack_vector(vector, nlevels=1, nquant=5, nssd=1, kde_quant=False):
+    unpacked = []
+    vector = vector.reshape(nlevels, int(vector.size/nlevels))
+    for v in vector:
+        if nssd>1:
+            # get accuracy at each SSD
+            presp = v[1:1+nssd]
+        else:
+            # get go, stop accuracy
+            presp = v[:2]
+        quant = v[-nquant*2:]
+        quant_cor = quant[:nquant]
+        quant_err = quant[-nquant:]
+        if kde_quant:
+            quant_cor = analyze.kde_fit_quantiles([quant_cor], bw=.005)
+            quant_err = analyze.kde_fit_quantiles([quant_err], bw=.005)
+        unpacked.append([presp, quant_cor, quant_err])
+    return unpacked
+
 def get_plot_labels(fitparams):
     lbls = np.hstack(fitparams['clmap'].values())
     labels = [[lbl + dtype for dtype in ['_data', '_model']] for lbl in lbls]
     return labels
-
-def plot_kde_cdf(quant, bw=.1, ax=None, color=None):
-    if ax is None:
-        f, ax = plt.subplots(1, figsize=(5, 5))
-    if color is None:
-        color = 'k'
-    kdefits = analyze.kde_fit_quantiles(quant, bw=bw)
-    sns.kdeplot(kdefits, cumulative=True,  color=color, ax=ax, linewidth=2.5)
-    ax.set_xlim(kdefits.min() * .94, kdefits.max() * 1.05)
-    ax.set_ylabel('P(RT<t)')
-    ax.set_xlabel('RT (s)')
-    ax.set_ylim(-.05, 1.05)
-    ax.set_xticklabels(ax.get_xticks() * .1)
-    plt.tight_layout()
-    sns.despine()

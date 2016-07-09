@@ -1,5 +1,6 @@
 #!usr/bin/env python
 from __future__ import division
+import os
 from future.utils import listvalues
 from copy import deepcopy
 import pandas as pd
@@ -15,6 +16,7 @@ class DataHandler(object):
         self.model = model
         self.data = model.data
         self.inits = model.inits
+        self.model_id = model.model_id
         self.idx = model.idx
         self.nidx = model.nidx
         self.max_wt = max_wt
@@ -352,3 +354,33 @@ class DataHandler(object):
             _ = [params.remove(pname) for pname in dep_keys]
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
         self.f_cols = np.hstack([['idx'], params, fit_cols]).tolist()
+
+    def write_results(self, save_observed=False):
+        """ Saves yhatDF and fitDF results to model output dir
+        ::Arguments::
+            save_observed (bool):
+                if True will write observedDF & wtsDF to
+                model output dir
+        """
+        make_fname = lambda savestr: '_'.join([self.model_id, savestr+'.csv'])
+        self.yhatDF.to_csv(make_fname('yhat_df'))
+        self.fitDF.to_csv(make_fname('finfo_df'))
+        if save_observed:
+            self.observedDF.to_csv(make_fname('observed_data'))
+            self.wtsDF.to_csv(make_fname('cost_weights'))
+
+    def make_output_dir(self, custompath=None):
+        """ make directory for writing model output and figures
+        dir is named according to model_id, navigate to dir
+        after ensuring it exists
+        """
+        savepath = os.path.expanduser('~')
+        if custompath is not None:
+            savepath = os.path.join(savepath, custompath)
+        os.chdir(savepath)
+        abspath = os.path.abspath('.')
+        abs_savepath = os.path.join(abspath, self.model_id)
+        if not os.path.isdir(abs_savepath):
+            os.makedirs(abs_savepath)
+        os.chdir(abs_savepath)
+        print('Moving to: {}'.format(os.path.abspath('.')))

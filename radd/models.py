@@ -14,9 +14,11 @@ class Simulator(object):
     """ Core code for simulating models. All cond, trials, &
     timepoints are simulated simultaneously
     """
-    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False):
+    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False, dynamic=False):
         self.learn = learn
         self.kind = kind
+        if 'x' in self.kind:
+            self.dynamic = True
         self.pc_map = pc_map
         self.fitparams = fitparams
         self.__update_steps__(dt=dt, si=si)
@@ -40,7 +42,6 @@ class Simulator(object):
         self.nlevels = fp['y'].ndim
         self.ntot = fp['ntrials']
         self.quantiles = fp['quantiles']
-        self.dynamic = fp['dynamic']
         # include SSD's if stop-signal task
         if 'ssd_info' in list(fp):
             self.ssd_info = fp['ssd_info']
@@ -127,13 +128,9 @@ class Simulator(object):
         elif 'irace' in self.kind:
             self.sim_fx = self.simulate_irace
             self.analyze_fx = self.analyze_reactive
-        # SET STATIC/DYNAMIC BASIS FUNCTIONS
-        if 'x' in self.kind and self.dynamic == 'hyp':
-            # dynamic bias is hyperbolic
+        # dynamic bias is hyperbolic cosine
+        if self.dynamic:
             self.dynamics_fx = lambda p, t: np.cosh(p['xb'][:, na] * t)
-        elif 'x' in self.kind and self.dynamic == 'exp':
-            # dynamic bias is exponential
-            self.dynamics_fx = lambda p, t: np.exp(p['xb'][:, na] * t)
         else:
             self.dynamics_fx = lambda p, t: np.ones((self.nlevels, len(t)))
 
@@ -263,8 +260,9 @@ class Simulator(object):
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
         ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
         Pg, xtb, Ps, ss_on = self.__update_trace_params__(p, ss=True)
-
+        # generate Go traces (nlevels, ntrials, ntimepoints)
         DVg = xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
+        # generate SS traces (nlevels, nSSD, ntrials_perssd, ntimepoints)
         DVs = csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
@@ -277,6 +275,7 @@ class Simulator(object):
         p = self.vectorize_params(p)
         Pg, Tg, dvg = self.__update_go_process__(p)
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
+        # generate Go traces (nlevels, ntrials, ntimepoints)
         DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
         if analyze:
             return self.analyze_fx(DVg, p)
@@ -289,6 +288,8 @@ class Simulator(object):
         ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
         nl, ntot = self.nlevels, self.ntot
         gdec = self.go_resp(DVg, p['a'])
+        # if dpm, simply ss_resp() uses 0
+        # as boundary simply ignores sec. arg
         sdec = self.ss_resp(DVs, p['a'])
         gort = self.go_RT(p['tr'], gdec)
         ssrt = self.ss_RT(ssd, sdec)

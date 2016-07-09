@@ -186,7 +186,7 @@ def get_stepsize_scalars(keys, nlevels=1):
         stepsize_scalars = stepsize_scalars.squeeze()
     return stepsize_scalars
 
-def get_default_inits(kind='dpm', dynamic='hyp', depends_on={}):
+def get_default_inits(kind='dpm', depends_on={}):
     """ if user does not provide inits dict when initializing Model instance,
     grab default dictionary of init params reasonably suited for Model kind
     """
