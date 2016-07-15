@@ -119,12 +119,10 @@ class Agent(Environment):
         B = ch[ch==1].size
         C = ch[ch==2].size
         D = ch[ch==3].size
-
         # payoff (P) score
         P = (C+D) - (A+B)
         # sensitivity (Q) score
         Q = (B+D) - (A+C)
-
         return [P, Q]
 
     def plot_summary(self, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)',
