@@ -526,6 +526,7 @@
     }
     .cm-s-ipython.CodeMirror {
      background: #eeeeee;
+     background: #eeeeee;
      color: #303030;
      border-radius: 2px;
     }
@@ -662,8 +663,8 @@
      font-size: 9.5pt;
     }
     div.input_area {
-     background-color: #ffffff;
-     background: #ffffff;
+     background-color: #eeeeee;
+     background: #eeeeee;
      margin-bottom: 0px;
      border: 0px;
      border-top-left-radius: 0px;
