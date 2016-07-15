@@ -21,7 +21,7 @@ def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='a
     names_arrays = zip(array_names, arrays)
     y_str, wts_str, yhat_str = map(stringify, names_arrays)
 
-    if fp['y'].ndim==1:
+    if fp['nlevels']==1:
         fit_on = ' '.join([fit_on, 'FLAT'])
         dep_id = "flat model (no conditional parameters)"
         fname = './' + kind + '_flat.txt'

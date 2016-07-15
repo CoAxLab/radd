@@ -136,6 +136,30 @@ def get_exp_counts(simdf, obs_quant, n_obs, quantiles=([.10, .30, .50, .70, .90]
     expected = np.ceil(np.diff([0] + [pscore(simrt, oq_rt) * .01 for oq_rt in oq] + [1]) * n_obs)
     return expected, exp_quant
 
+
+def pwts_group_error_calc(handler):
+    """ get stdev across subjects (and any conds) in observedDF
+    weight perr by inverse of counts for each resp. probability measure
+    previously a bound method of dfhandler --> DataHandler class
+    """
+    groupedDF = handler.observedDF.groupby(handler.conds)
+    perr = groupedDF.agg(np.nanstd).loc[:, handler.p_cols].values
+    counts = groupedDF.count().loc[:, handler.p_cols].values
+    nsplits = handler.nlevels * handler.nconds
+    ndata = len(handler.p_cols)
+    # replace stdev of 0 with next smallest value in vector
+    perr[perr==0.] = perr[perr>0.].min()
+    p_wt_bycount = perr * (1./counts)
+    # set wts equal to ratio --> median_perr / all_perr_values
+    pwts_ratio = np.nanmedian(p_wt_bycount, axis=1)[:, None] / p_wt_bycount
+    # set extreme values to max_wt arg val
+    pwts_ratio[pwts_ratio >= handler.max_wt] = handler.max_wt
+    # shape pwts_ratio to conform to wtsDF
+    idx_pwts = np.array([pwts_ratio]*handler.nidx)
+    return idx_pwts.reshape(handler.nidx * nsplits, ndata)
+
+
+
 def get_intersection(iter1, iter2):
     """ get the intersection of two iterables ("items in-common")
     """

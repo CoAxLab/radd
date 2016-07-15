@@ -71,7 +71,7 @@ class Optimizer(object):
         self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
         self.constants = deepcopy(['a', 'tr', 'v', 'xb'])
 
-    def hop_around(self, inits_list, pbars=None):
+    def hop_around(self, inits, pbars=None):
         """ initialize model with niter randomly generated parameter sets
         and perform global minimization using basinhopping algorithm
         ::Arguments::
@@ -81,15 +81,12 @@ class Optimizer(object):
             parameter set with the best fit
         """
         callback = None
-        progress = False
-        if pbars is not None:
-            progress = True
         xpopt, xfmin = [], []
-        for i, inits in enumerate(inits_list):
-            if progress:
+        for i, p in enumerate(inits):
+            if pbars is not None:
                 pbars.update(name='glb_basin', i=i)
                 callback = pbars.callback
-            popt, fmin = self.run_basinhopping(p=inits, is_flat=True, callback=callback)
+            popt, fmin = self.run_basinhopping(p=p, callback=callback)
             xpopt.append(popt)
             xfmin.append(fmin)
         if self.fitparams['disp']:
@@ -98,23 +95,24 @@ class Optimizer(object):
         # return parameters at the global basin
         return xpopt[np.argmin(xfmin)]
 
-    def run_basinhopping(self, p, is_flat=True, callback=None):
+    def run_basinhopping(self, p, callback=None):
         """ uses fmin_tnc in combination with basinhopping to perform bounded global
          minimization of multivariate model
         ::Arguments::
-            is_flat (bool <True>):
-              if True, optimize all params in p
+            p (dict):
+                parameter dictionary
+            callback (function):
+                callable function for displaying optimization progress
         """
         bp = self.basinparams
-        if is_flat:
+        nl = self.fitparams['nlevels']
+        if nl==1:
             basin_keys = np.sort(list(p))
             xp = dict(deepcopy(p))
             basin_params = theta.scalarize_params(xp)
-            nl = 1
         else:
             basin_keys = np.sort(list(self.pc_map))
             basin_params = deepcopy(p)
-            nl = self.fitparams['y'].ndim
         self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys)
         # make list of init values for all pkeys included in fit
         x0 = np.hstack(np.hstack([basin_params[pk]*np.ones(nl) for pk in basin_keys]))
@@ -137,17 +135,17 @@ class Optimizer(object):
             p[k] = xopt[i]
         return p, funcmin
 
-    def gradient_descent(self, inits=None, is_flat=True):
+    def gradient_descent(self, p=None):
         """ Optimizes parameters following specified parameter
         dependencies on task conditions (i.e. depends_on={param: cond})
         """
         fp = self.fitparams
-        if inits is None:
-            inits = dict(deepcopy(self.inits))
+        if p is None:
+            p = dict(deepcopy(self.inits))
         optkws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev']}
         # make lmfit Parameters object to keep track of
         # parameter names and dependencies during fir
-        lmParams = theta.loadParameters(inits=inits, pc_map=self.pc_map, is_flat=is_flat, kind=self.kind)
+        lmParams = theta.loadParameters(inits=p, pc_map=self.pc_map, is_flat=fp['flat'], kind=self.kind)
         lmMinimizer = minimize(self.simulator.cost_fx, lmParams, method=fp['method'], options=optkws)
         self.lmMinimizer = lmMinimizer
         #self.lmMinimizer = deepcopy(lmMinimizer)
@@ -161,5 +159,5 @@ class Optimizer(object):
         # get model-predicted yhat vector
         yhat = (lmMinimizer.residual / self.simulator.wts) + self.simulator.y
         # un-vectorize all parameters except conditionals
-        popt = theta.scalarize_params(p, pc_map=self.pc_map, is_flat=is_flat)
+        popt = theta.scalarize_params(p, pc_map=self.pc_map, is_flat=fp['flat'])
         return finfo, popt, yhat

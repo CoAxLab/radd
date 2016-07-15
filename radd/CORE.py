@@ -9,7 +9,7 @@ from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from lmfit import fit_report
 from radd.tools import analyze, messages
-from radd import theta
+from radd import theta, vis
 
 class RADDCore(object):
     """ Parent class for constructing attributes and methods used by
@@ -19,8 +19,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False):
-
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False, custompath=None):
         self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
@@ -47,6 +46,9 @@ class RADDCore(object):
         self.__prepare_fit__()
         self.iter_flat = zip(self.observed_flat, self.flat_wts)
         self.iter_cond = zip(self.observed, self.cond_wts)
+        self.finished_sampling = True
+        self.track_subjects = False
+        self.track_basins = False
 
     def __prepare_fit__(self):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
@@ -122,10 +124,11 @@ class RADDCore(object):
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_wts
             self.fitparams = {'idx':0, 'y': self.observed_flat[0], 'wts': self.flat_wts[0],
-                'ntrials': 20000, 'tol': 1.e-7, 'method': 'nelder', 'maxfev': 2000,
+                'ntrials': 20000, 'tol': 1.e-30, 'method': 'nelder', 'maxfev': 2000,
                 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on, 'kind': self.kind,
                 'clmap': self.clmap, 'quantiles': self.quantiles, 'model_id': self.model_id,
                 'depends_on': self.depends_on, 'flat': True, 'disp':True}
+            self.fitparams = pd.Series(self.fitparams)
         else:
             # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
@@ -141,7 +144,7 @@ class RADDCore(object):
         """
         if not hasattr(self, 'basinparams'):
             self.basinparams =  {'ninits': 5, 'nsamples': 5000, 'interval': 10, 'T': 1.,
-            'disp': False, 'stepsize': .05, 'nsuccess': 40, 'tol': 1.e-4, 'method': 'TNC',
+            'disp': False, 'stepsize': .05, 'nsuccess': 40, 'tol': 1.e-20, 'method': 'TNC',
             'init_sample_method': 'best'}
         else:
             # fill with kwargs for the upcoming fit
@@ -157,7 +160,7 @@ class RADDCore(object):
         else:
             # get ssd vector for fit number idx
             ssd = self.ssd[self.fitparams['idx']]
-        if self.fitparams['flat']:
+        if self.fitparams.nlevels==1:
             # single vector (nlevels=1), don't squeeze
             ssd = np.mean(ssd, axis=0, keepdims=True)
         nssd = ssd.shape[-1]
@@ -180,12 +183,14 @@ class RADDCore(object):
             self.pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
 
     def sample_param_sets(self, pkeys=None, nsamples=None):
+        self.finished_sampling = False
         if pkeys is None:
             pkeys = np.sort(list(self.inits))
         if nsamples is None:
             nsamples = self.basinparams['nsamples']
         self.param_sets = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list_of_dicts=True)
         self.param_yhats = [self.opt.simulator.sim_fx(params_i) for params_i in self.param_sets]
+        self.finished_sampling = True
 
     def filter_param_sets(self):
         if not hasattr(self, 'param_sets'):
@@ -194,6 +199,53 @@ class RADDCore(object):
         keep_method = self.basinparams['init_sample_method']
         inits_list, globalmin = theta.filter_param_sets(self.param_sets, self.param_yhats, self.fitparams, nkeep=nkeep, keep_method=keep_method)
         return inits_list, globalmin
+
+    def fill_yhatDF(self, yhat=None, fitparams=None):
+        """ wrapper for filling & updating model yhatDF
+        """
+        if yhat is None:
+            yhat = self.yhat
+        if fitparams is None:
+            fitparams = self.fitparams
+        self.handler.fill_yhatDF(data=yhat, fitparams=fitparams)
+        self.yhatDF = self.handler.yhatDF.copy()
+
+    def fill_fitDF(self, finfo=None, fitparams=None):
+        """ wrapper for filling & updating model fitDF
+        """
+        if finfo is None:
+            finfo = self.finfo
+        if fitparams is None:
+            fitparams = self.fitparams
+        self.handler.fill_fitDF(data=finfo, fitparams=fitparams)
+        self.fitDF = self.handler.fitDF.copy()
+
+    def write_results(self, save_observed=False):
+        """ wrapper for dfhandler.write_results saves yhatDF and fitDF
+        results to model output dir
+        ::Arguments::
+            save_observed (bool):
+                if True will write observedDF & wtsDF to
+                model output dir
+        """
+        self.handler.write_results(save_observed)
+
+    def plot_model_fits(self, y=None, yhat=None, fitparams=None, kde=True, err=None, save=False, bw=.008, sameaxis=False):
+        """ wrapper for radd.tools.vis.plot_model_fits """
+        from radd import vis
+        if fitparams is None:
+            fitparams=self.fitparams
+        if y is None:
+            y = fitparams['y']
+        if yhat is None:
+            if hasattr(self, 'yhat'):
+                yhat = self.yhat
+            else:
+                yhat = deepcopy(y)
+                print("model is unoptimized, no yhat provided")
+        if self.fit_on=='average' and err is None:
+            err = self.handler.observed_err
+        vis.plot_model_fits(y, yhat, fitparams, err=err, save=save, bw=bw, sameaxis=sameaxis)
 
     def log_fit_info(self, finfo, popt, fitparams):
         """ write meta-information about latest fit
@@ -217,6 +269,22 @@ class RADDCore(object):
         if appendstr is not None:
             model_id.append(appendstr)
         self.model_id = '_'.join(model_id)
+
+    def make_progress_bars(self):
+        """ initialize progress bars to track fit progress (subject fits,
+        init optimization, etc)
+        """
+        from radd.tools.utils import NestedProgress
+        n = self.basinparams['ninits']
+        pbars = NestedProgress(name='glb_basin', n=n, title='Global Basin', color='green')
+        pbars.add_bar(name='lcl_basin', bartype='infobar', title='Current Basin', color='red')
+        self.track_basins=True
+        if self.fit_on=='subjects':
+            self.track_subjects = True
+            pbars.add_bar(name='idx', n=self.nidx, title='Subject Fits', color='blue')
+        self.fitparams['disp']=False
+        self.basinparams['disp']=False
+        return pbars
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF

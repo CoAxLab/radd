@@ -38,9 +38,9 @@ class PBinJ(object):
                 args = [self.title, self.color, "500", self.barid, '0%', 'left']
                 self.update = self.update_colorbar
             else:
-                args = [self.title, self.color, "105", self.barid, '100%', 'center']
+                args = [self.title, self.color, "108", self.barid, '100%', 'center']
                 self.update = self.update_progress
-            self.bar="""<div<p>{0}</p> <div style="border: 1px solid {1}; width:{2}px">
+            self.bar="""<div<p>{0}</p> <div style="border: 2px solid {1}; width:{2}px">
             <div id="{3}" style="background-color:{1}; width:{4}; text:''; color:#fff; text-align:{5};">
             &nbsp;</div> </div> </div>""".format(*args)
 
@@ -60,7 +60,7 @@ class PBinJ(object):
         if self.displayed==False:
             self.display_bars()
         if i is not None:
-            display(Javascript("$('div#{}').width('{:.2f}%')".format(self.barid, ((i+1)*1./(self.n+1))*100)))
+            display(Javascript("$('div#{}').width('{:.2f}%')".format(self.barid, ((i+1)*1./(self.n))*100)))
         if new_progress is not None:
             self.update_progress(new_progress)
 

@@ -65,6 +65,7 @@ class DataHandler(object):
             self.observed_flat = [flatvalues(odf.mean())]
             self.flat_wts = [flatvalues(wdf.mean())]
 
+
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
         """
@@ -99,7 +100,12 @@ class DataHandler(object):
             # fill wtsDF with resp. probability wts (ratios)
             self.wtsDF.loc[:, self.p_cols] = idx_pwts
         else:
-            self.wtsDF.loc[:, masterDF_header] = 1
+            self.wtsDF.loc[:, self.p_cols+self.q_cols] = 1
+        if self.fit_on=='average':
+            observed_err = self.observedDF.groupby(self.conds).std()
+            self.observed_err = observed_err.loc[:, 'acc':].values.squeeze()
+        else:
+            self.varDF=None
 
     def rangl_data(self, data):
         """ called by __make_dataframes__ to generate
@@ -200,17 +206,12 @@ class DataHandler(object):
         percents = self.quantiles
         nquant = percents.size
         # estimate quantile weights
-        idx_qwts = self.mj_quanterr()
+        idx_qwts = self.idx_quant_weights()
         # estimate resp. probability weights
-        if self.model.fit_on=='subjects':
-            idx_pwts = self.pwts_idx_error_calc()
-        elif self.model.fit_on=='average':
-            # repeat for all rows in wtsDF (idx x ncond x nlevels)
-            idx_pwts = self.pwts_group_error_calc()
-            #idx_pwts = self.pwts_idx_error_calc()
+        idx_pwts = self.idx_acc_weights()
         return idx_qwts, idx_pwts
 
-    def mj_quanterr(self):
+    def idx_quant_weights(self):
         """ calculates weight vectors for reactive RT quantiles by
         first estimating the SEM of RT quantiles for corr. and err. responses.
         (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
@@ -243,27 +244,7 @@ class DataHandler(object):
         # reshape to fit in wtsDF[:, q_cols]
         return idx_qratio.reshape(nidx * nsplits, nquant * 2)
 
-    def pwts_group_error_calc(self):
-        """ get stdev across subjects (and any conds) in observedDF
-        weight perr by inverse of counts for each resp. probability measure
-        """
-        groupedDF = self.observedDF.groupby(self.conds)
-        perr = groupedDF.agg(np.nanstd).loc[:, self.p_cols].values
-        counts = groupedDF.count().loc[:, self.p_cols].values
-        nsplits = self.nlevels * self.nconds
-        ndata = len(self.p_cols)
-        # replace stdev of 0 with next smallest value in vector
-        perr[perr==0.] = perr[perr>0.].min()
-        p_wt_bycount = perr * (1./counts)
-        # set wts equal to ratio --> median_perr / all_perr_values
-        pwts_ratio = np.nanmedian(p_wt_bycount, axis=1)[:, None] / p_wt_bycount
-        # set extreme values to max_wt arg val
-        pwts_ratio[pwts_ratio >= self.max_wt] = self.max_wt
-        # shape pwts_ratio to conform to wtsDF
-        idx_pwts = np.array([pwts_ratio]*self.nidx)
-        return idx_pwts.reshape(self.nidx * nsplits, ndata)
-
-    def pwts_idx_error_calc(self, index=['idx']):
+    def idx_acc_weights(self, index=['idx']):
         """ count number of observed responses across levels, transform into ratios
         (counts_at_each_level / np.median(counts_at_each_level)) for weight
         subject-level p(response) values in cost function.
@@ -369,7 +350,7 @@ class DataHandler(object):
             self.observedDF.to_csv(make_fname('observed_data'))
             self.wtsDF.to_csv(make_fname('cost_weights'))
 
-    def make_output_dir(self, custompath=None):
+    def make_results_dir(self, custompath=None, get_path=True):
         """ make directory for writing model output and figures
         dir is named according to model_id, navigate to dir
         after ensuring it exists
@@ -377,10 +358,10 @@ class DataHandler(object):
         savepath = os.path.expanduser('~')
         if custompath is not None:
             savepath = os.path.join(savepath, custompath)
-        os.chdir(savepath)
-        abspath = os.path.abspath('.')
+        abspath = os.path.abspath(savepath)
         abs_savepath = os.path.join(abspath, self.model_id)
         if not os.path.isdir(abs_savepath):
             os.makedirs(abs_savepath)
         os.chdir(abs_savepath)
-        print('Moving to: {}'.format(os.path.abspath('.')))
+        if get_path:
+            return abs_savepath

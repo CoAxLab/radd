@@ -34,41 +34,35 @@ class Model(RADDCore):
     """
 
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
-        self.track_subjects = False
-        self.track_basins = False
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, inits_list=None, progress=True, plot_fits=True, save_plot=False, kde_quant_plots=True, keep_log=False, save_results=True, save_observed=False, custompath=None):
+    def optimize(self, fit_flat=True, fit_cond=True, progress=True, plot_fits=True, saveplot=False, keeplog=False, save_results=True, save_observed=False, custompath=None, pbars=None, sameaxis=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
-        if np.any([keep_log, save_plot, save_results]):
-            self.handler.make_output_dir(custompath=custompath)
-        popt = self.__check_inits__(self.inits)
+        if np.any([keeplog, saveplot, save_results]):
+            self.results_dir = self.handler.make_results_dir(custompath, get_path=True)
         if progress:
-            self.make_progress_bars()
-        nfits = len(self.observed)
-        for i in range(nfits):
+            pbars = self.make_progress_bars()
+        for i in range(len(self.observed)):
             if self.track_subjects:
-                self.pbars.update(name='idx', i=i, new_progress=self.idx[i])
-            if fit_flat or self.is_flat:
-                y, wts = self.iter_flat[i]
-                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
-                finfo, popt, yhat = self.optimize_flat(inits_list=inits_list, progress=progress)
-            if fit_cond and not self.is_flat:
+                pbars.update(name='idx', i=i, new_progress=self.idx[i])
+            y, wts = self.iter_flat[i]
+            self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
+            finfo, popt, yhat = self.optimize_flat(pbars=pbars)
+            if not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
-                finfo, popt, yhat = self.optimize_conditional(popt, multiopt)
-            self.assess_fit(finfo, popt, yhat, keep_log)
+                finfo, popt, yhat = self.optimize_conditional(p=popt)
+            self.assess_fit(finfo, popt, yhat, keeplog)
             if plot_fits:
-                self.plot_model_fits(y=y, yhat=yhat, kde_quant=kde_quant_plots, save=save_plot)
+                self.plot_model_fits(y=y, yhat=yhat, save=saveplot, sameaxis=sameaxis)
         if progress:
-            self.pbars.clear()
+            pbars.clear()
         if save_results:
             self.write_results(save_observed)
 
-
-    def optimize_flat(self, inits_list=None, progress=False):
+    def optimize_flat(self, pbars=None):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -79,20 +73,19 @@ class Model(RADDCore):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
-        globalmin = 1.; pbars=None;
-        if not hasattr(self, 'param_yhats'):
+        globalmin = 1.;
+        if not self.finished_sampling:
             self.sample_param_sets()
-        if inits_list is None:
-            inits_list, globalmin = self.filter_param_sets()
-        if self.track_basins:
-            pbars = self.pbars.reset_bar('glb_basin', init_state=globalmin)
+        inits, globalmin = self.filter_param_sets()
+        if pbars is not None:
+            pbars.reset_bar('glb_basin', init_state=globalmin)
         # Global Optimization w/ Basinhopping (+TNC)
-        p = self.opt.hop_around(inits_list=inits_list, pbars=pbars)
+        p = self.opt.hop_around(inits=inits, pbars=pbars)
         # Flat Simplex Optimization of Parameters at Global Minimum
-        finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=True)
+        finfo, popt, yhat = self.opt.gradient_descent(p=p)
         return finfo, popt, yhat
 
-    def optimize_conditional(self, p, multiopt=True):
+    def optimize_conditional(self, p=None):
         """ optimizes full model to all conditions in data
         ::Arguments::
             p (dict): parameter dictionary to initalize model, if None uses init params
@@ -101,18 +94,19 @@ class Model(RADDCore):
             finfo (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt (dict): optimized parameters dictionary
         """
-        if multiopt:
-            # Pretune Conditional Parameters
-            p, fmin = self.opt.run_basinhopping(p, is_flat=False)
+        if p is None:
+            p = self.__check_inits__(self.inits)
+        # Pretune Conditional Parameters
+        p, fmin = self.opt.run_basinhopping(p)
         # Final Simplex Optimization
-        finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=False)
+        finfo, popt, yhat = self.opt.gradient_descent(p=p)
         return finfo, popt, yhat
 
     def assess_fit(self, finfo, popt, yhat, keep_log=False):
         """ wrapper for analyze.assess_fit calculates and stores
         rchi, AIC, BIC and other fit statistics
         """
-        fp = dict(deepcopy(self.fitparams))
+        fp = deepcopy(self.fitparams)
         fp['yhat'] = yhat.flatten()
         y = fp['y'].flatten()
         wts = fp['wts'].flatten()
@@ -134,67 +128,7 @@ class Model(RADDCore):
             self.fill_fitDF(finfo=finfo, fitparams=fp)
         except Exception:
             print('fill_df error, already optimized? try new model')
-            print('self.finfo, self.popt, and self.yhat still accessible from last fit')
-
-    def fill_yhatDF(self, yhat=None, fitparams=None):
-        """ wrapper for filling & updating model yhatDF
-        """
-        if yhat is None:
-            yhat = self.yhat
-        if fitparams is None:
-            fitparams = self.fitparams
-        self.handler.fill_yhatDF(data=yhat, fitparams=fitparams)
-        self.yhatDF = self.handler.yhatDF.copy()
-
-    def fill_fitDF(self, finfo=None, fitparams=None):
-        """ wrapper for filling & updating model fitDF
-        """
-        if finfo is None:
-            finfo = self.finfo
-        if fitparams is None:
-            fitparams = self.fitparams
-        self.handler.fill_fitDF(data=finfo, fitparams=fitparams)
-        self.fitDF = self.handler.fitDF.copy()
-
-    def write_results(self, save_observed=False):
-        """ wrapper for dfhandler.write_results saves yhatDF and fitDF
-        results to model output dir
-        ::Arguments::
-            save_observed (bool):
-                if True will write observedDF & wtsDF to
-                model output dir
-        """
-        self.handler.write_results(save_observed)
-
-    def plot_model_fits(self, y=None, yhat=None, fitparams=None, kde_quant=True, save=False):
-        """ wrapper for radd.tools.vis.plot_model_fits """
-        if fitparams is None:
-            fitparams=self.fitparams
-        if y is None:
-            y = fitparams['y']
-        if yhat is None:
-            if hasattr(self, 'yhat'):
-                yhat = self.yhat
-            else:
-                yhat = deepcopy(y)
-                print("model is unoptimized and no yhat array provided")
-                print("plotting with yhat as copy of y")
-        plot_model_fits(y, yhat, fitparams, kde_quant=kde_quant, save=save)
-
-    def make_progress_bars(self):
-        """ initialize progress bars to track fit progress (subject fits,
-        init optimization, etc)
-        """
-        from radd.tools.utils import NestedProgress
-        n = self.basinparams['ninits']
-        self.pbars = NestedProgress(name='glb_basin', n=n, title='Global Basin')
-        self.pbars.add_bar(name='lcl_basin', bartype='infobar', title='Current Basin', color='red')
-        self.track_basins=True
-        if self.fit_on=='subjects':
-            self.track_subjects = True
-            self.pbars.add_bar(name='idx', n=self.nidx, title='Subject Fits', color='green')
-        self.fitparams['disp']=False
-        self.basinparams['disp']=False
+            print('latest finfo, popt, yhat available as model attributes')
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using

@@ -14,9 +14,13 @@ class Simulator(object):
     """ Core code for simulating models. All cond, trials, &
     timepoints are simulated simultaneously
     """
-    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False, dynamic=False):
+    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.001, si=.01, learn=False, dynamic=False):
         self.learn = learn
         self.kind = kind
+        self.ntime = 0
+        if 'ssd_info' in fitparams.keys():
+            self.ssd_info = fitparams['ssd_info']
+            self.include_ss=True
         if 'x' in self.kind:
             self.dynamic = True
         self.pc_map = pc_map
@@ -27,35 +31,25 @@ class Simulator(object):
     def __update__(self, fitparams=None):
         """ update critical simulator parameters for each fit
         by providing an updated fitparams dictionary"""
-        if fitparams:
-            fp = dict(deepcopy(fitparams))
-            self.fitparams = fp
-        else:
-            fp = dict(deepcopy(self.fitparams))
-        self.ntime = 0
+        if fitparams is not None:
+            self.fitparams = fitparams
+        fp = deepcopy(self.fitparams)
+        # non conditional parameters & meta-data
+        self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']
         self.tb = fp['tb']
-        # set y, wts to be used cost function
-        self.y = fp['y'].flatten()
-        self.wts = fp['wts'].flatten()
-        # misc data & model parameters used during
-        # simulations/optimizations
-        self.nlevels = fp['y'].ndim
+        self.nlevels = fp['nlevels']
         self.ntot = fp['ntrials']
         self.quantiles = fp['quantiles']
+        # set empirical data, wts vectors
+        self.y = fp['y'].flatten()
+        self.wts = fp['wts'].flatten()
         # include SSD's if stop-signal task
-        if 'ssd_info' in list(fp):
+        if self.include_ss:
             self.ssd_info = fp['ssd_info']
-            ss=True
-        self.__update_rand__(ss)
-        # non conditional parameters
-        self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']
-        if self.nlevels==1 or fp['flat']:
-            self.is_flat_fit = True
-        else:
-            self.is_flat_fit = False
-        if not self.is_flat_fit and len(list(self.pc_map))>=1:
+        if self.nlevels>1:
             # remove any parameters free to vary across experimental conditions
             map((lambda pkey: self.pvc.remove(pkey)), list(self.pc_map))
+        self.__update_rand_vectors__()
         self.__init_model_functions__()
         self.__init_analyze_functions__()
 
@@ -171,7 +165,7 @@ class Simulator(object):
             self.dx = np.sqrt(p['si'] * self.dt)
         if 'xb' not in list(p):
             p['xb'] = 1.0
-        if self.is_flat_fit:
+        if self.nlevels==1:
             p = theta.scalarize_params(p)
             return {pk:p[pk]*nl_ones for pk in list(p)}
         for pkey in self.pvc:
@@ -183,36 +177,32 @@ class Simulator(object):
                 p[pkey] = array([p[pc] for pc in pkc]).astype(np.float32)
         return p
 
-    def __update_rand__(self, ss=False):
-        """ update rvector (random_floats)
-        for go process and get get dynamic bias signal if 'x' model
+    def __update_rand_vectors__(self):
+        """ update rvector (random_floats) for Go and Stop traces
         """
         nl, ntot, ntime = self.nlevels, self.ntot, self.ntime
         self.rvector = rs((nl, ntot, ntime))
-        if ss:
+        if self.include_ss:
             ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
             self.rvector_ss=self.rvector[:, :nss, :].reshape(nl, nssd, nss_per, ntime)
 
-    def __update_trace_params__(self, p, ss=False):
+    def __update_trace_params__(self, p):
         """ update Pg (probability of DVg +dx) and Tg (n timepoints)
         for go process and get get dynamic bias signal if 'x' model
         """
         Pg = 0.5 * (1 + p['v'] * self.dx / self.si)
         Tg = np.ceil((self.tb - p['tr']) / self.dt).astype(int)
-        #t = csum([self.dt] * Tg.max())
-        if ss:
-            Ps, Ts = self.__update_ss_trace_params__(p)
-            ss_on = 0
-            if 'dpm' in self.kind:
-                ss_on = np.where(Ts<Tg[:, na], Tg[:, na]-Ts, 0)
-        ntime_new = np.max([Tg.max(), Ts.max()])
-        if ntime_new > self.ntime:
-            self.ntime = ntime_new
-            self.__update_rand__(ss)
-        xtb = self.dynamics_fx(p, csum([self.dt] * self.ntime))
-        return Pg, xtb, Ps, ss_on
+        self.ntime_new = Tg.max()
+        out = [Pg]
+        if self.include_ss:
+            out.extend(self.__update_ss_trace_params__(p, Tg))
+        if self.ntime_new > self.ntime:
+            self.ntime = self.ntime_new
+            self.__update_rand_vectors__()
+        self.xtb = self.dynamics_fx(p, csum([self.dt] * self.ntime))
+        return out
 
-    def __update_ss_trace_params__(self, p, sso=0):
+    def __update_ss_trace_params__(self, p, Tg, sso=0):
         """ update Ps (probability of DVs +dx) and Ts (n timepoints)
         for condition and each SSD of stop process
         """
@@ -221,7 +211,11 @@ class Simulator(object):
             sso = p['sso']
         Ps = 0.5 * (1 + p['ssv'] * self.dx / self.si)
         Ts = np.ceil((self.tb - (ssd + sso)) / self.dt).astype(int)
-        return Ps, Ts
+        ss_on = 0
+        if 'dpm' in self.kind:
+            ss_on = np.where(Ts<Tg[:, na], Tg[:, na]-Ts, ss_on)
+        self.ntime_new = np.max([self.ntime_new, Ts.max()])
+        return [Ps, ss_on]
 
     def simulate_dpm(self, p, analyze=True):
         """ Simulate the dependent process model (DPM)
@@ -238,14 +232,12 @@ class Simulator(object):
         p = self.vectorize_params(p)
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
         ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
-        Pg, xtb, Ps, ss_on = self.__update_trace_params__(p, ss=True)
-
+        Pg, Ps, ss_on = self.__update_trace_params__(p)
         # generate Go traces (nlevels, ntrials, ntimepoints)
-        DVg = xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
+        DVg = self.xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
         ssDVg = DVg[:, :nss, :].reshape(nl, nssd, nss_per, DVg.shape[-1])
         # use array-indexing to initialize SS at DVg[:nlevels, :ssd, :trials, t=SSD]
         ssBase = ssDVg[np.arange(nl)[:,na], ssd_ix, :, ss_on][:,:,:,na]
-        #self.rvector_ss=self.rvector[:, :nss, :].reshape(nl, nssd, nss_per, self.ntime)
         # add ssBaseline to SS traces (nlevels, nSSD, ntrials_perssd, ntimepoints)
         DVs = ssBase + csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
         if analyze:
@@ -259,9 +251,9 @@ class Simulator(object):
         p = self.vectorize_params(p)
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
         ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
-        Pg, xtb, Ps, ss_on = self.__update_trace_params__(p, ss=True)
+        Pg, Ps, ss_on = self.__update_trace_params__(p)
         # generate Go traces (nlevels, ntrials, ntimepoints)
-        DVg = xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
+        DVg = self.xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
         # generate SS traces (nlevels, nSSD, ntrials_perssd, ntimepoints)
         DVs = csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
         if analyze:
@@ -273,10 +265,10 @@ class Simulator(object):
         (see simulate_dpm() for I/O details)
         """
         p = self.vectorize_params(p)
-        Pg, Tg, dvg = self.__update_go_process__(p)
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
+        Pg = self.__update_trace_params__(p)
         # generate Go traces (nlevels, ntrials, ntimepoints)
-        DVg = xtb[:,na] * csum(np.where((rs((nl, ntot, Tg.max())).T < Pg), dx, -dx).T, axis=2)
+        DVg = self.xtb[:,na] * csum(np.where(self.rvector.T < Pg, dx, -dx).T, axis=2)
         if analyze:
             return self.analyze_fx(DVg, p)
         return DVg
@@ -317,17 +309,20 @@ class Simulator(object):
         with learning
         """
         p = self.vectorize_params(p)
-        Pg, Tg = self.__update_go_process__(p)
-        Ps, Ts = self.__update_stop_process__(p)
-        ssd, nssd, nss, nss_per_ssd, ssd_ix = self.ssd_info
+        Pg, xtb, Ps, ss_on = self.__update_go_process__(p)
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
+        ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
 
         for trial in range(ntot):
-            DVg = self.xtb[:, na] * csum(np.where((rs((nl, Tg.max())).T<Pg), dx, -dx).T, axis=1)
+            DVg = xtb[:, na] * csum(np.where(self.rvector[:, trial, :].T < Pg, dx, -dx).T, axis=2)
             # INITIALIZE DVs FROM DVg(t=SSD)
             if trial%2:
-                init_ss = array([[DVg[i, ix] for ix in np.where(Ts<Tg[i], Tg[i]-Ts, 0)] for i in range(nl)])
-                DVs = init_ss[:,:,na] + csum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
+                DVg[:, ]
+                ssBase = ssDVg[np.arange(nl)[:,na], ssd_ix, :, ss_on][:,:,:,na]
+                DVs = ssBase + csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
+                #ssBase = DVg[np.arange(nl)[:,na], ssd_ix, :, ss_on][:,:,:,na]
+                #DVs = init_ss[:,:,na] + csum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)
+                DVs = csum(np.where(rs((nl, Ts.max()))<Ps, dx, -dx), axis=1)
         if analyze:
             return self.analyze_fx(DVg, DVs, p)
         return [DVg, DVs]
