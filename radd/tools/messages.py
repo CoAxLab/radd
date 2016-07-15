@@ -21,7 +21,7 @@ def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='a
     names_arrays = zip(array_names, arrays)
     y_str, wts_str, yhat_str = map(stringify, names_arrays)
 
-    if fp['y'].ndim==1:
+    if fp['nlevels']==1:
         fit_on = ' '.join([fit_on, 'FLAT'])
         dep_id = "flat model (no conditional parameters)"
         fname = './' + kind + '_flat.txt'
@@ -55,12 +55,12 @@ def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='a
         f.write('converged: %s' % finfo['cnvrg'] + '\n\n')
         f.write('==' * 30 + '\n\n\n')
 
-def saygo(depends_on={}, cond_map=None, kind='xdpm', fit_on='subjects', dynamic='hyp'):
+def saygo(depends_on={}, cond_map=None, kind='xdpm', fit_on='subjects'):
     """ generate confirmation message that model is prepared and ready to fit.
     repeats structure and important fit details for user to confirm """
     depkeys = describe_model(depends_on)
     if 'x' in kind:
-        bias = '(w/ %s dynamic bias)' % dynamic
+        bias = '(w/ dynamic bias)'
     else:
         bias = ""
     dep = listvalues(depends_on)

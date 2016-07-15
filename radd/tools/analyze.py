@@ -3,52 +3,12 @@ from __future__ import division
 import pandas as pd
 import numpy as np
 import os
-import re
 from numpy import array
 from sklearn.neighbors import KernelDensity
 from scipy.stats.mstats import mquantiles as mq
-from scipy.stats.mstats_extras import mjci
 from scipy import optimize
 import functools
-
-
-def assess_fit(finfo, lmMin=None, fitparams=None):
-    """ calculate fit statistics
-    """
-    y, wts, yhat = fitparams['y'], fitparams['wts'], fitparams['yhat']
-    # fill finfo dict with goodness-of-fit info
-    finfo['chi'] = np.sum(wts * (y.flatten() - yhat)**2)
-    finfo['ndata'] = len(yhat)
-    finfo['cnvrg'] = lmMinimizer.success
-    finfo['nfev'] = lmMinimizer.nfev
-    finfo['nvary'] = len(lmMinimizer.var_names)
-    finfo = pd.Series(finfo)
-    chisqr = finfo.chi
-    finfo['df'] = finfo.ndata - finfo.nvary
-    finfo['rchi'] = chisqr / finfo.df
-    finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
-    finfo['AIC'] = finfo.logp + 2 * finfo.nvary
-    finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
-    return finfo
-
-def rangl_data(data, tb=.555, quantiles=([.1, .3, .5, .7, .9]), ssd_method='all'):
-    """ called by __make_dataframes__ to generate observed dataframes and iterables for
-    subject fits
-    """
-    gac = data.query('ttype=="go"').acc.mean()
-    grt = data.query('ttype=="go" & acc==1').rt.values
-    ert = data.query('response==1 & acc==0').rt.values
-    gq = mq(grt, prob=quantiles)
-    eq = mq(ert, prob=quantiles)
-    data_vector = [gac, gq, eq]
-    if 'ssd' in data.columns:
-        stopdf = data.query('ttype=="stop"')
-        if ssd_method=='all':
-            sacc=stopdf.groupby('ssd').mean()['acc'].values
-        elif ssd_method=='central':
-            sacc = np.array([stopdf.mean()['acc']])
-        data_vector.insert(1, sacc)
-    return np.hstack(data_vector)
+from scipy.interpolate import interp1d
 
 def remove_outliers(data, sd=1.5, verbose=False):
     df = data.copy()
@@ -80,6 +40,31 @@ def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
     samples = kdefit.sample(n_samples=nsamples).flatten()
     return samples
 
+def scurve_interpolate(x, y, kind='cubic'):
+    interpol_fx = interp1d(x, y, kind=kind)
+    xsim = np.linspace(x[0], x[-1], 10000, endpoint=True)
+    ysim = interpol_fx(xsim)
+    return xsim, ysim
+
+def scurve_poly_fit(x, y, n=20):
+    polysim = lambda p, pi, x, xi: p[pi]*x**xi
+    ix = np.arange(n+1)
+    poly_ix = zip(ix, ix[::-1])
+    p = np.polyfit(x,y,n)
+    xsim = np.linspace(x.min(), x.max(), 10000, endpoint=True)
+    ysim = np.sum([polysim(p, pi, xsim, xi) for pi, xi in poly_ix],axis=0)
+    return xsim, ysim
+
+def fit_sigmoid(x, y):
+    x = resize(x, lower=x.max(), upper=x.min())
+    y = resize(y, lower=y.min(), upper=y.max())
+    p0 = (np.mean(x), np.mean(y), .5, .5)
+    p, pcov = optimize.leastsq(residuals, p0, args=(x, y), xtol=1.e-15, ftol=1.e-15, maxfev=20000)
+    x0, y0, c, k = p
+    xsim = np.linspace(x.min()-20, x.max()+20, 10000, endpoint=True)
+    ysim = sigmoid(p, xsim)
+    return xsim, ysim
+
 def sigmoid(p, x):
     x0, y0, c, k = p
     y = c / (1 + np.exp(k * (x - x0))) + y0
@@ -88,7 +73,7 @@ def sigmoid(p, x):
 def residuals(p, x, y):
     return y - sigmoid(p, x)
 
-def res(arr, lower=0.0, upper=1.0):
+def resize(arr, lower=0.0, upper=1.0):
     arr = arr.copy()
     if lower > upper:
         lower, upper = upper, lower
@@ -150,6 +135,30 @@ def get_exp_counts(simdf, obs_quant, n_obs, quantiles=([.10, .30, .50, .70, .90]
     oq = obs_quant
     expected = np.ceil(np.diff([0] + [pscore(simrt, oq_rt) * .01 for oq_rt in oq] + [1]) * n_obs)
     return expected, exp_quant
+
+
+def pwts_group_error_calc(handler):
+    """ get stdev across subjects (and any conds) in observedDF
+    weight perr by inverse of counts for each resp. probability measure
+    previously a bound method of dfhandler --> DataHandler class
+    """
+    groupedDF = handler.observedDF.groupby(handler.conds)
+    perr = groupedDF.agg(np.nanstd).loc[:, handler.p_cols].values
+    counts = groupedDF.count().loc[:, handler.p_cols].values
+    nsplits = handler.nlevels * handler.nconds
+    ndata = len(handler.p_cols)
+    # replace stdev of 0 with next smallest value in vector
+    perr[perr==0.] = perr[perr>0.].min()
+    p_wt_bycount = perr * (1./counts)
+    # set wts equal to ratio --> median_perr / all_perr_values
+    pwts_ratio = np.nanmedian(p_wt_bycount, axis=1)[:, None] / p_wt_bycount
+    # set extreme values to max_wt arg val
+    pwts_ratio[pwts_ratio >= handler.max_wt] = handler.max_wt
+    # shape pwts_ratio to conform to wtsDF
+    idx_pwts = np.array([pwts_ratio]*handler.nidx)
+    return idx_pwts.reshape(handler.nidx * nsplits, ndata)
+
+
 
 def get_intersection(iter1, iter2):
     """ get the intersection of two iterables ("items in-common")

@@ -7,13 +7,11 @@ from numpy import array
 from radd.models import Simulator
 from radd.tools import messages
 from radd.CORE import RADDCore
-from radd.tools.vis import plot_model_fits
+from radd.vis import plot_model_fits
 
 class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
     Inherits from RADDCore parent class (see CORE module).
-    Many of the naming conventions as well as the logic behind constructing parameter
-    dependencies on task condition are taken from HDDM (http://ski.clps.brown.edu/hddm_docs/)
     ::Arguments::
         data (pandas DF):
             data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
@@ -31,37 +29,40 @@ class Model(RADDCore):
             (ex. depends_on={'v': 'Condition'})
         weighted (bool):
             if True (default), perform fits using a weighted least-squares approach
-        dynamic (str):
-            set dynamic bias signal to follow an exponential or hyperbolic
-            form when fitting models with 'x' included in <kind> attr
         quantiles (array):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, dynamic='hyp', quantiles=np.array([.1, .3, .5, .7, .9])):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, dynamic=dynamic, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
-
-    def optimize(self, fit_flat=True, fit_cond=True, multiopt=True, inits_list=None, progress=False, plot_fits=False, saveplot=False, kde_quant_plots=True):
+    def optimize(self, fit_flat=True, fit_cond=True, progress=True, plot_fits=True, saveplot=False, keeplog=False, save_results=True, save_observed=False, custompath=None, pbars=None, sameaxis=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
-        nfits = len(self.observed)
-        for i in range(nfits):
-            popt = self.__check_inits__(self.inits)
-            if fit_flat or self.is_flat:
-                y, wts = self.iter_flat[i]
-                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
-                finfo, popt, yhat = self.optimize_flat(popt, multiopt=multiopt, inits_list=inits_list, progress=progress)
-            if fit_cond and not self.is_flat:
+        if np.any([keeplog, saveplot, save_results]):
+            self.results_dir = self.handler.make_results_dir(custompath, get_path=True)
+        if progress:
+            pbars = self.make_progress_bars()
+        for i in range(len(self.observed)):
+            if self.track_subjects:
+                pbars.update(name='idx', i=i, new_progress=self.idx[i])
+            y, wts = self.iter_flat[i]
+            self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
+            finfo, popt, yhat = self.optimize_flat(pbars=pbars)
+            if not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
-                finfo, popt, yhat = self.optimize_conditional(popt, multiopt)
-            self.assess_fit(finfo, popt, yhat)
+                finfo, popt, yhat = self.optimize_conditional(p=popt)
+            self.assess_fit(finfo, popt, yhat, keeplog)
             if plot_fits:
-                self.plot_model_fits(y=y, yhat=yhat, kde_quant=kde_quant_plots, save=saveplot)
+                self.plot_model_fits(y=y, yhat=yhat, save=saveplot, sameaxis=sameaxis)
+        if progress:
+            pbars.clear()
+        if save_results:
+            self.write_results(save_observed)
 
-    def optimize_flat(self, p, multiopt=True, inits_list=None, progress=False):
+    def optimize_flat(self, pbars=None):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -72,18 +73,19 @@ class Model(RADDCore):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
-        if multiopt:
-            # Global Optimization w/ Basinhopping (+TNC)
-            ntrials = self.fitparams['ntrials']
-            self.set_fitparams(ntrials=15000)
-            p = self.opt.hop_around(p, inits_list=inits_list, progress=progress)
-            self.set_fitparams(ntrials=ntrials)
-            print('Finished Hopping Around')
+        globalmin = 1.;
+        if not self.finished_sampling:
+            self.sample_param_sets()
+        inits, globalmin = self.filter_param_sets()
+        if pbars is not None:
+            pbars.reset_bar('glb_basin', init_state=globalmin)
+        # Global Optimization w/ Basinhopping (+TNC)
+        p = self.opt.hop_around(inits=inits, pbars=pbars)
         # Flat Simplex Optimization of Parameters at Global Minimum
-        finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=True)
+        finfo, popt, yhat = self.opt.gradient_descent(p=p)
         return finfo, popt, yhat
 
-    def optimize_conditional(self, p, multiopt=True):
+    def optimize_conditional(self, p=None):
         """ optimizes full model to all conditions in data
         ::Arguments::
             p (dict): parameter dictionary to initalize model, if None uses init params
@@ -92,82 +94,41 @@ class Model(RADDCore):
             finfo (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt (dict): optimized parameters dictionary
         """
-        if multiopt:
-            ntrials = self.fitparams['ntrials']
-            self.set_fitparams(ntrials=15000)
-            # Pretune Conditional Parameters
-            p, funcmin = self.opt.run_basinhopping(p, is_flat=False)
-            self.set_fitparams(ntrials=ntrials)
+        if p is None:
+            p = self.__check_inits__(self.inits)
+        # Pretune Conditional Parameters
+        p, fmin = self.opt.run_basinhopping(p)
         # Final Simplex Optimization
-        finfo, popt, yhat = self.opt.gradient_descent(inits=p, is_flat=False)
+        finfo, popt, yhat = self.opt.gradient_descent(p=p)
         return finfo, popt, yhat
 
-    def assess_fit(self, finfo, popt, yhat):
+    def assess_fit(self, finfo, popt, yhat, keep_log=False):
         """ wrapper for analyze.assess_fit calculates and stores
         rchi, AIC, BIC and other fit statistics
         """
-        fp = dict(deepcopy(self.fitparams))
+        fp = deepcopy(self.fitparams)
         fp['yhat'] = yhat.flatten()
         y = fp['y'].flatten()
         wts = fp['wts'].flatten()
         # fill finfo dict with goodness-of-fit info
-        finfo['chi'] = np.sum(wts * (fp['yhat'] - y)**2).astype(np.float32)
+        finfo['chi'] = np.sum(wts * (fp['yhat'] - y)**2)
         finfo['ndata'] = len(fp['yhat'])
         finfo['df'] = finfo.ndata - finfo.nvary
         finfo['rchi'] = finfo.chi / finfo.df
         finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
         finfo['AIC'] = finfo.logp + 2 * finfo.nvary
         finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
-        self.log_fit_info(finfo, popt, fp)
         self.finfo = finfo
         self.popt = popt
         self.yhat = yhat
+        if keep_log:
+            self.log_fit_info(finfo, popt, fp)
         try:
-            self.fill_df(data=yhat, fitparams=fp, dftype='yhat')
-            self.fill_df(data=finfo, fitparams=fp, dftype='fit')
+            self.fill_yhatDF(yhat=yhat, fitparams=fp)
+            self.fill_fitDF(finfo=finfo, fitparams=fp)
         except Exception:
             print('fill_df error, already optimized? try new model')
-            print('self.finfo, self.popt, and self.yhat still accessible from last fit')
-
-    def fill_df(self, data, fitparams, dftype='fit'):
-        if dftype=='fit':
-            data['idx'] = self.idx[fitparams['idx']]
-            next_row = np.argmax(self.fitDF.isnull().any(axis=1))
-            keys = self.handler.f_cols
-            self.fitDF.loc[next_row, keys] = data
-            if self.fit_on=='average':
-                fit_df = self.fitDF.dropna().copy()
-                fit_df.idx='average'
-                self.fitDF = fit_df.set_index('idx').T
-        elif dftype=='yhat':
-            nl = fitparams['nlevels']
-            data = data.reshape(nl, int(data.size/nl))
-            next_row = np.argmax(self.yhatDF.isnull().any(axis=1))
-            keys = self.handler.idx_cols[next_row]
-            yhat_df = self.yhatDF.copy()
-            for i in range(nl):
-                data_series = pd.Series(data[i], index=keys)
-                yhat_df.loc[next_row+i, keys] = data_series
-            if self.fit_on=='average':
-                yhat_df = yhat_df.dropna()
-                yhat_df.idx='average'
-                self.yhatDF = yhat_df.copy()
-
-    def log_fit_info(self, finfo, popt, fitparams):
-        """ write meta-information about latest fit
-        to logfile (.txt) in working directory
-        """
-        fp = dict(deepcopy(fitparams))
-        # lmfit-structured fit_report to write in log file
-        param_report = self.opt.param_report
-        # log all fit and meta information in working directory
-        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
-
-    def plot_model_fits(self, y, yhat, fitparams=None, kde_quant=True, save=False):
-        """ wrapper for radd.tools.vis.plot_model_fits """
-        if fitparams is None:
-            fitparams=self.fitparams
-        plot_model_fits(y, yhat, fitparams, kde_quant=kde_quant, save=save)
+            print('latest finfo, popt, yhat available as model attributes')
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using
