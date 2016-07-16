@@ -90,7 +90,6 @@ class DataHandler(object):
         for rowi in range(nrows):
             # fill observedDF one row at a time, using idx_rows
             self.observedDF.loc[rowi, self.idx_cols[rowi]] = self.dfvals[rowi]
-
         if self.model.weighted:
             # Calculate p(resp) and rt quantile costfx weights
             idx_qwts, idx_pwts = self.estimate_cost_weights()

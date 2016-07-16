@@ -26,6 +26,7 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
     sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
     nlevels = fitparams['nlevels']
     ssd, nssd, nss, nss_per, ssd_ix = fitparams.ssd_info
+    quantiles = fitparams.quantiles
     if len(palettes) != nlevels:
         palettes = colors.get_cpals(aslist=True)[:nlevels]
     if sameaxis or nlevels==1:
@@ -54,7 +55,7 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
         accdata = [y_dat[i][0], yhat_dat[i][0]]
         qpdata = [y_dat[i], yhat_dat[i]]
         plot_acc(accdata, err=sc_err[i], ssd=ssd[i], colors=clrs[i], labels=lbls[i], ax=ax1, ssdlabels=sameaxis)
-        plot_quantiles(qpdata, err=qp_err[i], colors=clrs[i], axes=[ax2,ax3], kde=y_kde[i], bw=bw)
+        plot_quantiles(qpdata, err=qp_err[i], quantiles=quantiles, colors=clrs[i], axes=[ax2,ax3], kde=y_kde[i], bw=bw)
     axes = format_axes(axes)
     if save:
         plt.savefig(fitparams['model_id']+'.png', dpi=600)
@@ -104,7 +105,7 @@ def scurves(data, err=None, colors=None, labels=None, ssd=None, ax=None, get_pse
     if get_pse:
         return pse
 
-def plot_quantiles(data, err=None, axes=None, colors=None, labels=None, kde=None, quantiles=np.array([.1, .3, .5, .7, .9]), bw=.008):
+def plot_quantiles(data, err=None, quantiles=None, axes=None, colors=None, labels=None, kde=None, bw=.008):
     """ plotting function for displaying model-predicted
     quantile-probabilities over empirical estimates
     """
@@ -116,6 +117,8 @@ def plot_quantiles(data, err=None, axes=None, colors=None, labels=None, kde=None
         f, (axc, axe) = plt.subplots(1, 2, figsize=(10, 4))
     qc, qc_hat = y_data[1], yhat_data[1]
     qe, qe_hat = y_data[2], yhat_data[2]
+    if quantiles is None:
+        quantiles = np.linspace(.1, .9, qc.size)
     if err is not None:
         qc_err, qe_err = err
     else:
