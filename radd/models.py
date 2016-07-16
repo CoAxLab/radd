@@ -14,7 +14,7 @@ class Simulator(object):
     """ Core code for simulating models. All cond, trials, &
     timepoints are simulated simultaneously
     """
-    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.001, si=.01, learn=False, dynamic=False):
+    def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False, dynamic=False):
         self.learn = learn
         self.kind = kind
         self.ntime = 0
