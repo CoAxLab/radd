@@ -792,4 +792,14 @@
      background-color: #dedede;
      background: #dedede;
     }
+    div.input_area {
+     background-color: #eeeeee;
+     background: #eeeeee;
+     margin-bottom: 0px;
+     border: 0px;
+     border-top-left-radius: 0px;
+     border-top-right-radius: 2px;
+     border-bottom-left-radius: 0px;
+     border-bottom-right-radius: 0px;
+    }
 </style>
