@@ -4,7 +4,7 @@ import glob
 import pandas as pd
 modules = glob.glob(os.path.dirname(__file__)+"/*.py")
 __all__ = [ os.path.basename(f)[:-3] for f in modules]
-__version__ = '0.1.1'
+__version__ = '0.1.2'
 _examples_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'examples')
 
 def load_example_data():

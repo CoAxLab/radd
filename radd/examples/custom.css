@@ -18,6 +18,11 @@
      font-family: 'Hack', monospace;
      font-size: 11pt;
     }
+    div.CodeMirror,
+    div.CodeMirror pre {
+     background: #eeeeee;
+     background-color: #eeeeee;
+    }
     div#ipython_notebook {
      display: none;
     }
