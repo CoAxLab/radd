@@ -90,7 +90,7 @@ def scurves(data, err=None, colors=None, labels=None, ssd=None, ax=None, get_pse
         idx = (np.abs(ysim - .5)).argmin()
         pse.append(xsim[idx])
         if not i%2:
-            ax.errorbar(x, yi, yerr=err[i], lw=0., elinewidth=1.5, color=colors[i],  marker='o', ms=5)
+            ax.errorbar(x, yi, yerr=err, lw=0., elinewidth=1.5, color=colors[i], marker='o', ms=5)
             ax.plot(xsim, ysim, lw=2, color=colors[i], label=labels[i])
             continue
         ax.plot(x, yi, lw=0., color=colors[i], marker='o', ms=10, mfc="none", mec=colors[i], mew=1.7, label=labels[i])

@@ -18,6 +18,11 @@
      font-family: 'Hack', monospace;
      font-size: 11pt;
     }
+    div.CodeMirror,
+    div.CodeMirror pre {
+     background: #eeeeee;
+     background-color: #eeeeee;
+    }
     div#ipython_notebook {
      display: none;
     }
@@ -526,7 +531,7 @@
     }
     .cm-s-ipython.CodeMirror {
      background: #eeeeee;
-     background: #eeeeee;
+     background-color: #eeeeee;
      color: #303030;
      border-radius: 2px;
     }
@@ -786,5 +791,9 @@
     ::-webkit-scrollbar-thumb:window-inactive {
      background-color: #dedede;
      background: #dedede;
+    }
+    div.input_area {
+     background-color: #eeeeee;
+     background: #eeeeee;
     }
 </style>
