@@ -62,7 +62,6 @@ class RADDCore(object):
         """
         from radd.optimize import Optimizer
         from radd.models import Simulator
-        from radd.dfhandler import DataHandler
         # initial parameters
         if self.inits is None:
             self.__get_default_inits__()
@@ -72,9 +71,7 @@ class RADDCore(object):
             self.__format_pcmap__()
         # create model_id string for naming output
         self.generate_model_id()
-        # initialize dataframe handler
-        self.handler = DataHandler(self)
-        # generate dataframes for observed data, popt, fitinfo, etc
+        # initialize DataHandler & generate I/O dataframes
         self.__make_dataframes__()
         # calculate costfx weights
         self.__set_wts__()
@@ -95,6 +92,10 @@ class RADDCore(object):
     def __make_dataframes__(self):
         """ wrapper for dfhandler.DataHandler.make_dataframes
         """
+        from radd.dfhandler import DataHandler
+        # initialize dataframe handler
+        self.handler = DataHandler(self)
+        # make dataframes
         self.handler.make_dataframes()
         # Group dataframe (nsubjects*nconds*nlevels x ndatapoints)
         self.observedDF = self.handler.observedDF.copy()
@@ -135,6 +136,9 @@ class RADDCore(object):
                 self.fitparams[kw_arg] = kw_val
         if hasattr(self, 'ssd'):
             self.__set_ssd_info__()
+        if self.fitparams.quantiles.size != self.quantiles.size:
+            self.quantiles = self.fitparams.quantiles
+            self.__make_dataframes__()
         if hasattr(self, 'opt'):
             self.opt.fitparams = self.fitparams
             self.opt.simulator.__update__(fitparams=self.opt.fitparams)
