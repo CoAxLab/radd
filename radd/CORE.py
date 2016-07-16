@@ -73,8 +73,6 @@ class RADDCore(object):
         self.generate_model_id()
         # initialize DataHandler & generate I/O dataframes
         self.__make_dataframes__()
-        # calculate costfx weights
-        self.__set_wts__()
         # set fit parameters with default values
         self.set_fitparams()
         # set basinhopping parameters with default values
@@ -109,11 +107,6 @@ class RADDCore(object):
         self.fitDF = self.handler.fitDF
         # dataframe containing cost_function wts (see dfhandler docs)
         self.wtsDF = self.handler.wtsDF
-
-    def __set_wts__(self):
-        """ wrapper for analyze functions used to calculate
-        weights used in cost function
-        """
         # list of arrays containing conditional costfx weights
         self.cond_wts = self.handler.cond_wts
         # list of arrays containing flat costfx weights
@@ -139,6 +132,8 @@ class RADDCore(object):
         if self.fitparams.quantiles.size != self.quantiles.size:
             self.quantiles = self.fitparams.quantiles
             self.__make_dataframes__()
+            self.fitparams.y = self.observed_flat[self.fitparams.idx]
+            self.fitparams.wts = self.flat_wts[self.fitparams.idx]
         if hasattr(self, 'opt'):
             self.opt.fitparams = self.fitparams
             self.opt.simulator.__update__(fitparams=self.opt.fitparams)
@@ -163,12 +158,12 @@ class RADDCore(object):
             ssd = np.array(self.ssd).mean(axis=0)
         else:
             # get ssd vector for fit number idx
-            ssd = self.ssd[self.fitparams['idx']]
+            ssd = self.ssd[self.fitparams.idx]
         if self.fitparams.nlevels==1:
             # single vector (nlevels=1), don't squeeze
             ssd = np.mean(ssd, axis=0, keepdims=True)
         nssd = ssd.shape[-1]
-        nss = int((.5 * self.fitparams['ntrials']))
+        nss = int((.5 * self.fitparams.ntrials))
         nss_per_ssd = int(nss/nssd)
         ssd_ix = np.arange(nssd) * np.ones((ssd.shape[0], ssd.shape[-1])).astype(np.int)
         # store all ssd_info in fitparams, accessed by Simulator
