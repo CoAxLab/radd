@@ -36,10 +36,11 @@ class Model(RADDCore):
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, fit_flat=True, fit_cond=True, progress=True, plot_fits=True, saveplot=False, keeplog=False, save_results=True, save_observed=False, custompath=None, pbars=None, sameaxis=False):
+    def optimize(self, plot_fits=True, saveplot=False, keeplog=False, save_results=True, save_observed=False, custompath=None, sameaxis=False, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
+        pbars = None
         if np.any([keeplog, saveplot, save_results]):
             self.results_dir = self.handler.make_results_dir(custompath, get_path=True)
         if progress:
@@ -73,7 +74,6 @@ class Model(RADDCore):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
-        globalmin = 1.;
         if not self.finished_sampling:
             self.sample_param_sets()
         inits, globalmin = self.filter_param_sets()

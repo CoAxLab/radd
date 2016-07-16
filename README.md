@@ -4,11 +4,11 @@ This repository is associated with the manuscript [Competing basal-ganglia pathw
 
 
 #### Interactive Demo
-[![Binder](http://mybinder.org/badge.svg)](http://mybinder.org/repo/CoAxLab/radd)
+[![Binder](http://mybinder.org/badge.svg)](http://mybinder.org:/repo/coaxlab/radd)
 
 (static version [**here**](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb) if binder is down)
 
-#### Install with pip (NOTE: Python 2.7.* only)
+#### Install with pip (Note: Python 2.* only)
 ```sh
 pip install radd
 ```
