@@ -36,12 +36,12 @@ class Model(RADDCore):
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, plot_fits=True, saveplot=False, keeplog=False, save_results=True, save_observed=False, custompath=None, sameaxis=False, progress=False):
+    def optimize(self, plotfits=True, saveplot=False, keeplog=False, saveresults=True, saveobserved=False, custompath=None, sameaxis=False, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
         pbars = None
-        if np.any([keeplog, saveplot, save_results]):
+        if np.any([keeplog, saveplot, saveresults]):
             self.results_dir = self.handler.make_results_dir(custompath, get_path=True)
         if progress:
             pbars = self.make_progress_bars()
@@ -51,17 +51,36 @@ class Model(RADDCore):
             y, wts = self.iter_flat[i]
             self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
             finfo, popt, yhat = self.optimize_flat(pbars=pbars)
+            self.init_params = deepcopy(popt)
             if not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
                 finfo, popt, yhat = self.optimize_conditional(p=popt)
             self.assess_fit(finfo, popt, yhat, keeplog)
-            if plot_fits:
+            if plotfits:
                 self.plot_model_fits(y=y, yhat=yhat, save=saveplot, sameaxis=sameaxis)
         if progress:
             pbars.clear()
-        if save_results:
-            self.write_results(save_observed)
+        if saveresults:
+            self.write_results(saveobserved)
+
+    def optimize_nested_models(self, model_list, plotfits=False, progress=False):
+        """ optimize externally defined models in model_list using
+        same init parameters as the current model for conditional fits
+        NOTE: currently for models with fit_on='average'
+        """
+        self.optimize(plotfits=plotfits, progress=progress)
+        self.models_finfo = {self.model_id: self.finfo}
+        self.models_yhat = {self.model_id: self.yhat}
+        self.models_popt = {self.model_id: self.popt}
+        for model in model_list:
+            p = deepcopy(self.init_params)
+            finfo, popt, yhat = model.optimize_conditional(p=p)
+            if plotfits:
+                model.plot_model_fits()
+            self.models_finfo[model.model_id] = finfo
+            self.models_popt[model.model_id] = popt
+            self.models_yhat[model.model_id] = yhat
 
     def optimize_flat(self, pbars=None):
         """ optimizes flat model to data collapsing across all conditions

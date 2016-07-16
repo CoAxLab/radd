@@ -65,7 +65,6 @@ class DataHandler(object):
             self.observed_flat = [flatvalues(odf.mean())]
             self.flat_wts = [flatvalues(wdf.mean())]
 
-
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
         """
@@ -102,7 +101,7 @@ class DataHandler(object):
         else:
             self.wtsDF.loc[:, self.p_cols+self.q_cols] = 1
         if self.fit_on=='average':
-            observed_err = self.observedDF.groupby(self.conds).std()
+            observed_err = self.observedDF.groupby(self.conds).sem()*2
             self.observed_err = observed_err.loc[:, 'acc':].values.squeeze()
         else:
             self.varDF=None
@@ -114,8 +113,8 @@ class DataHandler(object):
         gac = data.query('ttype=="go"').acc.mean()
         grt = data.query('response==1 & acc==1').rt.values
         ert = data.query('response==1 & acc==0').rt.values
-        gq = mq(grt, prob=self.quantiles)
-        eq = mq(ert, prob=self.quantiles)
+        gq = mq(grt, prob=self.model.quantiles)
+        eq = mq(ert, prob=self.model.quantiles)
         data_vector = [gac, gq, eq]
         if 'ssd' in self.data.columns:
             stopdf = data.query('ttype=="stop"')
@@ -203,7 +202,7 @@ class DataHandler(object):
         """
         data = self.data
         nsplits = self.nlevels * self.nconds
-        percents = self.quantiles
+        percents = self.model.quantiles
         nquant = percents.size
         # estimate quantile weights
         idx_qwts = self.idx_quant_weights()
@@ -220,9 +219,9 @@ class DataHandler(object):
               QSEM = mjci(rtvectors)
               wts = median(QSEM)/QSEM
         """
-        idx_mjci = lambda x: mjci(x.rt, prob=self.quantiles)
+        idx_mjci = lambda x: mjci(x.rt, prob=self.model.quantiles)
         nidx = self.nidx
-        nquant = self.quantiles.size
+        nquant = self.model.quantiles.size
         groups = self.groups
         nsplits = self.nlevels * self.nconds
         # get all trials with response recorded
@@ -310,8 +309,8 @@ class DataHandler(object):
         """ make header names for correct/error RT quants
         in observedDF, yhatDF, and wtsDF
         """
-        cq = ['c' + str(int(n * 100)) for n in self.quantiles]
-        eq = ['e' + str(int(n * 100)) for n in self.quantiles]
+        cq = ['c' + str(int(n * 100)) for n in self.model.quantiles]
+        eq = ['e' + str(int(n * 100)) for n in self.model.quantiles]
         self.q_cols = cq + eq
 
     def make_p_cols(self, ssd_list=None):
