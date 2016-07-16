@@ -526,7 +526,7 @@
     }
     .cm-s-ipython.CodeMirror {
      background: #eeeeee;
-     background: #eeeeee;
+     background-color: #eeeeee;
      color: #303030;
      border-radius: 2px;
     }
