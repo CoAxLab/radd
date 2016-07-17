@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 from numpy import array
 from radd.models import Simulator
-from radd.tools import messages
 from radd.CORE import RADDCore
 from radd.vis import plot_model_fits
 
@@ -124,38 +123,37 @@ class Model(RADDCore):
         self.yhat = yhat
         if keeplog:
             self.log_fit_info(finfo, popt, fp)
-        try:
-            self.fill_yhatDF(yhat=yhat, fitparams=fp)
-            self.fill_fitDF(finfo=finfo, fitparams=fp)
-        except Exception:
-            print('fill_df error, already optimized? try new model')
-            print('latest finfo, popt, yhat available as model attributes')
+        # try:
+        self.fill_yhatDF(yhat=yhat, fitparams=fp)
+        self.fill_fitDF(finfo=finfo, fitparams=fp)
+        # except Exception:
+        #     print('fill_df error, already optimized? try new model')
+        #     print('latest finfo, popt, yhat available as model attributes')
 
-    def optimize_nested_models(self, models, plotfits=True, progress=False, keeplog=False):
-        """ optimize externally defined models in model_list using
-        same init parameters as the current model for conditional fits
-        NOTE: currently for models with fit_on='average'
+    def optimize_nested_models(self, models=[], saveplot=True, plotfits=True, progress=False, keeplog=True):
+        """ optimize externally defined models in model_list using same init parameters
+        as the current model for conditional fits (NOTE: only works with fit_on='average')
         """
+        self.is_nested = True
         if not hasattr(self, 'init_params'):
             self.optimize(plotfits=plotfits, progress=progress)
-            pbars.update(i=1)
-        self.models_finfo = {self.model_id: self.finfo}
-        self.models_aic = {self.model_id: self.finfo.AIC}
-        self.models_bic = {self.model_id: self.finfo.BIC}
+        # self.models_finfo = {self.model_id: self.finfo}
+        # self.models_aic = {self.model_id: self.finfo.AIC}
+        # self.models_bic = {self.model_id: self.finfo.BIC}
         for i, pdep in enumerate(models):
             self.set_fitparams(depends_on = {pdep: list(self.clmap)[0]})
             p = self.__check_inits__(deepcopy(self.init_params))
             finfo, popt, yhat = self.optimize_conditional(p=p)
             self.assess_fit(finfo, popt, yhat, keeplog)
             if plotfits:
-                self.plot_model_fits(self.fitparams.y, yhat, self.fitparams)
-            self.models_finfo[self.model_id] = self.finfo
-            self.models_aic[self.model_id] = self.finfo.AIC
-            self.models_bic[self.model_id] = self.finfo.BIC
-        cols = sorted(list(self.models_finfo))
-        datas = [self.models_finfo[c] for c in cols]
-        dfx = pd.concat(datas, axis=1)
-        dfx.columns = cols
+                self.plot_model_fits(self.fitparams.y, yhat, self.fitparams, save=saveplot)
+            # self.models_finfo[self.model_id] = self.finfo
+            # self.models_aic[self.model_id] = self.finfo.AIC
+            # self.models_bic[self.model_id] = self.finfo.BIC
+        # cols = sorted(list(self.models_finfo))
+        # datas = [self.models_finfo[c] for c in cols]
+        # dfx = pd.concat(datas, axis=1)
+        # dfx.columns = cols
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using

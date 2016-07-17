@@ -136,14 +136,16 @@ class DataHandler(object):
         if fitparams is None:
             fitparams = self.model.fitparams
         fitDF = self.fitDF.copy()
-        data['idx'] = self.idx[fitparams['idx']]
-        next_row = np.argmax(fitDF.isnull().any(axis=1))
-        keys = self.f_cols
-        fitDF.loc[next_row, keys] = data
-        # if self.fit_on=='average':
-        #     fit_df = fitDF.dropna().copy()
-        #     fit_df.idx='average'
-        #     fitDF = fit_df.set_index('idx').T
+        row = np.argmax(fitDF.isnull().any(axis=1))
+        if self.fit_on=='average':
+            idxname = 'average'
+            if self.model.is_nested:
+                idxname = self.model.model_id
+        else:
+            idxname = self.idx[fitparams['idx']]
+        data_widx = data.copy()
+        data_widx['idx'] = idxname
+        fitDF.loc[row, self.f_cols] = data_widx
         self.fitDF = fitDF.copy()
 
     def fill_yhatDF(self, data, fitparams=None):
@@ -163,12 +165,15 @@ class DataHandler(object):
         next_row = np.argmax(yhatDF.isnull().any(axis=1))
         keys = self.idx_cols[next_row]
         for i in range(nl):
+            row = next_row+i
             data_series = pd.Series(data[i], index=keys)
-            yhatDF.loc[next_row+i, keys] = data_series
-        if self.fit_on=='average':
-            #yhat_df = yhatDF.dropna()
-            #yhat_df.idx = 'average'
-            yhatDF = yhat_df.copy()
+            yhatDF.loc[row, keys] = data_series
+            if self.fit_on=='average':
+                if self.model.is_nested:
+                    idxname = self.model.model_id
+                else:
+                    idxname = 'average'
+                yhatDF.loc[row, 'idx'] = idxname
         self.yhatDF = yhatDF.copy()
 
     def determine_ssd_method(self, stopdf):

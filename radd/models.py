@@ -37,6 +37,7 @@ class Simulator(object):
         # non conditional parameters & meta-data
         self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']
         self.tb = fp['tb']
+        self.nconds = len(list(fp['clmap']))
         self.nlevels = fp['nlevels']
         self.ntot = fp['ntrials']
         self.quantiles = fp['quantiles']
