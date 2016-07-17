@@ -16,7 +16,7 @@ class PBinJ(object):
     (set bartype to 'uglybar' if running from terminal)
     """
     def __init__(self, bartype='colorbar', n=None, color='blue', title='Progress'):
-        colors = {'green': '#16a085', 'blue': '#3A539B', 'red': "#e74c3c"}
+        colors = {'green': '#16a085', 'blue': '#4168B7', 'red': "#e74c3c"}
         self.color = colors[color]
         self.n=n
         self.displayed=False
@@ -54,7 +54,10 @@ class PBinJ(object):
     def update_progress(self, new_progress=None):
         if self.displayed==False:
             self.display_bars()
-        display(Javascript("$('div#{}').text({:.5f})".format(self.barid, new_progress)))
+        if type(new_progress) is str:
+            display(Javascript("$('div#{}').text({})".format(self.barid, new_progress)))
+        else:
+            display(Javascript("$('div#{}').text({:.5f})".format(self.barid, new_progress)))
 
     def update_colorbar(self, i=None, new_progress=None):
         if self.displayed==False:

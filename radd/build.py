@@ -1,4 +1,4 @@
-#!/usr/local/bin/env python
+    #!/usr/local/bin/env python
 from __future__ import division
 from copy import deepcopy
 import numpy as np
@@ -36,7 +36,7 @@ class Model(RADDCore):
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, plotfits=True, saveplot=False, keeplog=False, saveresults=True, saveobserved=False, custompath=None, sameaxis=False, progress=False):
+    def optimize(self, plotfits=True, saveplot=False, keeplog=True, saveresults=True, saveobserved=False, custompath=None, sameaxis=False, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
@@ -63,24 +63,6 @@ class Model(RADDCore):
             pbars.clear()
         if saveresults:
             self.write_results(saveobserved)
-
-    def optimize_nested_models(self, model_list, plotfits=False, progress=False):
-        """ optimize externally defined models in model_list using
-        same init parameters as the current model for conditional fits
-        NOTE: currently for models with fit_on='average'
-        """
-        self.optimize(plotfits=plotfits, progress=progress)
-        self.models_finfo = {self.model_id: self.finfo}
-        self.models_yhat = {self.model_id: self.yhat}
-        self.models_popt = {self.model_id: self.popt}
-        for model in model_list:
-            p = deepcopy(self.init_params)
-            finfo, popt, yhat = model.optimize_conditional(p=p)
-            if plotfits:
-                model.plot_model_fits()
-            self.models_finfo[model.model_id] = finfo
-            self.models_popt[model.model_id] = popt
-            self.models_yhat[model.model_id] = yhat
 
     def optimize_flat(self, pbars=None):
         """ optimizes flat model to data collapsing across all conditions
@@ -114,14 +96,14 @@ class Model(RADDCore):
             popt (dict): optimized parameters dictionary
         """
         if p is None:
-            p = self.__check_inits__(self.inits)
+            p = self.__check_inits__(self.init_params)
         # Pretune Conditional Parameters
         p, fmin = self.opt.run_basinhopping(p)
         # Final Simplex Optimization
         finfo, popt, yhat = self.opt.gradient_descent(p=p)
         return finfo, popt, yhat
 
-    def assess_fit(self, finfo, popt, yhat, keep_log=False):
+    def assess_fit(self, finfo, popt, yhat, keeplog=False):
         """ wrapper for analyze.assess_fit calculates and stores
         rchi, AIC, BIC and other fit statistics
         """
@@ -140,7 +122,7 @@ class Model(RADDCore):
         self.finfo = finfo
         self.popt = popt
         self.yhat = yhat
-        if keep_log:
+        if keeplog:
             self.log_fit_info(finfo, popt, fp)
         try:
             self.fill_yhatDF(yhat=yhat, fitparams=fp)
@@ -148,6 +130,31 @@ class Model(RADDCore):
         except Exception:
             print('fill_df error, already optimized? try new model')
             print('latest finfo, popt, yhat available as model attributes')
+
+    def optimize_nested_models(self, models, plotfits=True, progress=False, keeplog=False):
+        """ optimize externally defined models in model_list using
+        same init parameters as the current model for conditional fits
+        NOTE: currently for models with fit_on='average'
+        """
+        from radd.tools.utils import PBinJ
+        pbars = PBinJ(n=len(models)+1, title='Models', color='blue')
+        if not hasattr(self, 'init_params'):
+            self.optimize(plotfits=plotfits, progress=progress)
+            pbars.update(i=1)
+        self.models_finfo = {self.model_id: self.finfo}
+        self.models_aic = {self.model_id: self.finfo.AIC}
+        self.models_bic = {self.model_id: self.finfo.BIC}
+        for i, pdep in enumerate(models):
+            pbars.update(i=i+1)
+            self.set_fitparams(depends_on = {pdep: list(self.clmap)[0]})
+            p = self.__check_inits__(deepcopy(self.init_params))
+            finfo, popt, yhat = self.optimize_conditional(p=p)
+            self.assess_fit(finfo, popt, yhat, keeplog)
+            if plotfits:
+                self.plot_model_fits(self.fitparams.y, yhat, self.fitparams)
+            self.models_finfo[self.model_id] = self.finfo
+            self.models_aic[self.model_id] = self.finfo.AIC
+            self.models_bic[self.model_id] = self.finfo.BIC
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using
