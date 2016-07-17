@@ -5,7 +5,7 @@ This repository is associated with the manuscript [Competing basal-ganglia pathw
 ### [Jupyter Notebook Demo](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb)
 
 ### Install with pip
-###### Python 2.* only
+#### Python 2.* only
 ```sh
 pip install radd
 ```
