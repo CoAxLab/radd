@@ -6,8 +6,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-from radd.tools import colors, messages, analyze
-from IPython.display import HTML, Javascript, display
+from radd.tools import colors, analyze
 import warnings
 warnings.simplefilter('ignore', np.RankWarning)
 

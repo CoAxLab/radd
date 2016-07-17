@@ -8,7 +8,7 @@ import pandas as pd
 from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from lmfit import fit_report
-from radd.tools import analyze, messages
+from radd.tools import messages
 from radd import theta, vis
 
 class RADDCore(object):
@@ -19,7 +19,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False, custompath=None):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None):
         self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
@@ -47,6 +47,7 @@ class RADDCore(object):
         self.finished_sampling = False
         self.track_subjects = False
         self.track_basins = False
+        self.is_nested = False
 
     def __prepare_fit__(self):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
@@ -306,6 +307,7 @@ class RADDCore(object):
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF
         """
+        from radd.tools.analyze import remove_outliers
         self.data = analyze.remove_outliers(self.data.copy(), sd=sd, verbose=verbose)
 
     def __get_default_inits__(self):

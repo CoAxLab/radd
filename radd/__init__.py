@@ -17,7 +17,7 @@ def load_dpm_animation():
     mov_fpath = os.path.join(_examples_dir, 'anim.mp4')
     video = io.open(mov_fpath, 'r+b').read()
     encoded = base64.b64encode(video)
-    data='''<video width="40%" alt="test" loop=1 controls> <source src="data:video/mp4; base64,{0}" type="video/mp4" /> </video>'''.format(encoded.decode('ascii'))
+    data='''<video width="50%" alt="test" loop=1 controls> <source src="data:video/mp4; base64,{0}" type="video/mp4" /> </video>'''.format(encoded.decode('ascii'))
     return HTML(data=data)
 
 def style_notebook():
