@@ -136,8 +136,6 @@ class Model(RADDCore):
         same init parameters as the current model for conditional fits
         NOTE: currently for models with fit_on='average'
         """
-        from radd.tools.utils import PBinJ
-        pbars = PBinJ(n=len(models)+1, title='Models', color='blue')
         if not hasattr(self, 'init_params'):
             self.optimize(plotfits=plotfits, progress=progress)
             pbars.update(i=1)
@@ -145,7 +143,6 @@ class Model(RADDCore):
         self.models_aic = {self.model_id: self.finfo.AIC}
         self.models_bic = {self.model_id: self.finfo.BIC}
         for i, pdep in enumerate(models):
-            pbars.update(i=i+1)
             self.set_fitparams(depends_on = {pdep: list(self.clmap)[0]})
             p = self.__check_inits__(deepcopy(self.init_params))
             finfo, popt, yhat = self.optimize_conditional(p=p)
@@ -155,6 +152,10 @@ class Model(RADDCore):
             self.models_finfo[self.model_id] = self.finfo
             self.models_aic[self.model_id] = self.finfo.AIC
             self.models_bic[self.model_id] = self.finfo.BIC
+        cols = sorted(list(self.models_finfo))
+        datas = [self.models_finfo[c] for c in cols]
+        dfx = pd.concat(datas, axis=1)
+        dfx.columns = cols
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using
