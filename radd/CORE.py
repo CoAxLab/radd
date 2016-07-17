@@ -64,9 +64,7 @@ class RADDCore(object):
         if self.inits is None:
             self.__get_default_inits__()
         # pc_map (see docstrings)
-        self.pc_map = {}
-        if not self.is_flat:
-            self.__format_pcmap__()
+        self.__format_pcmap__()
         # create model_id string for naming output
         self.generate_model_id()
         # initialize DataHandler & generate I/O dataframes
@@ -81,7 +79,7 @@ class RADDCore(object):
         # initialize model simulator, mainly accessed by the model optimizer object
         self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
         if self.verbose:
-            self.is_prepared = messages.saygo(depends_on=self.depends_on, cond_map=self.cond_map, kind=self.kind, fit_on=self.fit_on)
+            self.is_prepared = messages.saygo(depends_on=self.depends_on, cond_map=self.clmap, kind=self.kind, fit_on=self.fit_on)
         else:
             self.prepared = True
 
@@ -135,8 +133,14 @@ class RADDCore(object):
             self.__make_dataframes__()
             self.fitparams['y'] = self.observed_flat[self.fitparams.idx]
             self.fitparams['wts'] = self.flat_wts[self.fitparams.idx]
+        if list(self.depends_on)[0]!=list(self.fitparams.depends_on)[0]:
+            self.depends_on = self.fitparams.depends_on
+            self.__format_pcmap__()
+            self.generate_model_id()
         if hasattr(self, 'opt'):
             self.opt.fitparams = self.fitparams
+            self.opt.pc_map = self.pc_map
+            self.opt.simulator.pc_map = self.pc_map
             self.opt.simulator.__update__(fitparams=self.opt.fitparams)
 
     def set_basinparams(self, **kwargs):
@@ -178,9 +182,17 @@ class RADDCore(object):
             |<--- pc_map = {'v':['v_bsl', 'v_pnl']} <---|
             |---> p['v'] = array([V1, V2]) -------> [OUT]
         """
-        for p, cond in self.depends_on.items():
-            levels = np.sort(self.data[cond].unique())
-            self.pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
+        pc_map = {}
+        if not self.is_flat:
+            for p, cond in self.depends_on.items():
+                levels = np.sort(self.data[cond].unique())
+                pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
+        self.pc_map = pc_map
+        if hasattr(self, 'opt'):
+            self.opt.pc_map = self.pc_map
+            self.opt.fitparams = self.fitparams
+            self.opt.simulator.pc_map = self.pc_map
+            self.opt.simulator.__update__(fitparams=self.opt.fitparams)
 
     def sample_param_sets(self, pkeys=None, nsamples=None):
         """ sample *nsamples* (default=5000, see set_fitparams) different

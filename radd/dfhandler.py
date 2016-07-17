@@ -140,10 +140,10 @@ class DataHandler(object):
         next_row = np.argmax(fitDF.isnull().any(axis=1))
         keys = self.f_cols
         fitDF.loc[next_row, keys] = data
-        if self.fit_on=='average':
-            fit_df = fitDF.dropna().copy()
-            fit_df.idx='average'
-            fitDF = fit_df.set_index('idx').T
+        # if self.fit_on=='average':
+        #     fit_df = fitDF.dropna().copy()
+        #     fit_df.idx='average'
+        #     fitDF = fit_df.set_index('idx').T
         self.fitDF = fitDF.copy()
 
     def fill_yhatDF(self, data, fitparams=None):
@@ -166,8 +166,8 @@ class DataHandler(object):
             data_series = pd.Series(data[i], index=keys)
             yhatDF.loc[next_row+i, keys] = data_series
         if self.fit_on=='average':
-            yhat_df = yhatDF.dropna()
-            yhat_df.idx = 'average'
+            #yhat_df = yhatDF.dropna()
+            #yhat_df.idx = 'average'
             yhatDF = yhat_df.copy()
         self.yhatDF = yhatDF.copy()
 
