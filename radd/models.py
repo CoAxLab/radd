@@ -18,6 +18,7 @@ class Simulator(object):
         self.learn = learn
         self.kind = kind
         self.ntime = 0
+        self.dynamic = dynamic
         if 'ssd_info' in fitparams.keys():
             self.ssd_info = fitparams['ssd_info']
             self.include_ss=True
