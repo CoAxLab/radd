@@ -135,18 +135,23 @@ class DataHandler(object):
         """
         if fitparams is None:
             fitparams = self.model.fitparams
+        for k in data.keys():
+            if '_' in k:
+                data[k.split('_')[-1]] = data[k]
+                data.drop(k, inplace=True)
         fitDF = self.fitDF.copy()
-        row = np.argmax(fitDF.isnull().any(axis=1))
+        row = np.argmax(fitDF['AIC'].isnull())
         if self.fit_on=='average':
             idxname = 'average'
             if self.model.is_nested:
-                idxname = self.model.model_id
+                idxname = self.model.model_id.split('_')[1]
         else:
             idxname = self.idx[fitparams['idx']]
         data_widx = data.copy()
         data_widx['idx'] = idxname
         fitDF.loc[row, self.f_cols] = data_widx
         self.fitDF = fitDF.copy()
+        self.model.fitDF = fitDF.copy()
 
     def fill_yhatDF(self, data, fitparams=None):
         """ fill yhatDF with model predictions
@@ -175,6 +180,7 @@ class DataHandler(object):
                     idxname = 'average'
                 yhatDF.loc[row, 'idx'] = idxname
         self.yhatDF = yhatDF.copy()
+        self.model.yhatDF = yhatDF.copy()
 
     def determine_ssd_method(self, stopdf):
         ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
@@ -333,7 +339,7 @@ class DataHandler(object):
         params = np.sort(list(self.inits))
         if not self.model.is_flat:
             dep_keys = list(self.model.pc_map)
-            cond_param_names = listvalues(self.model.pc_map)
+            cond_param_names = listvalues(self.model.clmap)
             params = np.hstack([params, np.squeeze(cond_param_names)]).tolist()
             _ = [params.remove(pname) for pname in dep_keys]
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
@@ -346,9 +352,12 @@ class DataHandler(object):
                 if True will write observedDF & wtsDF to
                 model output dir
         """
-        make_fname = lambda savestr: '_'.join([self.model_id, savestr+'.csv'])
-        self.yhatDF.to_csv(make_fname('yhat_df'))
-        self.fitDF.to_csv(make_fname('finfo_df'))
+        fname = self.model.model_id
+        if self.model.is_nested:
+            fname='nested_models'
+        make_fname = lambda savestr: '_'.join([fname, savestr+'.csv'])
+        self.yhatDF.to_csv(make_fname('yhat'))
+        self.fitDF.to_csv(make_fname('finfo'))
         if save_observed:
             self.observedDF.to_csv(make_fname('observed_data'))
             self.wtsDF.to_csv(make_fname('cost_weights'))
@@ -362,7 +371,7 @@ class DataHandler(object):
         if custompath is not None:
             savepath = os.path.join(savepath, custompath)
         abspath = os.path.abspath(savepath)
-        abs_savepath = os.path.join(abspath, self.model_id)
+        abs_savepath = os.path.join(abspath, self.model.model_id)
         if not os.path.isdir(abs_savepath):
             os.makedirs(abs_savepath)
         os.chdir(abs_savepath)
