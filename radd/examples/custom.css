@@ -6,26 +6,29 @@
      background-color: #ffffff;
     }
     #notebook-container {
-     padding: 0px;
+     padding: 15px;
      background-color: #ffffff;
      min-height: 0px;
      box-shadow: none;
     }
     .container {
-     width: 900px;
+     width: 850px;
+    }
+    div#menubar-container.container {
+     width: 940px;
     }
     .toolbar_info {
      color: #2c2c2c;
      font-size: 12pt;
      border: none;
-     font-family: 'Open-Sans', sans-serif;
+     font-family: 'Helvetica', sans-serif;
      text-shadow: none !important;
     }
     .list_container {
      color: #2c2c2c;
      font-size: 12pt;
      border: none;
-     font-family: 'Open-Sans', sans-serif;
+     font-family: 'Helvetica', sans-serif;
      text-shadow: none !important;
     }
     .list_container > div {
@@ -36,7 +39,7 @@
      color: #2c2c2c;
      font-size: 12pt;
      border: none;
-     font-family: 'Open-Sans', sans-serif;
+     font-family: 'Helvetica', sans-serif;
      text-shadow: none !important;
     }
     div.list_container a:hover {
@@ -60,7 +63,7 @@
      color: #2c2c2c;
      font-size: 12pt;
      border: none;
-     font-family: 'Open-Sans', sans-serif;
+     font-family: 'Helvetica', sans-serif;
      text-shadow: none !important;
     }
     .nav-tabs > li > a:hover {
@@ -596,7 +599,7 @@
      color: #009fb7;
     }
     div.text_cell_render h1 {
-     font-family: 'Open-Sans', sans-serif;
+     font-family: 'Helvetica', sans-serif;
      text-align: center;
      font-weight: lighter;
      background: #ffffff;
@@ -608,7 +611,7 @@
     div.text_cell_render h4,
     div.text_cell_render h5,
     div.text_cell_render h6 {
-     font-family: 'Open-Sans', sans-serif;
+     font-family: 'Helvetica', sans-serif;
      text-align: left;
      font-weight: lighter;
      background: #ffffff;
@@ -616,15 +619,15 @@
      color: #1e70c7;
     }
     body {
-     font-family: "Open-Sans", sans-serif;
-     font-size: 12pt;
-     line-height: 1.45;
+     font-family: 'Helvetica', sans-serif;
+     font-size: 10pt;
+     line-height: 1.6;
      color: #2c2c2c;
      background-color: #ffffff;
     }
     a {
      color: #2c2c2c;
-     font-family: "Open-Sans", sans-serif;
+     font-family: 'Helvetica', sans-serif;
     }
     div#notebook,
     div.output_area pre,
@@ -633,7 +636,7 @@
     div.CodeMirror,
     div.CodeMirror pre {
      font-family: "Hack", monospace;
-     font-size: 11pt;
+     font-size: 10pt;
     }
     div.cell {
      padding: 0px;
@@ -706,7 +709,7 @@
     }
     div.output_subarea {
      overflow-x: auto;
-     padding: 1.0em;
+     padding: .5em;
      -webkit-box-flex: 1;
      -moz-box-flex: 1;
      box-flex: 1;
@@ -716,9 +719,9 @@
     div.text_cell,
     div.text_cell_render pre,
     div.text_cell_render {
-     font-family: "Open-Sans", sans-serif;
-     font-size: 100%;
-     line-height: 130%;
+     font-family: "Helvetica", sans;
+     font-size: 105%;
+     line-height: 160%;
      margin-right: 0px;
      margin-left: 0px;
      background: #ffffff;
@@ -754,6 +757,13 @@
      background-color: #ffffff;
      border-radius: 2px;
     }
+    .rendered-html pre,
+    .rendered-html code {
+     font-size: 9pt;
+     color: #2c2c2c;
+     line-height: 100%;
+     background: #eeeeee;
+    }
     .rendered_html table,
     .rendered_html th,
     .rendered_html tr,
@@ -766,13 +776,6 @@
      background: #ffffff;
      align-content: left !important;
     }
-    .rendered-html pre,
-    .rendered-html code {
-     font-size: 12pt;
-     color: #2c2c2c;
-     line-height: 100%;
-     background: #eeeeee;
-    }
     div.output_html {
      color: #4c4c4c;
     }
@@ -782,7 +785,7 @@
      font-family: "Hack", monospace;
      text-align: left;
      line-height: 1.21429em;
-     min-width: 9.5ex;
+     min-width: 9ex;
      font-size: 9pt;
     }
     div.prompt.input_prompt {
