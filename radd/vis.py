@@ -221,6 +221,44 @@ def format_axes(axes):
     plt.tight_layout()
     return axes
 
+def compare_nested_models(fitDF, model_ids, plot_stats=True):
+    gof = {}
+    fitDF = fitDF[fitDF.idx.isin(model_ids)]
+    # print GOF stats for both models
+    for i, p in enumerate(model_ids):
+        gof[p] = fitDF.loc[i, ['AIC', 'BIC']]
+        print('{} GOF:\nAIC = {}\nBIC = {}\n'.format(model_ids[i], *gof[p]))
+    # Which model provides a better fit to the data?
+    aicwinner = model_ids[np.argmin([gof[mid][0] for mid in model_ids])]
+    bicwinner = model_ids[np.argmin([gof[mid][1] for mid in model_ids])]
+    print('AIC likes {} model'.format(aicwinner))
+    print('BIC likes {} model'.format(bicwinner))
+    plot_model_gof(gof, aicwinner)
+
+def plot_model_gof(gof_dict, aicwinner):
+    sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
+    nmodels = len(list(gof_dict))
+    c1 = ["#4168B7", "#d62c1a"]
+    l1, l2 = None, None
+    f, ax = plt.subplots(1, figsize=(8,6))
+    x = np.arange(1, nmodels*2, 2)
+    vals = np.hstack(gof_dict.values()).astype(float)
+    yylim = (vals.max()*1.05, vals.min()*.95)
+    xtls = []
+    for i, (m_id, gof) in enumerate(gof_dict.items()):
+        if i == len(x)-1:
+            l1, l2 = 'AIC', 'BIC'
+        a=.4
+        if m_id==aicwinner:
+            a=1
+        ax.plot(x[i]-.2, gof['AIC'], color=c1[0], marker='o', ms=10, label=l1, alpha=a)
+        ax.plot(x[i]+.2, gof['BIC'], color=c1[1], marker='o', ms=10, label=l2, alpha=a)
+        xtls.append(m_id)
+    plt.setp(ax, xticks=x, xticklabels=xtls, ylim=yylim, xlim=(0, nmodels*2))
+    ax.xaxis.tick_top()
+    sns.despine()
+    ax.legend(loc=0)
+
 def get_plot_labels(fitparams):
     lbls = np.hstack(fitparams['clmap'].values())
     labels = [[lbl + dtype for dtype in [' data', ' model']] for lbl in lbls]

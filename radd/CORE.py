@@ -19,7 +19,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.1, .3, .5, .7, .9]), ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.arange(.1, 1.,.1), ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None):
         self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
@@ -137,7 +137,8 @@ class RADDCore(object):
         if list(self.depends_on)[0]!=list(self.fitparams.depends_on)[0]:
             self.depends_on = self.fitparams.depends_on
             self.__format_pcmap__()
-            self.generate_model_id()
+            self.fitparams['model_id'] = self.generate_model_id(get_id=True)
+            self.is_flat = False
         if hasattr(self, 'opt'):
             self.opt.fitparams = self.fitparams
             self.opt.pc_map = self.pc_map
@@ -190,6 +191,7 @@ class RADDCore(object):
                 pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
         self.pc_map = pc_map
         if hasattr(self, 'opt'):
+            self.handler.pc_map = self.pc_map
             self.opt.pc_map = self.pc_map
             self.opt.fitparams = self.fitparams
             self.opt.simulator.pc_map = self.pc_map
@@ -275,7 +277,7 @@ class RADDCore(object):
         # log all fit and meta information in working directory
         messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
 
-    def generate_model_id(self, appendstr=None):
+    def generate_model_id(self, get_id=False, appendstr=None):
         """ generate an identifying string with model information.
         used for reading and writing model output
         """
@@ -287,22 +289,25 @@ class RADDCore(object):
         if appendstr is not None:
             model_id.append(appendstr)
         self.model_id = '_'.join(model_id)
+        if get_id:
+            return self.model_id
 
-    def make_progress_bars(self):
+    def make_progress_bars(self, models=None):
         """ initialize progress bars to track fit progress (subject fits,
         init optimization, etc)
         """
         from radd.tools.utils import NestedProgress
         n = self.basinparams['ninits']
-        pbars = NestedProgress(name='glb_basin', n=n, title='Global Basin', color='green')
-        pbars.add_bar(name='lcl_basin', bartype='infobar', title='Current Basin', color='red')
+        self.pbars = NestedProgress(name='glb_basin', n=n, title='Global Basin', color='green')
+        self.pbars.add_bar(name='lcl_basin', bartype='infobar', title='Current Basin', color='red')
+        if self.is_nested:
+            self.pbars.add_bar(name='models', n=self.nmodels, title='Nested Fits', color='blue')
         self.track_basins=True
         if self.fit_on=='subjects':
             self.track_subjects = True
-            pbars.add_bar(name='idx', n=self.nidx, title='Subject Fits', color='blue')
+            self.pbars.add_bar(name='idx', n=self.nidx, title='Subject Fits', color='blue')
         self.fitparams['disp']=False
         self.basinparams['disp']=False
-        return pbars
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF

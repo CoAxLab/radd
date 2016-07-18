@@ -32,25 +32,28 @@ class Model(RADDCore):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.array([.1, .3, .5, .7, .9])):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', weighted=True, depends_on={'all':'flat'}, ssd_method=None, quantiles=np.arange(.1, 1.,.1)):
+
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
     def optimize(self, plotfits=True, saveplot=False, keeplog=True, saveresults=True, saveobserved=False, custompath=None, sameaxis=False, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
-        pbars = None
         if np.any([keeplog, saveplot, saveresults]):
             self.results_dir = self.handler.make_results_dir(custompath, get_path=True)
         if progress:
-            pbars = self.make_progress_bars()
+            self.make_progress_bars()
         for i in range(len(self.observed)):
             if self.track_subjects:
-                pbars.update(name='idx', i=i, new_progress=self.idx[i])
-            y, wts = self.iter_flat[i]
-            self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
-            finfo, popt, yhat = self.optimize_flat(pbars=pbars)
-            self.init_params = deepcopy(popt)
+                self.pbars.update(name='idx', i=i, new_progress=self.idx[i])
+            if not hasattr(self, 'init_params'):
+                y, wts = self.iter_flat[i]
+                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
+                finfo, popt, yhat = self.optimize_flat(progress=progress)
+                self.init_params = deepcopy(popt)
+            else:
+                popt = self.init_params
             if not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
@@ -58,12 +61,12 @@ class Model(RADDCore):
             self.assess_fit(finfo, popt, yhat, keeplog)
             if plotfits:
                 self.plot_model_fits(y=y, yhat=yhat, save=saveplot, sameaxis=sameaxis)
-        if progress:
-            pbars.clear()
+        if progress and not self.is_nested:
+            self.pbars.clear()
         if saveresults:
             self.write_results(saveobserved)
 
-    def optimize_flat(self, pbars=None):
+    def optimize_flat(self, progress=False):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -74,11 +77,13 @@ class Model(RADDCore):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
+        pbars=None
         if not self.finished_sampling:
             self.sample_param_sets()
         inits, globalmin = self.filter_param_sets()
-        if pbars is not None:
-            pbars.reset_bar('glb_basin', init_state=globalmin)
+        if progress:
+            self.pbars.reset_bar('glb_basin', init_state=globalmin)
+            pbars = self.pbars
         # Global Optimization w/ Basinhopping (+TNC)
         p = self.opt.hop_around(inits=inits, pbars=pbars)
         # Flat Simplex Optimization of Parameters at Global Minimum
@@ -123,37 +128,27 @@ class Model(RADDCore):
         self.yhat = yhat
         if keeplog:
             self.log_fit_info(finfo, popt, fp)
-        # try:
         self.fill_yhatDF(yhat=yhat, fitparams=fp)
         self.fill_fitDF(finfo=finfo, fitparams=fp)
-        # except Exception:
-        #     print('fill_df error, already optimized? try new model')
-        #     print('latest finfo, popt, yhat available as model attributes')
 
     def optimize_nested_models(self, models=[], saveplot=True, plotfits=True, progress=False, keeplog=True):
         """ optimize externally defined models in model_list using same init parameters
         as the current model for conditional fits (NOTE: only works with fit_on='average')
         """
-        self.is_nested = True
+        self.is_nested = True; self.nmodels=len(models)
         if not hasattr(self, 'init_params'):
             self.optimize(plotfits=plotfits, progress=progress)
-        # self.models_finfo = {self.model_id: self.finfo}
-        # self.models_aic = {self.model_id: self.finfo.AIC}
-        # self.models_bic = {self.model_id: self.finfo.BIC}
         for i, pdep in enumerate(models):
+            if progress:
+                self.pbars.update(name='models', i=i)
             self.set_fitparams(depends_on = {pdep: list(self.clmap)[0]})
             p = self.__check_inits__(deepcopy(self.init_params))
             finfo, popt, yhat = self.optimize_conditional(p=p)
             self.assess_fit(finfo, popt, yhat, keeplog)
             if plotfits:
                 self.plot_model_fits(self.fitparams.y, yhat, self.fitparams, save=saveplot)
-            # self.models_finfo[self.model_id] = self.finfo
-            # self.models_aic[self.model_id] = self.finfo.AIC
-            # self.models_bic[self.model_id] = self.finfo.BIC
-        # cols = sorted(list(self.models_finfo))
-        # datas = [self.models_finfo[c] for c in cols]
-        # dfx = pd.concat(datas, axis=1)
-        # dfx.columns = cols
+        if progress:
+            self.pbars.clear()
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using
