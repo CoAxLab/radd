@@ -30,7 +30,7 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
         palettes = colors.get_cpals(aslist=True)[:nlevels]
     if sameaxis or nlevels==1:
         f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
-        axes = np.asarray([ax1, ax2, ax3])
+        axes = np.asarray([[ax1, ax2, ax3]])
     else:
         f, axes = plt.subplots(nlevels, 3, figsize=(14, 4.5*nlevels), sharey=True)
     if nssd==1:
@@ -93,7 +93,7 @@ def scurves(data, err=None, colors=None, labels=None, ssd=None, ax=None, get_pse
             ax.errorbar(x, yi, yerr=err, lw=0., elinewidth=1.5, color=colors[i], marker='o', ms=5)
             ax.plot(xsim, ysim, lw=2, color=colors[i], label=labels[i])
             continue
-        ax.plot(x, yi, lw=0., color=colors[i], marker='o', ms=10, mfc="none", mec=colors[i], mew=1.7, label=labels[i])
+        ax.plot(x, yi, lw=0., marker='o', ms=10, mfc="none", mec=colors[i], mew=1.7, label=labels[i])
     xxlim = (xsim[0], xsim[-1])
     ytls = np.arange(0, 1.2, .2).astype(np.int)
     plt.setp(ax, xticks=x, xlim=xxlim, xticklabels=xtls, ylim=(-.01, 1.05), yticks=ytls, yticklabels=ytls)
@@ -243,7 +243,7 @@ def plot_model_gof(gof_dict, aicwinner):
     f, ax = plt.subplots(1, figsize=(8,6))
     x = np.arange(1, nmodels*2, 2)
     vals = np.hstack(gof_dict.values()).astype(float)
-    yylim = (vals.max()*1.05, vals.min()*.95)
+    yylim = (vals.max()*.95, vals.min()*1.05)
     xtls = []
     for i, (m_id, gof) in enumerate(gof_dict.items()):
         if i == len(x)-1:
@@ -255,6 +255,7 @@ def plot_model_gof(gof_dict, aicwinner):
         ax.plot(x[i]+.2, gof['BIC'], color=c1[1], marker='o', ms=10, label=l2, alpha=a)
         xtls.append(m_id)
     plt.setp(ax, xticks=x, xticklabels=xtls, ylim=yylim, xlim=(0, nmodels*2))
+    ax.invert_yaxis()
     ax.xaxis.tick_top()
     sns.despine()
     ax.legend(loc=0)

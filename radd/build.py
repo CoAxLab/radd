@@ -52,12 +52,14 @@ class Model(RADDCore):
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
                 finfo, popt, yhat = self.optimize_flat(progress=progress)
                 self.init_params = deepcopy(popt)
-            else:
-                popt = self.init_params
+            popt = self.init_params
             if not self.is_flat:
                 y, wts = self.iter_cond[i]
                 self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
                 finfo, popt, yhat = self.optimize_conditional(p=popt)
+            elif self.is_flat and hasattr(self, 'init_params'):
+                print('Model is flat, already optimized')
+                continue
             self.assess_fit(finfo, popt, yhat, keeplog)
             if plotfits:
                 self.plot_model_fits(y=y, yhat=yhat, save=saveplot, sameaxis=sameaxis)
@@ -137,7 +139,7 @@ class Model(RADDCore):
         """
         self.is_nested = True; self.nmodels=len(models)
         if not hasattr(self, 'init_params'):
-            self.optimize(plotfits=plotfits, progress=progress)
+            self.optimize(plotfits=plotfits, progress=progress, saveplot=saveplot, keeplog=keeplog)
         for i, pdep in enumerate(models):
             if progress:
                 self.pbars.update(name='models', i=i)
