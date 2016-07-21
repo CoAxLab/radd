@@ -36,39 +36,31 @@ class Model(RADDCore):
 
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, plotfits=True, saveplot=False, keeplog=True, saveresults=True, saveobserved=False, custompath=None, sameaxis=False, progress=False):
+    def optimize(self, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, sameaxis=False, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         """
-        if np.any([keeplog, saveplot, saveresults]):
-            self.results_dir = self.handler.make_results_dir(custompath, get_path=True)
-        if progress:
+        if np.any([saveplot, saveresults]):
+            self.handler.make_results_dir(custompath)
+        if progress and not self.is_nested:
             self.make_progress_bars()
-        for i in range(len(self.observed)):
+        for ix in range(len(self.observed)):
             if self.track_subjects:
-                self.pbars.update(name='idx', i=i, new_progress=self.idx[i])
-            if not hasattr(self, 'init_params'):
-                y, wts = self.iter_flat[i]
-                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=1, flat=True)
-                finfo, popt, yhat = self.optimize_flat(progress=progress)
-                self.init_params = deepcopy(popt)
-            popt = self.init_params
+                self.pbars.update(name='idx', i=ix, new_progress=self.idx[i])
+            if not hasattr(self, 'flat_popt'):
+                self.set_fitparams(ix=ix, nlevels=1)
+                self.optimize_flat()
             if not self.is_flat:
-                y, wts = self.iter_cond[i]
-                self.set_fitparams(idx=i, y=y, wts=wts, nlevels=self.nlevels, flat=False)
-                finfo, popt, yhat = self.optimize_conditional(p=popt)
-            elif self.is_flat and hasattr(self, 'init_params'):
-                print('Model is flat, already optimized')
-                continue
-            self.assess_fit(finfo, popt, yhat, keeplog)
+                self.set_fitparams(ix=ix, nlevels=self.nlevels)
+                self.optimize_conditional()
             if plotfits:
-                self.plot_model_fits(y=y, yhat=yhat, save=saveplot, sameaxis=sameaxis)
+                self.plot_model_fits(save=saveplot, sameaxis=sameaxis)
         if progress and not self.is_nested:
             self.pbars.clear()
         if saveresults:
-            self.write_results(saveobserved)
+            self.handler.save_results(saveobserved)
 
-    def optimize_flat(self, progress=False):
+    def optimize_flat(self):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             p (dict):
@@ -83,14 +75,16 @@ class Model(RADDCore):
         if not self.finished_sampling:
             self.sample_param_sets()
         inits, globalmin = self.filter_param_sets()
-        if progress:
+        if hasattr(self, 'pbars'):
             self.pbars.reset_bar('glb_basin', init_state=globalmin)
             pbars = self.pbars
         # Global Optimization w/ Basinhopping (+TNC)
         p = self.opt.hop_around(inits=inits, pbars=pbars)
         # Flat Simplex Optimization of Parameters at Global Minimum
-        finfo, popt, yhat = self.opt.gradient_descent(p=p)
-        return finfo, popt, yhat
+        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=p, flat=False)
+        self.flat_popt = self.popt
+        if self.is_flat:
+            self.write_results()
 
     def optimize_conditional(self, p=None):
         """ optimizes full model to all conditions in data
@@ -101,56 +95,55 @@ class Model(RADDCore):
             finfo (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt (dict): optimized parameters dictionary
         """
-        if p is None:
-            p = self.__check_inits__(self.init_params)
+        p = self.__check_inits__(deepcopy(self.flat_popt))
         # Pretune Conditional Parameters
         p, fmin = self.opt.run_basinhopping(p)
         # Final Simplex Optimization
-        finfo, popt, yhat = self.opt.gradient_descent(p=p)
-        return finfo, popt, yhat
+        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=p, flat=False)
+        self.write_results()
 
-    def assess_fit(self, finfo, popt, yhat, keeplog=False):
-        """ wrapper for analyze.assess_fit calculates and stores
-        rchi, AIC, BIC and other fit statistics
-        """
-        fp = deepcopy(self.fitparams)
-        fp['yhat'] = yhat.flatten()
-        y = fp['y'].flatten()
-        wts = fp['wts'].flatten()
-        # fill finfo dict with goodness-of-fit info
-        finfo['chi'] = np.sum(wts * (fp['yhat'] - y)**2)
-        finfo['ndata'] = len(fp['yhat'])
-        finfo['df'] = finfo.ndata - finfo.nvary
-        finfo['rchi'] = finfo.chi / finfo.df
-        finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
-        finfo['AIC'] = finfo.logp + 2 * finfo.nvary
-        finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
-        self.finfo = finfo
-        self.popt = popt
-        self.yhat = yhat
-        if keeplog:
-            self.log_fit_info(finfo, popt, fp)
-        self.fill_yhatDF(yhat=yhat, fitparams=fp)
-        self.fill_fitDF(finfo=finfo, fitparams=fp)
-
-    def optimize_nested_models(self, models=[], saveplot=True, plotfits=True, progress=False, keeplog=True):
+    def optimize_nested_models(self, models=[], cond=None, saveplot=True, plotfits=True, progress=False, keeplog=True):
         """ optimize externally defined models in model_list using same init parameters
         as the current model for conditional fits (NOTE: only works with fit_on='average')
         """
-        self.is_nested = True; self.nmodels=len(models)
-        if not hasattr(self, 'init_params'):
-            self.optimize(plotfits=plotfits, progress=progress, saveplot=saveplot, keeplog=keeplog)
-        for i, pdep in enumerate(models):
-            if progress:
+        self.is_nested = True;
+        self.nmodels=len(models)
+        if not self.is_flat:
+            cond = list(self.clmap)[0]
+            models.insert(0, list(self.depends_on)[0])
+        else:
+            if cond is None:
+                print("Must provide <cond>")
+                return
+        for i, pvary in enumerate(models):
+            if progress and i>0:
                 self.pbars.update(name='models', i=i)
-            self.set_fitparams(depends_on = {pdep: list(self.clmap)[0]})
-            p = self.__check_inits__(deepcopy(self.init_params))
-            finfo, popt, yhat = self.optimize_conditional(p=p)
-            self.assess_fit(finfo, popt, yhat, keeplog)
-            if plotfits:
-                self.plot_model_fits(self.fitparams.y, yhat, self.fitparams, save=saveplot)
+            self.set_fitparams(depends_on={pvary: cond})
+            self.optimize(plotfits=plotfits, progress=progress, saveplot=saveplot)
         if progress:
             self.pbars.clear()
+
+    def write_results(self, finfo=None, popt=None, yhat=None):
+        """ logs fit info to txtfile, fills yhatDF and fitDF
+        """
+        finfo, popt, yhat =self.set_results(finfo, popt, yhat)
+        self.log_fit_info(finfo, popt, self.fitparams)
+        self.handler.fill_yhatDF(data=yhat, fitparams=self.fitparams)
+        self.handler.fill_fitDF(data=finfo, fitparams=self.fitparams)
+
+    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw=.008, sameaxis=False):
+        """ wrapper for radd.tools.vis.plot_model_fits
+        """
+        if y is None:
+            y = self.fitparams.y
+        if yhat is None:
+            try:
+                yhat = self.yhat
+            except NameError:
+                yhat = deepcopy(y)
+        if self.fit_on=='average' and err is None:
+            err = self.handler.observed_err
+        plot_model_fits(y, yhat, self.fitparams, err=err, save=save, bw=bw, sameaxis=sameaxis)
 
     def simulate(self, p=None, analyze=True):
         """ simulate yhat vector using

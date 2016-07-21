@@ -13,20 +13,19 @@ import matplotlib as mpl
 from IPython.display import display, Latex
 
 
-def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
+def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=700):
 
     rtkeys = np.sort(rts.keys())
     rt_dists = [np.asarray(rts[k])*1e3-(np.mean(p['tr'])*1e3) for k in rtkeys]
     tb = np.ceil(np.max([np.max(rti) if len(rti)>0 else 0 for rti in rt_dists]))+100
 
-    sns.set(style='white', font_scale=1.2)
+    sns.set(style='white', font_scale=1.5)
     f, axes = build_multi_axis(p, tb=tb)
     clrs = sns.color_palette('muted', 5)
-
     for i in xrange(len(all_traces)):
         for ii, ax in enumerate(axes.flatten()):
             x=np.arange(len(all_traces[i][ii]))
-            ax.plot(x, all_traces[i][ii], color=clrs[ii], alpha=.51, lw=.75)
+            ax.plot(x, all_traces[i][ii], color=clrs[ii], alpha=.3, lw=.75)
 
     for i, ax in enumerate(axes.flatten()):
         divider = make_axes_locatable(ax)
@@ -37,9 +36,9 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
         axx.set_yticklabels([])
         if len(rt_dists[i])<=1:
             continue
-        sns.distplot(rt_dists[i], ax=axx, label=k, color=clrs[i])
+        sns.distplot(rt_dists[i], ax=axx, label=k, kde=False, norm_hist=True, color=clrs[i], bins=10)
         text_str='$\mu_{%s}=%.fms$'%(names[i], np.mean(rt_dists[i]))
-        ax.text(x[0]-50, np.mean(p['a'])-.06, text_str, fontsize=15)
+        ax.text(x[0]-50, np.mean(p['a'])-.06, text_str, fontsize=21)
 
 
 def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)', 'Change in P(card)', '$v^G_t$', '$v^N_t$'], plot_traces=False, p=None, tb=1000):
@@ -168,13 +167,14 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P', 
 
 
 def build_multi_axis(p, nresp=4, tb=1000):
+    sns.set(style='white', font_scale=1.5)
     bound = p['a']
     onset = p['tr']
     if hasattr(bound, '__iter__'):
         bound = bound[0]
         onset = onset[0]
     # init figure, axes, properties
-    f, axes = plt.subplots(2, 2, figsize=(10, 5), sharex=True, sharey=True)
+    f, axes = plt.subplots(2, 2, figsize=(14, 7), sharex=True, sharey=True, dpi=600)
     f.subplots_adjust(hspace=.1, top=.99, bottom=.05)
     w = tb + 40
     h = bound
@@ -185,7 +185,7 @@ def build_multi_axis(p, nresp=4, tb=1000):
         plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
         ax.hlines(y=h, xmin=start, xmax=w, color='k')
         ax.hlines(y=0, xmin=start, xmax=w, color='k')
-        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1.5, linestyle='-', alpha=.5)
+        ax.vlines(x=tb, ymin=0, ymax=h, color='#2043B0', lw=1, linestyle='-', alpha=.35)
         ax.vlines(x=start + 2, ymin=0, ymax=h, color='k')
         ax.set_xticklabels([])
         ax.set_yticklabels([])

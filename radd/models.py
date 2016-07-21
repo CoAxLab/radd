@@ -29,11 +29,13 @@ class Simulator(object):
         self.__update_steps__(dt=dt, si=si)
         self.__update__(fitparams=fitparams)
 
-    def __update__(self, fitparams=None):
+    def __update__(self, fitparams=None, pc_map=None):
         """ update critical simulator parameters for each fit
         by providing an updated fitparams dictionary"""
         if fitparams is not None:
             self.fitparams = fitparams
+        if pc_map is not None:
+            self.pc_map = pc_map
         fp = deepcopy(self.fitparams)
         # non conditional parameters & meta-data
         self.pvc = ['a', 'tr', 'v', 'xb', 'ssv']

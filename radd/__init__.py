@@ -1,19 +1,21 @@
 #!usr/bin/env python
 import os
 import glob
-import pandas as pd
 modules = glob.glob(os.path.dirname(__file__)+"/*.py")
 __all__ = [ os.path.basename(f)[:-3] for f in modules]
-__version__ = '0.1.3'
-_examples_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'examples')
+_package_dir = os.path.dirname(os.path.realpath(__file__))
+__version__ = '0.1.4'
 
 def load_example_data():
+    import pandas as pd
+    _examples_dir = os.path.join(_package_dir, 'examples')
     data_fpath = os.path.join(_examples_dir, 'reactive_example_idx.csv')
     return pd.read_csv(data_fpath).copy()
 
 def load_dpm_animation():
     import io, base64
     from IPython.display import HTML
+    _examples_dir = os.path.join(_package_dir, 'examples')
     mov_fpath = os.path.join(_examples_dir, 'anim.mp4')
     video = io.open(mov_fpath, 'r+b').read()
     encoded = base64.b64encode(video)
@@ -22,7 +24,9 @@ def load_dpm_animation():
 
 def style_notebook():
     from IPython.core.display import HTML
-    print("""Notebook Theme: Grade3\nmore at github.com/dunovank/jupyter-themes""")
-    css_path = os.path.join(_examples_dir, 'custom.css')
-    styles = open(css_path, "r").read()
-    return HTML(styles)
+    g3link = "(https://www.github.com/dunovank/jupyter-themes)"
+    print("Notebook Theme: Grade3\n{}".format(g3link))
+    _styles_dir = os.path.join(_package_dir, 'styles')
+    css_path = os.path.join(_styles_dir, 'custom.css')
+    csscontent = open(css_path, "r").read()
+    return HTML(csscontent)

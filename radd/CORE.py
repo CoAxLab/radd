@@ -20,7 +20,6 @@ class RADDCore(object):
     summary measures and weight matrix for weighting residuals during optimization.
     """
     def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.arange(.1, 1.,.1), ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None):
-        self.verbose = verbose
         self.kind = kind
         self.fit_on = fit_on
         self.ssd_method = ssd_method
@@ -29,20 +28,10 @@ class RADDCore(object):
         self.tb = data[data.response == 1].rt.max()
         self.idx = list(data.idx.unique())
         self.nidx = len(self.idx)
-        self.depends_on = depends_on
-        self.conds = np.unique(listvalues(depends_on)).tolist()
-        if 'flat' in self.conds:
-            self.is_flat = True
-            data = data.copy()
-            data['flat'] = 'flat'
-        else:
-            self.is_flat = False
-        self.nconds = len(self.conds)
-        self.clmap = {c: np.sort(data[c].unique()) for c in self.conds}
-        self.nlevels = np.sum([len(lvls) for lvls in listvalues(self.clmap)])
-        self.groups = np.hstack([['idx'], self.conds]).tolist()
-        self.data = data
         self.inits = inits
+        self.data = data
+        self.depends_on = depends_on
+        self.__set_conditions_info__()
         self.__prepare_fit__()
         self.finished_sampling = False
         self.track_subjects = False
@@ -61,7 +50,6 @@ class RADDCore(object):
         """
         from radd.optimize import Optimizer
         from radd.models import Simulator
-        # initial parameters
         if self.inits is None:
             self.__get_default_inits__()
         # pc_map (see docstrings)
@@ -76,13 +64,9 @@ class RADDCore(object):
         self.set_basinparams()
         # initialize optimizer object for controlling fit routines
         # (updated with fitparams/basinparams whenever params are set)
-        self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, inits=self.inits, depends_on=self.depends_on, pc_map=self.pc_map)
+        self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, depends_on=self.depends_on, pc_map=self.pc_map)
         # initialize model simulator, mainly accessed by the model optimizer object
         self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
-        if self.verbose:
-            self.is_prepared = messages.saygo(depends_on=self.depends_on, cond_map=self.clmap, kind=self.kind, fit_on=self.fit_on)
-        else:
-            self.prepared = True
 
     def __make_dataframes__(self):
         """ wrapper for dfhandler.DataHandler.make_dataframes
@@ -117,32 +101,30 @@ class RADDCore(object):
         """
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_wts
-            self.fitparams = {'idx':0, 'y': self.observed_flat[0], 'wts': self.flat_wts[0],
-                'ntrials': 20000, 'tol': 1.e-30, 'method': 'nelder', 'maxfev': 2000,
-                'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on, 'kind': self.kind,
-                'clmap': self.clmap, 'quantiles': self.quantiles, 'model_id': self.model_id,
-                'depends_on': self.depends_on, 'flat': True, 'disp':True}
+            self.fitparams = {'ix':0, 'ntrials': 20000, 'tol': 1.e-30, 'method': 'nelder',
+                'maxfev': 2000, 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
+                'kind': self.kind, 'clmap': self.clmap, 'quantiles': self.quantiles,
+                'model_id': self.model_id,  'depends_on': self.depends_on}
             self.fitparams = pd.Series(self.fitparams)
         else:
-            # fill with kwargs (i.e. y, wts, idx, etc) for the upcoming fit
+            # fill with kwargs (i.e. y, wts, ix, etc) for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.fitparams[kw_arg] = kw_val
+        if 'quantiles' in list(kwargs):
+            self.__update_quantiles__()
+        if 'depends_on' in list(kwargs):
+            reformat_dataframes = False
+            if self.is_flat:
+                reformat_dataframes=True
+            self.depends_on = kwargs['depends_on']
+            self.__set_conditions_info__()
+            if reformat_dataframes:
+                self.__prepare_fit__()
         if hasattr(self, 'ssd'):
             self.__set_ssd_info__()
-        if self.fitparams.quantiles.size != self.quantiles.size:
-            self.quantiles = self.fitparams.quantiles
-            self.__make_dataframes__()
-            self.fitparams['y'] = self.observed_flat[self.fitparams.idx]
-            self.fitparams['wts'] = self.flat_wts[self.fitparams.idx]
-        if list(self.depends_on)[0]!=list(self.fitparams.depends_on)[0]:
-            self.depends_on = self.fitparams.depends_on
-            self.__format_pcmap__()
-            self.fitparams['model_id'] = self.generate_model_id(get_id=True)
-            self.is_flat = False
+        self.__update_data__()
         if hasattr(self, 'opt'):
             self.opt.fitparams = self.fitparams
-            self.opt.pc_map = self.pc_map
-            self.opt.simulator.pc_map = self.pc_map
             self.opt.simulator.__update__(fitparams=self.opt.fitparams)
 
     def set_basinparams(self, **kwargs):
@@ -158,23 +140,38 @@ class RADDCore(object):
                 self.basinparams[kw_arg] = kw_val
             self.opt.basinparams = self.basinparams
 
-    def __set_ssd_info__(self):
-        """ set ssd_info for upcoming fit and store in fitparams dict
+    def __update_data__(self):
+        """ called when ix (int) is passed to fitparams as kwarg.
+        Fills fitparams with y and wts vectors corresponding to ix'th
+        arrays in observed(_flat) and (flat/cond)_wts lists.
         """
-        if self.fit_on=='average':
-            ssd = np.array(self.ssd).mean(axis=0)
-        else:
-            # get ssd vector for fit number idx
-            ssd = self.ssd[self.fitparams.idx]
+        i = self.fitparams['ix']
         if self.fitparams.nlevels==1:
-            # single vector (nlevels=1), don't squeeze
-            ssd = np.mean(ssd, axis=0, keepdims=True)
-        nssd = ssd.shape[-1]
-        nss = int((.5 * self.fitparams.ntrials))
-        nss_per_ssd = int(nss/nssd)
-        ssd_ix = np.arange(nssd) * np.ones((ssd.shape[0], ssd.shape[-1])).astype(np.int)
-        # store all ssd_info in fitparams, accessed by Simulator
-        self.fitparams['ssd_info'] = [ssd, nssd, nss, nss_per_ssd, ssd_ix]
+            y = self.observed_flat[i]
+            wts = self.flat_wts[i]
+        else:
+            y = self.observed[i]
+            wts = self.cond_wts[i]
+        self.fitparams['y'] = y
+        self.fitparams['wts'] = wts
+
+    def __set_conditions_info__(self):
+        data = self.data.copy()
+        self.conds = np.unique(listvalues(self.depends_on)).tolist()
+        if 'flat' in self.conds:
+            self.is_flat = True
+            data['flat'] = 'flat'
+            self.data = data.copy()
+        else:
+            self.is_flat = False
+        self.nconds = len(self.conds)
+        self.clmap = {c: np.sort(data[c].unique()) for c in self.conds}
+        self.nlevels = np.sum([len(lvls) for lvls in listvalues(self.clmap)])
+        self.groups = np.hstack([['idx'], self.conds]).tolist()
+        if hasattr(self, 'ssd'):
+            self.__set_ssd_info__()
+        if hasattr(self, 'fitparams'):
+            self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap)
 
     def __format_pcmap__(self):
         """ dict used by Simulator to extract conditional parameter values by name
@@ -191,11 +188,35 @@ class RADDCore(object):
                 pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
         self.pc_map = pc_map
         if hasattr(self, 'opt'):
-            self.handler.pc_map = self.pc_map
-            self.opt.pc_map = self.pc_map
-            self.opt.fitparams = self.fitparams
-            self.opt.simulator.pc_map = self.pc_map
-            self.opt.simulator.__update__(fitparams=self.opt.fitparams)
+            self.handler.pc_map = pc_map
+            self.opt.pc_map = pc_map
+            self.opt.simulator.__update__(pc_map=pc_map)
+
+    def __set_ssd_info__(self):
+        """ set ssd_info for upcoming fit and store in fitparams dict
+        """
+        if self.fit_on=='average':
+            ssd = np.array(self.ssd).mean(axis=0)
+        else:
+            # get ssd vector for fit index == ix
+            ssd = self.ssd[self.fitparams['ix']]
+        if self.fitparams.nlevels==1:
+            # single vector (nlevels=1), don't squeeze
+            ssd = np.mean(ssd, axis=0, keepdims=True)
+        nssd = ssd.shape[-1]
+        nss = int((.5 * self.fitparams.ntrials))
+        nss_per_ssd = int(nss/nssd)
+        ssd_ix = np.arange(nssd) * np.ones((ssd.shape[0], ssd.shape[-1])).astype(np.int)
+        # store all ssd_info in fitparams, accessed by Simulator
+        self.fitparams['ssd_info'] = [ssd, nssd, nss, nss_per_ssd, ssd_ix]
+
+    def __update_quantiles__(self):
+        """ recalculate observed dataframes w/ passed quantiles array
+        """
+        self.quantiles = self.fitparams.quantiles
+        self.__make_dataframes__()
+        self.fitparams['y'] = self.observed_flat[self.fitparams['ix']]
+        self.fitparams['wts'] = self.flat_wts[self.fitparams['ix']]
 
     def sample_param_sets(self, pkeys=None, nsamples=None):
         """ sample *nsamples* (default=5000, see set_fitparams) different
@@ -220,64 +241,28 @@ class RADDCore(object):
         inits_list, globalmin = theta.filter_param_sets(self.param_sets, self.param_yhats, self.fitparams, nkeep=nkeep, keep_method=keep_method)
         return inits_list, globalmin
 
-    def fill_yhatDF(self, yhat=None, fitparams=None):
-        """ wrapper for filling & updating model yhatDF
-        """
-        if yhat is None:
-            yhat = self.yhat
-        if fitparams is None:
-            fitparams = self.fitparams
-        self.handler.fill_yhatDF(data=yhat, fitparams=fitparams)
-        self.yhatDF = self.handler.yhatDF.copy()
-
-    def fill_fitDF(self, finfo=None, fitparams=None):
-        """ wrapper for filling & updating model fitDF
-        """
-        if finfo is None:
-            finfo = self.finfo
-        if fitparams is None:
-            fitparams = self.fitparams
-        self.handler.fill_fitDF(data=finfo, fitparams=fitparams)
-        self.fitDF = self.handler.fitDF.copy()
-
-    def write_results(self, save_observed=False):
-        """ wrapper for dfhandler.write_results saves yhatDF and fitDF
-        results to model output dir
-        ::Arguments::
-            save_observed (bool):
-                if True will write observedDF & wtsDF to
-                model output dir
-        """
-        self.handler.write_results(save_observed)
-
-    def plot_model_fits(self, y=None, yhat=None, fitparams=None, kde=True, err=None, save=False, bw=.008, sameaxis=False):
-        """ wrapper for radd.tools.vis.plot_model_fits """
-        from radd import vis
-        if fitparams is None:
-            fitparams=self.fitparams
-        if y is None:
-            y = fitparams['y']
-        if yhat is None:
-            if hasattr(self, 'yhat'):
-                yhat = self.yhat
-            else:
-                yhat = deepcopy(y)
-                print("model is unoptimized, no yhat provided")
-        if self.fit_on=='average' and err is None:
-            err = self.handler.observed_err
-        vis.plot_model_fits(y, yhat, fitparams, err=err, save=save, bw=bw, sameaxis=sameaxis)
-
-    def log_fit_info(self, finfo, popt, fitparams):
+    def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit
         to logfile (.txt) in working directory
         """
-        fp = dict(deepcopy(fitparams))
+        finfo, popt, yhat =self.set_results(finfo, popt, yhat)
+        fp = dict(deepcopy(self.fitparams))
+        fp['yhat'] = self.yhat
         # lmfit-structured fit_report to write in log file
         param_report = self.opt.param_report
         # log all fit and meta information in working directory
         messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
 
-    def generate_model_id(self, get_id=False, appendstr=None):
+    def set_results(self, finfo=None, popt=None, yhat=None):
+        if finfo is None:
+            finfo = self.finfo
+        if popt is None:
+            popt = self.popt
+        if yhat is None:
+            yhat = self.yhat
+        return finfo, popt, yhat
+
+    def generate_model_id(self, appendstr=None):
         """ generate an identifying string with model information.
         used for reading and writing model output
         """
@@ -289,8 +274,8 @@ class RADDCore(object):
         if appendstr is not None:
             model_id.append(appendstr)
         self.model_id = '_'.join(model_id)
-        if get_id:
-            return self.model_id
+        if hasattr(self, 'fitparams'):
+            self.fitparams['model_id'] = self.model_id
 
     def make_progress_bars(self, models=None):
         """ initialize progress bars to track fit progress (subject fits,
@@ -302,6 +287,7 @@ class RADDCore(object):
         self.pbars.add_bar(name='lcl_basin', bartype='infobar', title='Current Basin', color='red')
         if self.is_nested:
             self.pbars.add_bar(name='models', n=self.nmodels, title='Nested Fits', color='blue')
+            self.pbars.update(name='models', i=0)
         self.track_basins=True
         if self.fit_on=='subjects':
             self.track_subjects = True

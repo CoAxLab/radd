@@ -62,8 +62,7 @@ class Optimizer(object):
 
     Handles fitting routines for models of average, individual subject, and bootstrapped data
     """
-    def __init__(self, fitparams=None, basinparams=None, inits=None, kind='xdpm', depends_on=None, pc_map=None):
-        self.inits=inits
+    def __init__(self, fitparams=None, basinparams=None, kind='xdpm', depends_on=None, pc_map=None):
         self.fitparams = fitparams
         self.basinparams = basinparams
         self.kind = kind
@@ -89,9 +88,6 @@ class Optimizer(object):
             popt, fmin = self.run_basinhopping(p=p, callback=callback)
             xpopt.append(popt)
             xfmin.append(fmin)
-        if self.fitparams['disp']:
-            # report global minimum
-            print("Finished Hopping Around:\nGLOBAL MIN = {:.9f}".format(np.min(xfmin)))
         # return parameters at the global basin
         return xpopt[np.argmin(xfmin)]
 
@@ -109,7 +105,7 @@ class Optimizer(object):
         if nl==1:
             basin_keys = np.sort(list(p))
             xp = dict(deepcopy(p))
-            basin_params = theta.scalarize_params(xp)
+            basin_params = theta.scalarize_params(xp, is_flat=True)
         else:
             basin_keys = np.sort(list(self.pc_map))
             basin_params = deepcopy(p)
@@ -135,29 +131,42 @@ class Optimizer(object):
             p[k] = xopt[i]
         return p, funcmin
 
-    def gradient_descent(self, p=None):
+    def gradient_descent(self, p=None, flat=False):
         """ Optimizes parameters following specified parameter
         dependencies on task conditions (i.e. depends_on={param: cond})
         """
         fp = self.fitparams
-        if p is None:
-            p = dict(deepcopy(self.inits))
-        optkws = {'disp': fp['disp'], 'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev']}
+        optkws = {'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev']}
         # make lmfit Parameters object to keep track of
         # parameter names and dependencies during fir
-        lmParams = theta.loadParameters(inits=p, pc_map=self.pc_map, is_flat=fp['flat'], kind=self.kind)
-        lmMinimizer = minimize(self.simulator.cost_fx, lmParams, method=fp['method'], options=optkws)
-        self.lmMinimizer = lmMinimizer
+        lmParams = theta.loadParameters(inits=p, pc_map=self.pc_map, is_flat=flat, kind=self.kind)
+        self.lmMin = minimize(self.simulator.cost_fx, lmParams, method=fp['method'], options=optkws)
         #self.lmMinimizer = deepcopy(lmMinimizer)
-        self.param_report = fit_report(lmMinimizer.params)
+        self.param_report = fit_report(self.lmMin.params)
+        return self.assess_fit(flat=flat)
+
+    def assess_fit(self, flat=False):
+        """ wrapper for analyze.assess_fit calculates and stores
+        rchi, AIC, BIC and other fit statistics
+        """
+        fp = deepcopy(self.fitparams)
+        y = self.simulator.y.flatten()
+        wts = self.simulator.wts.flatten()
         # gen dict of lmfit optimized Parameters object
-        finfo = pd.Series(lmMinimizer.params.valuesdict())
-        p = finfo.to_dict()
-        finfo['cnvrg'] = lmMinimizer.success
-        finfo['nfev'] = lmMinimizer.nfev
-        finfo['nvary'] = len(lmMinimizer.var_names)
-        # get model-predicted yhat vector
-        yhat = (lmMinimizer.residual / self.simulator.wts) + self.simulator.y
+        finfo = pd.Series(self.lmMin.params.valuesdict())
         # un-vectorize all parameters except conditionals
-        popt = theta.scalarize_params(p, pc_map=self.pc_map, is_flat=fp['flat'])
-        return finfo, popt, yhat
+        popt = theta.scalarize_params(finfo, pc_map=self.pc_map, is_flat=flat)
+        # get model-predicted yhat vector
+        fp['yhat'] = (self.lmMin.residual / wts) + y
+        # fill finfo dict with goodness-of-fit info
+        finfo['cnvrg'] = self.lmMin.success
+        finfo['nfev'] = self.lmMin.nfev
+        finfo['nvary'] = len(self.lmMin.var_names)
+        finfo['chi'] = np.sum(wts*(fp['yhat'] - y)**2)
+        finfo['ndata'] = len(fp['yhat'])
+        finfo['df'] = finfo.ndata - finfo.nvary
+        finfo['rchi'] = finfo.chi / finfo.df
+        finfo['logp'] = finfo.ndata * np.log(finfo.rchi)
+        finfo['AIC'] = finfo.logp + 2 * finfo.nvary
+        finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
+        return finfo, popt, fp['yhat']

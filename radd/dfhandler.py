@@ -345,7 +345,7 @@ class DataHandler(object):
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
         self.f_cols = np.hstack([['idx'], params, fit_cols]).tolist()
 
-    def write_results(self, save_observed=False):
+    def save_results(self, save_observed=False):
         """ Saves yhatDF and fitDF results to model output dir
         ::Arguments::
             save_observed (bool):
@@ -367,13 +367,43 @@ class DataHandler(object):
         dir is named according to model_id, navigate to dir
         after ensuring it exists
         """
-        savepath = os.path.expanduser('~')
+        parentdir = os.path.expanduser('~')
         if custompath is not None:
-            savepath = os.path.join(savepath, custompath)
-        abspath = os.path.abspath(savepath)
-        abs_savepath = os.path.join(abspath, self.model.model_id)
-        if not os.path.isdir(abs_savepath):
-            os.makedirs(abs_savepath)
-        os.chdir(abs_savepath)
+            parentdir = os.path.join(_home, custompath)
+        abspath = os.path.abspath(parentdir)
+        self.resultsdir = os.path.join(abspath, self.model.model_id)
+        if not os.path.isdir(self.resultsdir):
+            os.makedirs(self.resultsdir)
+        os.chdir(self.resultsdir)
         if get_path:
-            return abs_savepath
+            return self.resultsdir
+
+    def params_io(p={}, io='w', path=None, iostr='popt'):
+        """ read // write parameters dictionaries
+        """
+        if path is None:
+            path = self.resultsdir
+        fname = os.path.join(path, ''.join([iostr, '.csv']))
+        if io == 'w':
+            pd.Series(p).to_csv(fname)
+        elif io == 'r':
+            p = pd.read_csv(fname, index_col=0)#, header=None)
+            #p = dict(zip(ps[0], ps[1]))
+            return p
+
+    def fits_io(fitparams, fits=[], path=None, io='w', iostr='fits'):
+        """ read // write y, wts, yhat arrays
+        """
+        if path is None:
+            path = self.resultsdir
+        fname = os.path.join(path, ''.join([iostr, '.csv']))
+        y = fitparams['y'].flatten()
+        wts = fitparams['wts'].flatten()
+        fits = fits.flatten()
+        if io == 'w':
+            index = np.arange(len(fits))
+            df = pd.DataFrame({'y': y, 'wts': wts, 'yhat': fits}, index=index)
+            df.to_csv(''.join([iostr, '.csv']))
+        elif io == 'r':
+            df = pd.read_csv(fname, index_col=0)
+            return df

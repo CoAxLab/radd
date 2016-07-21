@@ -28,19 +28,18 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
     quantiles = fitparams.quantiles
     if len(palettes) != nlevels:
         palettes = colors.get_cpals(aslist=True)[:nlevels]
+    clrs = [pal(2) for pal in palettes]
+    lbls = get_plot_labels(fitparams)
     if sameaxis or nlevels==1:
         f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
         axes = np.asarray([[ax1, ax2, ax3]])
     else:
         f, axes = plt.subplots(nlevels, 3, figsize=(14, 4.5*nlevels), sharey=True)
+    plot_acc = scurves
     if nssd==1:
         plot_acc = plot_accuracy
-    else:
-        plot_acc = scurves
-    clrs = [pal(2) for pal in palettes]
-    lbls = get_plot_labels(fitparams)
     y_dat = unpack_vector(y, fitparams, bw=bw)
-    y_kde = unpack_vector(y, fitparams, bw=bw, kde=True)
+    y_kde = unpack_vector(y, fitparams, bw=bw, kde=True)    
     yhat_dat = unpack_vector(yhat, fitparams, bw=bw)
     if err is not None:
         y_err = unpack_vector(err, fitparams, bw=bw)
@@ -221,19 +220,22 @@ def format_axes(axes):
     plt.tight_layout()
     return axes
 
-def compare_nested_models(fitDF, model_ids, plot_stats=True):
+def compare_nested_models(fitDF, model_ids, plot_stats=True, verbose=False):
     gof = {}
     fitDF = fitDF[fitDF.idx.isin(model_ids)]
     # print GOF stats for both models
     for i, p in enumerate(model_ids):
+        name = parameter_name(p)
         gof[p] = fitDF.loc[i, ['AIC', 'BIC']]
-        print('{} GOF:\nAIC = {}\nBIC = {}\n'.format(model_ids[i], *gof[p]))
+        print('{} GOF:\nAIC = {}\nBIC = {}\n'.format(name, *gof[p]))
     # Which model provides a better fit to the data?
     aicwinner = model_ids[np.argmin([gof[mid][0] for mid in model_ids])]
     bicwinner = model_ids[np.argmin([gof[mid][1] for mid in model_ids])]
-    print('AIC likes {} model'.format(aicwinner))
-    print('BIC likes {} model'.format(bicwinner))
+    if verbose:
+        print('AIC likes {} model'.format(aicwinner))
+        print('BIC likes {} model'.format(bicwinner))
     plot_model_gof(gof, aicwinner)
+    return gof
 
 def plot_model_gof(gof_dict, aicwinner):
     sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
@@ -246,15 +248,16 @@ def plot_model_gof(gof_dict, aicwinner):
     yylim = (vals.max()*.95, vals.min()*1.05)
     xtls = []
     for i, (m_id, gof) in enumerate(gof_dict.items()):
+        xtls.append(parameter_name(m_id, tex=True))
         if i == len(x)-1:
             l1, l2 = 'AIC', 'BIC'
         a=.4
         if m_id==aicwinner:
-            a=1
+            a=1; xtls[-1]+='*'
         ax.plot(x[i]-.2, gof['AIC'], color=c1[0], marker='o', ms=10, label=l1, alpha=a)
         ax.plot(x[i]+.2, gof['BIC'], color=c1[1], marker='o', ms=10, label=l2, alpha=a)
-        xtls.append(m_id)
-    plt.setp(ax, xticks=x, xticklabels=xtls, ylim=yylim, xlim=(0, nmodels*2))
+    plt.setp(ax, xticks=x,ylim=yylim, xlim=(0, nmodels*2))
+    ax.set_xticklabels(xtls, fontsize=15)
     ax.invert_yaxis()
     ax.xaxis.tick_top()
     sns.despine()
@@ -264,3 +267,15 @@ def get_plot_labels(fitparams):
     lbls = np.hstack(fitparams['clmap'].values())
     labels = [[lbl + dtype for dtype in [' data', ' model']] for lbl in lbls]
     return labels
+
+def parameter_name(param, tex=False):
+    param_name = {'v':['Drift', '$v_{GO}$'],
+        'xb': ['Dynamic Gain', '$xb$'],
+        'ssv': ['ssDrift', '$v_{SS}$'],
+        'a': ['Threshold', '$a$'],
+        'tr': ['Onset', '$tr_{GO}$'],
+        'xb': ['Dynamic Gain', '$xb$'],
+        'sso': ['ssOnset', '$v_{SS}$']}
+    if tex:
+        return param_name[param][1]
+    return param_name[param][0]

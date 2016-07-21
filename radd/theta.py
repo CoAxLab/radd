@@ -97,6 +97,8 @@ def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
 def scalarize_params(params, pc_map=None, is_flat=True):
     """ scalarize all parameters in params dict """
     exclude = []
+    if isinstance(params, pd.Series):
+        params = params.to_dict()
     if pc_map is not None and not is_flat:
         exclude = np.sort(list(pc_map))
         p_conds = np.sort(listvalues(pc_map)).squeeze()
