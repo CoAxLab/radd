@@ -9,129 +9,102 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from radd.tools import colors, messages, analyze
 from radd import theta
-from IPython.display import HTML, Javascript, display
+from IPython.display import display, Latex
+from ipywidgets import IntProgress, HTML, Box
+
 
 class PBinJ(object):
-    """ animated ProgressBar (PB) to be used (inJ)upyter notebooks
-    (set bartype to 'uglybar' if running from terminal)
-    """
-    def __init__(self, bartype='colorbar', n=None, color='blue', title='Progress'):
-        colors = {'green': '#16a085', 'blue': '#4168B7', 'red': "#e74c3c"}
-        self.color = colors[color]
-        self.n=n
-        self.displayed=False
-        self.bartype=bartype
-        self.title=title
-        self.init_bars()
-
-    def init_bars(self):
-        if self.bartype=='uglybar':
-            import progressbar
-            if self.n is not None:
-                self.bar = progressbar.ProgressBar(0, self.n)
-            self.new_prog_string = ''.join([self.title, ': {0}'])
-            self.update = self.update_uglybar
-        else:
-            import uuid
-            self.barid=str(uuid.uuid4())
-            if self.bartype=='colorbar':
-                args = [self.title, self.color, "500", self.barid, '0%', 'left']
-                self.update = self.update_colorbar
-            else:
-                args = [self.title, self.color, "108", self.barid, '100%', 'center']
-                self.update = self.update_progress
-            self.bar="""<div<p>{0}</p> <div style="border: 2px solid {1}; width:{2}px">
-            <div id="{3}" style="background-color:{1}; width:{4}; text:''; color:#fff; text-align:{5};">
-            &nbsp;</div> </div> </div>""".format(*args)
-
-    def display_bars(self):
-        if self.bartype=='uglybar':
-            self.bar.start()
-        else:
-            display(HTML(self.bar))
-        self.displayed=True
-
-    def update_progress(self, new_progress=None):
-        if self.displayed==False:
-            self.display_bars()
-        if type(new_progress) is str:
-            display(Javascript("$('div#{}').text({})".format(self.barid, new_progress)))
-        else:
-            display(Javascript("$('div#{}').text({:.5f})".format(self.barid, new_progress)))
-
-    def update_colorbar(self, i=None, new_progress=None):
-        if self.displayed==False:
-            self.display_bars()
-        if i is not None:
-            display(Javascript("$('div#{}').width('{:.2f}%')".format(self.barid, ((i+1)*1./(self.n))*100)))
-        if new_progress is not None:
-            self.update_progress(new_progress)
-
-    def update_uglybar(self, i=None, new_progress=None):
-        if self.displayed==False:
-            self.display_bars()
-        if new_progress is not None:
-            sys.stdout.write('\r'+self.new_prog_string.format(str(new_progress)))
-            sys.stdout.flush()
-        if i is not None:
-            self.bar.update(i)
-
-    def clear(self):
-        if self.bartype=='uglybar':
-            sys.stdout.flush
-        else:
-            from IPython.display import clear_output
-            clear_output()
-
-
-class NestedProgress(object):
     """ initialize multiple progress bars for tracking nested stages of fitting routine
     """
-    def __init__(self, name='inits_bar', bartype='colorbar', n=None, init_state=None, color='blue', title='global fmin'):
-        self.bars = {}
-        self.history = []
-        self.add_bar(name=name, bartype=bartype, n=n, init_state=init_state, color=color, title=title)
+    def __init__(self, n=1, value=0, status='{}', color='r', width='50%', height='25px'):
+        self.displayed = False
+        self.style_bar(n=n, value=value, status=status, color=color, width=width, height=height)
 
-    def add_bar(self, name='inits_bar', bartype='colorbar', n=None, init_state=None, color='blue', title='global fmin'):
-        bar = PBinJ(bartype=bartype, n=n, color=color, title=title)
-        self.bars[name] = bar
-        if init_state is not None:
-            self.reset_bar(name, init_state)
+    def style_bar(self, n=1, value=0, status='{}', color='r', width='50%', height='25px'):
+        colordict = {'g': '#16a085', 'b': '#4168B7', 'r': "#e74c3c", 'y': "#f39c12"}
+        self.bar = IntProgress(min=0, max=n, value=value)
+        self.status = status
+        self.bar.color = colordict[color]
+        self.bar.width = width
+        self.bar.height = height
 
-    def reset_bar(self, name, init_state=None):
-        self.history = [init_state]
-        self.bars[name].update(new_progress=init_state)
+    def reset_bar(self):
+        self.update(value=0)
 
-    def update(self, name='all', i=None, new_progress=None):
-        if name=='all':
-            update_list = listvalues(self.bars)
-        else:
-            update_list = [self.bars[name]]
-        for bar in update_list:
-            if bar.bartype=='infobar' and new_progress:
-                bar.update(new_progress)
-            elif bar.bartype=='colorbar':
-                bar.update(i=i, new_progress=new_progress)
-
-    def callback(self, x, fmin, accept):
-        """ A callback function for reporting basinhopping status
-        Arguments:
-            x (array):
-                parameter values
-            fmin (float):
-                function value of the trial minimum, and
-            accept (bool):
-                whether or not that minimum was accepted
-        """
-        if fmin <= np.min(self.history):
-            self.bars['glb_basin'].update(new_progress=fmin)
-        if accept:
-            self.history.append(fmin)
-            self.bars['lcl_basin'].update(new_progress=fmin)
+    def update(self, value=None, status=None):
+        if not self.displayed:
+            display(self.bar)
+            self.displayed=True
+        if status is not None:
+            if hasattr(status, '__iter__'):
+                status = self.status.format(*status)
+            else:
+                status = self.status.format(status)
+            self.bar.description = status
+        if value is not None:
+            self.bar.value = value+1
 
     def clear(self):
-        for bar in listvalues(self.bars):
-            bar.clear()
+        self.bar.close()
+
+
+class BasinCallback(object):
+    """ A callback function for reporting basinhopping status
+    Arguments:
+        x (array):
+            parameter values
+        fmin (float):
+            function value of the trial minimum, and
+        accept (bool):
+            whether or not that minimum was accepted
+    """
+    def __init__(self,  n=1, value=0, status='{:.3fz} / {:.3fz}', color='r'):
+        self.pbar = PBinJ(n=n, value=value, status=status, color='r')
+        self.reset(history=1, gbasin=1, get_call=0)
+
+    def reset(self, history=True, bar=False, gbasin=False, get_call=False):
+        if history:
+            self.history = [MyFloat(1.)]
+        if gbasin:
+            self.gbasin = MyFloat(1.)
+        if bar:
+            self.pbar.reset_bar()
+        if get_call:
+            return self.callback
+
+    def callback(self, x, fmin, accept):
+        if fmin <= np.min(self.history) and fmin<=self.gbasin:
+            self.gbasin = fmin
+        if accept:
+            self.history.append(fmin)
+            status=(MyFloat(x) for x in [fmin, self.gbasin])
+            self.pbar.update(value=len(self.history), status=status)
+            if len(self.history)>=self.pbar.bar.max:
+                # halt run if candidate global minimum has
+                # not changed in nsuccess steps (return True)
+                return True
+
+    def clear(self):
+        self.pbar.clear()
+
+
+
+class MyFloat(float):
+    """ remove leading zeros from string formatted floats
+    """
+    def remove_leading_zero(self, value, string):
+        if 1 > value > -1:
+            string = string.replace('0', '', 1)
+        return string
+
+    def __format__(self, format_string):
+        if format_string.endswith('z'):
+            format_string = format_string[:-1]
+            removezero = True
+        else:
+            removezero = False
+        string = super(MyFloat, self).__format__(format_string)
+        return self.remove_leading_zero(self, string) if removezero else string
 
 
 def rwr(X, get_index=False, n=None):

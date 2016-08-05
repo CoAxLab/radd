@@ -1,17 +1,17 @@
 from setuptools import setup, find_packages
 import numpy as np
 import os
-
+package_data = {'radd':['docs/*.md', 'docs/*.txt', 'examples/*.csv', 'examples/*.mp4', 'styles/*.css']}
 setup(
     name='RADD',
-    version='0.1.3',
+    version='0.2.0',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
     packages=['radd', 'radd.rl', 'radd.tools', 'radd.examples'],
-    package_data={'radd':['examples/*.csv', 'examples/*.txt', 'examples/*.mp4', 'examples/*.css']},
-    description='RADD (Race Against Drift-Diffusion) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
-    install_requires=['numpy>=1.8.2', 'scipy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'progressbar2>=3.9.3', 'future'],
+    package_data=package_data,
+    description='RADD (Race Against Drift-Diffusion model) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
+    install_requires=['numpy>=1.8.2', 'scipy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'sklearn>=0.17.1', 'progressbar2>=3.9.3', 'future'],
     include_dirs = [np.get_include()],
     classifiers=[
                 'Environment :: Console',

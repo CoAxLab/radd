@@ -1,5 +1,6 @@
 #!/usr/local/bin/env python
 from __future__ import division
+import os
 import numpy as np
 from numpy import array
 from numpy.random import sample as rs
@@ -85,7 +86,7 @@ def rew_func(rprob):
         return 0
 
 
-def run_trials(p, cards, nblocks=1, si=.01, a_go=.2, a_no=.2, beta=5, a_Q=.1):
+def run_trials(p=None, cards=None, nblocks=2, si=.1, a_go=.2, a_no=.2, beta=5, a_Q=.1, dt=.001, plot=False):
     """simulate series of trials with learning
     Arguments:
         p (dict): parameter dictionary
@@ -96,6 +97,12 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.2, a_no=.2, beta=5, a_Q=.1):
         all_traces (list): execution process traces truncated to length of winner
         qdict (dict): sequence of Q-value updates for each alt
     """
+    if p is None:
+        p={'vd':.09, 'vi':.05}; p['a']=.006; p['tr']=.3; p['xb']=.001
+    if cards is None:
+        h = os.path.expanduser('~')
+        cpath = os.path.join(h, "Dropbox/Projects/IGTob/IGTCards.csv")
+        cards = pd.read_csv(cpath)*.01
     trials = cards.copy()
     trials = trials.append([trials]*(nblocks-1)).reset_index()
     trials.rename(columns={'index':'t'}, inplace=True)
@@ -114,8 +121,8 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.2, a_no=.2, beta=5, a_Q=.1):
         winner=np.nan
         iquit=0
         while np.isnan(winner) and iquit<35:
-            execution = simulate_multirace(p, si=si)
-            winner, rt, traces, p, qdict, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, vals=vals, names=names, a_go=a_go, a_no=a_no, a_Q=a_Q, beta=beta, choice_prob=choice_prob)
+            execution = simulate_multirace(p, si=si, dt=dt)
+            winner, rt, traces, p, qdict, choice_prob = analyze_multiresponse(execution, p, qdict=qdict, vals=vals, names=names, a_go=a_go, a_no=a_no, a_Q=a_Q, beta=beta, choice_prob=choice_prob, dt=dt)
             iquit+=1
             if np.isnan(np.mean(p['xb'])):
                 iquit=36
@@ -136,13 +143,16 @@ def run_trials(p, cards, nblocks=1, si=.01, a_go=.2, a_no=.2, beta=5, a_Q=.1):
     percent_random_choice = (needsfixed*100.)/ntrials
     if percent_random_choice>=10.:
         print("trials with no winner {:.2f}%".format(percent_random_choice))
+    if plot:
+        visr.plot_traces_rts(p, all_traces, rts)
+        return all_traces, rts
     return choices, rts, all_traces, qdict, choice_prob, vdhist, vihist
 
 
-def simulate_multirace(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_a', 'vi_b', 'vi_c', 'vi_d']}, dt=.005, si=.01, tb=1.5, single_process=False, return_di=False):
+def simulate_multirace(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': ['vi_a', 'vi_b', 'vi_c', 'vi_d']}, dt=.001, si=.1, tb=.8, single_process=False, return_di=False):
 
     nresp = len(pc_map.values()[0])
-    dx=np.sqrt(si*dt)
+    dx = si*np.sqrt(dt)
     p = vectorize_params(p, pc_map=pc_map, nresp=nresp)
 
     Tex = np.ceil((tb-p['tr'])/dt).astype(int)
@@ -161,10 +171,10 @@ def simulate_multirace(p, pc_map={'vd': ['vd_a', 'vd_b', 'vd_c', 'vd_d'], 'vi': 
             return np.cumsum(direct, axis=1), np.cumsum(indirect, axis=1), execution
     return execution
 
-def simulate_dpm(p, pc_map={'vd':['vd_early', 'vd_late', 'vd_uniform'], 'vi': ['vi_early', 'vi_late', 'vi_uniform']}, dt=.005, si=.01, tb=.65, ssd=None, sso=0, single_process=False, return_di=False):
+def simulate_dpm(p, pc_map={'vd':['vd_early', 'vd_late', 'vd_uniform'], 'vi': ['vi_early', 'vi_late', 'vi_uniform']}, dt=.001, si=.1, tb=.65, ssd=None, sso=0, single_process=False, return_di=False):
 
     nlevels = len(pc_map.values()[0])
-    dx=np.sqrt(si*dt)
+    dx=si*np.sqrt(dt)
     p = vectorize_params(p, pc_map=pc_map, nresp=nlevels)
     Tg = np.ceil((tb-p['tr'])/dt).astype(int)
     xtb = temporal_dynamics(p, np.cumsum([dt]*Tg.max()))
@@ -191,7 +201,7 @@ def simulate_dpm(p, pc_map={'vd':['vd_early', 'vd_late', 'vd_uniform'], 'vi': ['
         return [DVg, DVs]
     return DVg
 
-def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_go=.2, a_no=.2,  dt=.005, beta=5, choice_prob={}, a_Q=.1):
+def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_go=.2, a_no=.2,  dt=.001, beta=5, choice_prob={}, a_Q=.1):
     """analyze multi-race execution processes"""
 
     nsteps_to_rt = np.argmax((execution.T>=p['a']).T, axis=1)
@@ -242,7 +252,6 @@ def analyze_multiresponse(execution, p, qdict={}, vals=[], names=[], a_go=.2, a_
         # update direct & indirect drift-rates with cp_delta
         p = reweight_drift(p, alt_i, delta_prob, a_go, a_no)
     #p['a'] = array([a_no*(bound_expected-np.sum(p['vi']))]*p['a'].size)
-
     return winner, rts, traces, p, qdict, choice_prob
 
 def analyze_dpm(p, DVg, DVs, qdict={}, vals=[], names=[], a_go=.2, a_no=.2,  dt=.005, beta=5, choice_prob={}, a_Q=.2):

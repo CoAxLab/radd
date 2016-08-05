@@ -138,7 +138,6 @@ class DataHandler(object):
         for k in data.keys():
             if '_' in k:
                 data[k.split('_')[-1]] = data[k]
-                data.drop(k, inplace=True)
         fitDF = self.fitDF.copy()
         row = np.argmax(fitDF['AIC'].isnull())
         if self.fit_on=='average':
@@ -175,7 +174,7 @@ class DataHandler(object):
             yhatDF.loc[row, keys] = data_series
             if self.fit_on=='average':
                 if self.model.is_nested:
-                    idxname = self.model.model_id
+                    idxname = self.model.model_id.split('_')[1]
                 else:
                     idxname = 'average'
                 yhatDF.loc[row, 'idx'] = idxname
@@ -338,14 +337,12 @@ class DataHandler(object):
         """
         params = np.sort(list(self.inits))
         if not self.model.is_flat:
-            dep_keys = list(self.model.pc_map)
             cond_param_names = listvalues(self.model.clmap)
             params = np.hstack([params, np.squeeze(cond_param_names)]).tolist()
-            _ = [params.remove(pname) for pname in dep_keys]
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
         self.f_cols = np.hstack([['idx'], params, fit_cols]).tolist()
 
-    def write_results(self, save_observed=False):
+    def save_results(self, save_observed=False):
         """ Saves yhatDF and fitDF results to model output dir
         ::Arguments::
             save_observed (bool):
@@ -356,24 +353,68 @@ class DataHandler(object):
         if self.model.is_nested:
             fname='nested_models'
         make_fname = lambda savestr: '_'.join([fname, savestr+'.csv'])
-        self.yhatDF.to_csv(make_fname('yhat'))
-        self.fitDF.to_csv(make_fname('finfo'))
+        self.model.yhatDF = self.yhatDF.dropna()
+        self.model.fitDF = self.fitDF.dropna()
+        self.model.yhatDF.to_csv(make_fname('yhat'), index=False)
+        self.model.fitDF.to_csv(make_fname('finfo'), index=False)
         if save_observed:
             self.observedDF.to_csv(make_fname('observed_data'))
             self.wtsDF.to_csv(make_fname('cost_weights'))
 
-    def make_results_dir(self, custompath=None, get_path=True):
+    def read_results(self, ftype='finfo', path=None, fname=None, dropcols='Unnamed: 0'):
+        """ read fits/yhat csv files into pandas DF
+        ::Arguments::
+            ftype (str):
+                data type: if 'finfo' reads fitDF, if 'yhat' reads yhatDF
+            path (str):
+                custom path if not reading from self.resultsdir
+            fname (str):
+                custom file name if not nested_models or model_id
+        ::Returns::
+            df (DataFrame): pandas df with requested data
+        """
+        if path is None:
+            path = self.resultsdir
+        if fname is None:
+            if self.model.is_nested:
+                fname='nested_models'
+            else:
+                fname = self.model.model_id
+        fname = '_'.join([fname, ftype])
+        full_fpath = os.path.join(path, ''.join([fname, '.csv']))
+        df = pd.read_csv(full_fpath)
+        if 'Unnamed: 0' in df.columns:
+            df = df.drop('Unnamed: 0', axis=1)
+        return df.dropna()
+
+    def make_results_dir(self, custompath=None, get_path=False):
         """ make directory for writing model output and figures
         dir is named according to model_id, navigate to dir
         after ensuring it exists
         """
-        savepath = os.path.expanduser('~')
+        parentdir = os.path.expanduser('~')
         if custompath is not None:
-            savepath = os.path.join(savepath, custompath)
-        abspath = os.path.abspath(savepath)
-        abs_savepath = os.path.join(abspath, self.model.model_id)
-        if not os.path.isdir(abs_savepath):
-            os.makedirs(abs_savepath)
-        os.chdir(abs_savepath)
+            parentdir = os.path.join(parentdir, custompath)
+        abspath = os.path.abspath(parentdir)
+        if self.model.is_nested:
+            self.resultsdir = os.path.join(abspath, "nested_models")
+        else:
+            self.resultsdir = os.path.join(abspath, self.model.model_id)
+        if not os.path.isdir(self.resultsdir):
+            os.makedirs(self.resultsdir)
+        os.chdir(self.resultsdir)
         if get_path:
-            return abs_savepath
+            return self.resultsdir
+
+    def params_io(p={}, io='w', path=None, iostr='popt'):
+        """ read // write parameters dictionaries
+        """
+        if path is None:
+            path = self.resultsdir
+        fname = os.path.join(path, ''.join([iostr, '.csv']))
+        if io == 'w':
+            pd.Series(p).to_csv(fname)
+        elif io == 'r':
+            p = pd.read_csv(fname, index_col=0)#, header=None)
+            #p = dict(zip(ps[0], ps[1]))
+            return p
