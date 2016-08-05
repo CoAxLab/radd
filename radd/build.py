@@ -195,7 +195,7 @@ class Model(RADDCore, Parameters):
                 1d array if analyze is True, else ndarray of decision traces
         """
         if p is None:
-            p = self.inits
+            p = self.popt 
         p = deepcopy(p)
         yhat = self.simulator.sim_fx(p, analyze=analyze)
         if set_observed:
