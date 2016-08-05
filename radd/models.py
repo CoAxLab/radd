@@ -15,21 +15,20 @@ class Simulator(object):
     timepoints are simulated simultaneously
     """
     def __init__(self, fitparams=None, pc_map=None, kind='xdpm', dt=.005, si=.01, learn=False, dynamic=False):
-        self.learn = learn
+        self.fitparams = fitparams
+        self.pc_map = pc_map
         self.kind = kind
-        self.ntime = 0
-        self.dynamic = dynamic
         if 'ssd_info' in fitparams.keys():
             self.ssd_info = fitparams['ssd_info']
             self.include_ss=True
         if 'x' in self.kind:
-            self.dynamic = True
-        self.pc_map = pc_map
-        self.fitparams = fitparams
+            dynamic = True
+        self.ntime = 0
+        self.dynamic = dynamic
         self.__update_steps__(dt=dt, si=si)
-        self.__update__(fitparams=fitparams)
+        self.update(fitparams=fitparams)
 
-    def __update__(self, fitparams=None, pc_map=None):
+    def update(self, fitparams=None, pc_map=None):
         """ update critical simulator parameters for each fit
         by providing an updated fitparams dictionary"""
         if fitparams is not None:
@@ -138,8 +137,6 @@ class Simulator(object):
         """
         prob = self.quantiles
         go_axis, ss_axis = 2, 3
-        if self.learn:
-            go_axis-=1; ss_axis-=1
         self.go_resp = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=go_axis) * self.dt
         self.ss_resp_up = lambda trace, upper: np.argmax((trace.T >= upper).T, axis=ss_axis) * self.dt
         self.ss_resp_lo = lambda trace, x: np.argmax((trace.T <= 0).T, axis=ss_axis) * self.dt
@@ -317,12 +314,12 @@ class Simulator(object):
         nl, ntot, dx = self.nlevels, self.ntot, self.dx
         ssd, nssd, nss, nss_per, ssd_ix = self.ssd_info
 
-        for trial in range(ntot):
+        for trial in xrange(ntot):
             DVg = xtb[:, na] * csum(np.where(self.rvector[:, trial, :].T < Pg, dx, -dx).T, axis=2)
             # INITIALIZE DVs FROM DVg(t=SSD)
             if trial%2:
                 DVg[:, ]
-                ssBase = ssDVg[np.arange(nl)[:,na], ssd_ix, :, ss_on][:,:,:,na]
+                ssBase = ssDVg[np.arange(nl)[:,na], ssd, :, ss_on][:,:,:,na]
                 DVs = ssBase + csum(np.where(self.rvector_ss.T < Ps, dx, -dx).T, axis=3)
                 #ssBase = DVg[np.arange(nl)[:,na], ssd_ix, :, ss_on][:,:,:,na]
                 #DVs = init_ss[:,:,na] + csum(np.where(rs((nss, Ts.max()))<Ps, dx, -dx), axis=1)

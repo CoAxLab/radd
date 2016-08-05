@@ -4,7 +4,7 @@ import os
 package_data = {'radd':['docs/*.md', 'docs/*.txt', 'examples/*.csv', 'examples/*.mp4', 'styles/*.css']}
 setup(
     name='RADD',
-    version='0.1.6',
+    version='0.2.0',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',

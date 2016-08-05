@@ -3,8 +3,9 @@ import os
 import glob
 modules = glob.glob(os.path.dirname(__file__)+"/*.py")
 __all__ = [ os.path.basename(f)[:-3] for f in modules]
+
 _package_dir = os.path.dirname(os.path.realpath(__file__))
-__version__ = '0.1.6'
+__version__ = '0.2.0'
 
 def load_example_data():
     import pandas as pd
@@ -27,6 +28,6 @@ def style_notebook():
     g3link = "(https://www.github.com/dunovank/jupyter-themes)"
     print("Notebook Theme: Grade3\n{}".format(g3link))
     _styles_dir = os.path.join(_package_dir, 'styles')
-    css_path = os.path.join(_styles_dir, 'custom.css')
-    csscontent = open(css_path, "r").read()
+    style = os.path.join(_styles_dir, 'custom.css')
+    csscontent = open(style, "r").read()
     return HTML(csscontent)

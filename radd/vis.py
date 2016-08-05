@@ -7,9 +7,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
 from radd.tools import colors, analyze
+from IPython.display import display, Latex
 import warnings
-warnings.simplefilter('ignore', np.RankWarning)
 
+warnings.simplefilter('ignore', np.RankWarning)
+warnings.filterwarnings("ignore", module="matplotlib")
 cdict = colors.get_cpals('all')
 rpal = cdict['rpal']
 bpal = cdict['bpal']
@@ -18,28 +20,29 @@ ppal = cdict['ppal']
 heat = cdict['heat']
 cool = cdict['cool']
 slate = cdict['slate']
+sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.2)
 
-def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=False, cdf=True, bw=.01, sameaxis=False):
+def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=False, cdf=True, bw=.01):
     """ main plotting function for displaying model fit predictions over data
     """
     sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
+    # extract model and fit info from fitparams
     nlevels = fitparams['nlevels']
     ssd, nssd, nss, nss_per, ssd_ix = fitparams.ssd_info
     quantiles = fitparams.quantiles
-    if len(palettes) != nlevels:
-        palettes = colors.get_cpals(aslist=True)[:nlevels]
+
+    # make colors and labels
+    palettes = colors.get_cpals(aslist=True)[:nlevels]
     clrs = [pal(2) for pal in palettes]
     lbls = get_plot_labels(fitparams)
-    if sameaxis or nlevels==1:
-        f, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(14, 5), sharey=True)
-        axes = np.asarray([[ax1, ax2, ax3]])
-    else:
-        f, axes = plt.subplots(nlevels, 3, figsize=(14, 4.5*nlevels), sharey=True)
+    f, axes = plt.subplots(nlevels, 3, figsize=(14, 5*nlevels), sharey=True)
+    # make two dimensional for iterating 1st dim
+    axes = axes.reshape(nlevels, 3)
     plot_acc = scurves
     if nssd==1:
         plot_acc = plot_accuracy
     y_dat = unpack_vector(y, fitparams, bw=bw)
-    y_kde = unpack_vector(y, fitparams, bw=bw, kde=True)    
+    y_kde = unpack_vector(y, fitparams, bw=bw, kde=True)
     yhat_dat = unpack_vector(yhat, fitparams, bw=bw)
     if err is not None:
         y_err = unpack_vector(err, fitparams, bw=bw)
@@ -47,12 +50,11 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
         qp_err = [[e[1], e[2]] for e in y_err]
     else:
         sc_err, qp_err = [[None]*nlevels]*2
-    for i in range(nlevels):
-        if not sameaxis:
-            ax1, ax2, ax3 = axes[i]
+
+    for i, (ax1, ax2, ax3) in enumerate(axes):
         accdata = [y_dat[i][0], yhat_dat[i][0]]
         qpdata = [y_dat[i], yhat_dat[i]]
-        plot_acc(accdata, err=sc_err[i], ssd=ssd[i], colors=clrs[i], labels=lbls[i], ax=ax1, ssdlabels=sameaxis)
+        plot_acc(accdata, err=sc_err[i], ssd=ssd[i], colors=clrs[i], labels=lbls[i], ax=ax1)
         plot_quantiles(qpdata, err=qp_err[i], quantiles=quantiles, colors=clrs[i], axes=[ax2,ax3], kde=y_kde[i], bw=bw)
     axes = format_axes(axes)
     if save:
@@ -147,12 +149,9 @@ def plot_accuracy(data=[], err=None, ssd=None, ax=None, linestyles=None, colors=
         linestyles = ['-', '--'] * len(data)
     x = np.arange(len(data[0]), dtype='float')
     if ssd is not None:
-        ssdstr = "SSD={:.2f}".format(ssd.mean(axis=0)*1e3)
-        if ssdlabels:
-            labels[0] = ' '.join([labels[0], ssdstr])
-            xtls = ['Go', 'Stop']
-        else:
-            xtls = ['Go', ssdstr]
+        ssdstr = "SSD={:.0f}ms".format(ssd.mean(axis=0)*1e3)
+        labels[0] = ' '.join([labels[0], ssdstr])
+        xtls = ['Go', 'Stop']
     for i, yi in enumerate(data):
         if not i%2:
             ax.errorbar(x, yi, yerr=err[i], linestyle=linestyles[i], lw=1.5, elinewidth=1.5, color=colors[i], label=labels[i], marker='o', ms=5)
@@ -227,41 +226,71 @@ def compare_nested_models(fitDF, model_ids, plot_stats=True, verbose=False):
     for i, p in enumerate(model_ids):
         name = parameter_name(p)
         gof[p] = fitDF.loc[i, ['AIC', 'BIC']]
-        print('{} GOF:\nAIC = {}\nBIC = {}\n'.format(name, *gof[p]))
     # Which model provides a better fit to the data?
     aicwinner = model_ids[np.argmin([gof[mid][0] for mid in model_ids])]
     bicwinner = model_ids[np.argmin([gof[mid][1] for mid in model_ids])]
     if verbose:
         print('AIC likes {} model'.format(aicwinner))
         print('BIC likes {} model'.format(bicwinner))
-    plot_model_gof(gof, aicwinner)
+    plot_model_gof(gof, aicwinner, model_ids)
     return gof
 
-def plot_model_gof(gof_dict, aicwinner):
+def plot_model_gof(gof_dict, aicwinner, models=None):
     sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
-    nmodels = len(list(gof_dict))
-    c1 = ["#4168B7", "#d62c1a"]
-    l1, l2 = None, None
+    if models is None:
+        models = np.sort(list(gof_dict))
+    nmodels = len(models)
     f, ax = plt.subplots(1, figsize=(8,6))
     x = np.arange(1, nmodels*2, 2)
+    clrs = colors.param_color_map()
+    lbls = {m_id: parameter_name(m_id,True) for m_id in models}
+    for i, m_id in enumerate(models):
+        yaic, ybic = gof_dict[m_id][['AIC', 'BIC']]
+        lbl = lbls[m_id]
+        if m_id==aicwinner:
+            lbl+='*'
+        ax.bar(x[i]-.25, yaic, color=clrs[m_id], width=.5, align='center', edgecolor=clrs[m_id], label=lbl)
+        ax.bar(x[i]+.25, ybic, color=clrs[m_id], alpha=.7, width=.5, align='center', edgecolor=clrs[m_id])
     vals = np.hstack(gof_dict.values()).astype(float)
     yylim = (vals.max()*.95, vals.min()*1.05)
-    xtls = []
-    for i, (m_id, gof) in enumerate(gof_dict.items()):
-        xtls.append(parameter_name(m_id, tex=True))
-        if i == len(x)-1:
-            l1, l2 = 'AIC', 'BIC'
-        a=.4
-        if m_id==aicwinner:
-            a=1; xtls[-1]+='*'
-        ax.plot(x[i]-.2, gof['AIC'], color=c1[0], marker='o', ms=10, label=l1, alpha=a)
-        ax.plot(x[i]+.2, gof['BIC'], color=c1[1], marker='o', ms=10, label=l2, alpha=a)
-    plt.setp(ax, xticks=x,ylim=yylim, xlim=(0, nmodels*2))
-    ax.set_xticklabels(xtls, fontsize=15)
+    plt.setp(ax, xticks=x, ylim=yylim, xlim=(0, x[-1]+1), ylabel='IC')
+    ax.set_xticklabels(['AIC | BIC']*nmodels, fontsize=18)
     ax.invert_yaxis()
-    ax.xaxis.tick_top()
     sns.despine()
-    ax.legend(loc=0)
+    ax.legend(loc=0, fontsize=22)
+
+def plot_param_distributions(p, nsamples=1000):
+    from radd import theta
+    pkeys = np.sort(list(p))
+    nparams = pkeys.size
+    p_dists = theta.random_inits(pkeys=pkeys, ninits=nsamples)
+    clrs = colors.param_color_map()
+    lbls = {pk: parameter_name(pk,True) for pk in pkeys}
+    ncols = np.ceil(nparams/2.).astype(int)
+    fig, axes = plt.subplots(2, ncols, figsize=(10,5))
+    axes = axes.flatten()
+    for i, pk in enumerate(pkeys):
+        sns.distplot(p_dists[pk], label=lbls[pk], color=clrs[pk], ax=axes[i])
+    for ax in axes:
+        ax.legend(loc=0, fontsize=16)
+    plt.tight_layout()
+    sns.despine()
+
+def compare_param_estimates(p1, p2, depends_on=None):
+    popt1 = deepcopy(p1)
+    popt2 = deepcopy(p2)
+    if depends_on is not None:
+        _ = [popt1.pop(param) for param in list(depends_on)]
+    pnames = np.sort(list(popt1))
+    x = np.arange(pnames.size)
+    clrs = sns.color_palette(palette='muted', n_colors=x.size)
+    i = 0
+    f, ax = plt.subplots(1, figsize=(6,5))
+    for param in pnames:
+        plt.plot(x[i], abs(popt1[param]), marker='o', markersize=10, color=clrs[i])
+        plt.plot(x[i], abs(popt2[param]), marker='s', markersize=8, color=clrs[i])
+        i+=1
+    _ = plt.setp(plt.gca(), xlim=(x[0]-.5, x[-1]+.5), xticks=x, xticklabels=pnames)
 
 def get_plot_labels(fitparams):
     lbls = np.hstack(fitparams['clmap'].values())
@@ -269,13 +298,13 @@ def get_plot_labels(fitparams):
     return labels
 
 def parameter_name(param, tex=False):
-    param_name = {'v':['Drift', '$v_{GO}$'],
-        'xb': ['Dynamic Gain', '$xb$'],
-        'ssv': ['ssDrift', '$v_{SS}$'],
-        'a': ['Threshold', '$a$'],
-        'tr': ['Onset', '$tr_{GO}$'],
-        'xb': ['Dynamic Gain', '$xb$'],
-        'sso': ['ssOnset', '$v_{SS}$']}
+    param_name = {'v':['Drift', '$v_{G}$'],
+        'ssv': ['ssDrift', '$v_{S}$'],
+        'a': ['Threshold', '$a_{G}$'],
+        'tr': ['Onset', '$tr_{G}$'],
+        'xb': ['Dynamic Gain', '$xb_{G}$'],
+        'sso': ['ssOnset', '$so_{S}$'],
+        'flat': ['Flat', '']}
     if tex:
         return param_name[param][1]
     return param_name[param][0]

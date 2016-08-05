@@ -30,12 +30,12 @@ class RADDCore(object):
         self.nidx = len(self.idx)
         self.inits = inits
         self.data = data
-        self.depends_on = depends_on
-        self.__set_conditions_info__()
+        self.set_conditions(depends_on)
         self.__prepare_fit__()
         self.finished_sampling = False
         self.track_subjects = False
         self.track_basins = False
+        self.pbars = None
         self.is_nested = False
 
     def __prepare_fit__(self):
@@ -62,11 +62,11 @@ class RADDCore(object):
         self.set_fitparams()
         # set basinhopping parameters with default values
         self.set_basinparams()
+        # initialize model simulator, mainly accessed by the model optimizer object
+        self.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
         # initialize optimizer object for controlling fit routines
         # (updated with fitparams/basinparams whenever params are set)
-        self.opt = Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, kind=self.kind, depends_on=self.depends_on, pc_map=self.pc_map)
-        # initialize model simulator, mainly accessed by the model optimizer object
-        self.opt.simulator = Simulator(fitparams=self.fitparams, kind=self.kind, pc_map=self.pc_map)
+        self.optimizer = Optimizer(simulator=self.simulator, basinparams=self.basinparams)
 
     def __make_dataframes__(self):
         """ wrapper for dfhandler.DataHandler.make_dataframes
@@ -96,13 +96,13 @@ class RADDCore(object):
         self.iter_flat = zip(self.observed_flat, self.flat_wts)
         self.iter_cond = zip(self.observed, self.cond_wts)
 
-    def set_fitparams(self, **kwargs):
+    def set_fitparams(self, force_conditional=False, **kwargs):
         """ dictionary of fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_wts
             self.fitparams = {'ix':0, 'ntrials': 20000, 'tol': 1.e-30, 'method': 'nelder',
-                'maxfev': 2000, 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
+                'maxfev': 3000, 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
                 'kind': self.kind, 'clmap': self.clmap, 'quantiles': self.quantiles,
                 'model_id': self.model_id,  'depends_on': self.depends_on}
             self.fitparams = pd.Series(self.fitparams)
@@ -116,47 +116,48 @@ class RADDCore(object):
             reformat_dataframes = False
             if self.is_flat:
                 reformat_dataframes=True
-            self.depends_on = kwargs['depends_on']
-            self.__set_conditions_info__()
+            self.set_conditions(kwargs['depends_on'])
             if reformat_dataframes:
                 self.__prepare_fit__()
+        self.update_data(force_conditional)
         if hasattr(self, 'ssd'):
             self.__set_ssd_info__()
-        self.__update_data__()
-        if hasattr(self, 'opt'):
-            self.opt.fitparams = self.fitparams
-            self.opt.simulator.__update__(fitparams=self.opt.fitparams)
+        if hasattr(self, 'optimizer'):
+            self.simulator = self.optimizer.update(fitparams=self.fitparams, pc_map=self.pc_map, get_simulator=True)
 
     def set_basinparams(self, **kwargs):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'ninits': 5, 'nsamples': 5000, 'interval': 10, 'T': 1.,
-            'disp': False, 'stepsize': .05, 'nsuccess': 40, 'tol': 1.e-20, 'method': 'TNC',
-            'init_sample_method': 'best'}
+            self.basinparams =  {'ninits': 3, 'nsamples': 3000, 'interval': 10, 'T': 1.,
+            'stepsize': .05,  'niter': 100, 'nsuccess': 60, 'tol': 1.e-20, 'method': 'TNC',
+            'init_sample_method': 'best', 'progress': False, 'disp': False}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.basinparams[kw_arg] = kw_val
-            self.opt.basinparams = self.basinparams
+        if hasattr(self, 'optimizer'):
+            self.optimizer.update(basinparams=self.basinparams)
 
-    def __update_data__(self):
+    def update_data(self, force_conditional=False):
         """ called when ix (int) is passed to fitparams as kwarg.
         Fills fitparams with y and wts vectors corresponding to ix'th
         arrays in observed(_flat) and (flat/cond)_wts lists.
         """
+        if force_conditional:
+            self.fitparams['nlevels'] = self.nlevels
+        nlevels = self.fitparams.nlevels
         i = self.fitparams['ix']
-        if self.fitparams.nlevels==1:
-            y = self.observed_flat[i]
-            wts = self.flat_wts[i]
+        if nlevels>1:
+            self.fitparams['y'] = self.observed[i]
+            self.fitparams['wts'] = self.cond_wts[i]
         else:
-            y = self.observed[i]
-            wts = self.cond_wts[i]
-        self.fitparams['y'] = y
-        self.fitparams['wts'] = wts
+            self.fitparams['y'] = self.observed_flat[i]
+            self.fitparams['wts'] = self.flat_wts[i]
 
-    def __set_conditions_info__(self):
+    def set_conditions(self, depends_on=None):
         data = self.data.copy()
+        self.depends_on = depends_on
         self.conds = np.unique(listvalues(self.depends_on)).tolist()
         if 'flat' in self.conds:
             self.is_flat = True
@@ -168,9 +169,11 @@ class RADDCore(object):
         self.clmap = {c: np.sort(data[c].unique()) for c in self.conds}
         self.nlevels = np.sum([len(lvls) for lvls in listvalues(self.clmap)])
         self.groups = np.hstack([['idx'], self.conds]).tolist()
+        self.__format_pcmap__()
         if hasattr(self, 'ssd'):
             self.__set_ssd_info__()
         if hasattr(self, 'fitparams'):
+            self.generate_model_id()
             self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap)
 
     def __format_pcmap__(self):
@@ -187,10 +190,8 @@ class RADDCore(object):
                 levels = np.sort(self.data[cond].unique())
                 pc_map[p] = ['_'.join([p, lvl]) for lvl in levels]
         self.pc_map = pc_map
-        if hasattr(self, 'opt'):
+        if hasattr(self, 'handler'):
             self.handler.pc_map = pc_map
-            self.opt.pc_map = pc_map
-            self.opt.simulator.__update__(pc_map=pc_map)
 
     def __set_ssd_info__(self):
         """ set ssd_info for upcoming fit and store in fitparams dict
@@ -210,7 +211,7 @@ class RADDCore(object):
         # store all ssd_info in fitparams, accessed by Simulator
         self.fitparams['ssd_info'] = [ssd, nssd, nss, nss_per_ssd, ssd_ix]
 
-    def __update_quantiles__(self):
+    def update_quantiles(self):
         """ recalculate observed dataframes w/ passed quantiles array
         """
         self.quantiles = self.fitparams.quantiles
@@ -218,7 +219,7 @@ class RADDCore(object):
         self.fitparams['y'] = self.observed_flat[self.fitparams['ix']]
         self.fitparams['wts'] = self.flat_wts[self.fitparams['ix']]
 
-    def sample_param_sets(self, pkeys=None, nsamples=None):
+    def sample_param_sets(self, pkeys=None, nsamples=None, nkeep=None):
         """ sample *nsamples* (default=5000, see set_fitparams) different
         parameter sets (param_sets) and get model yhat for each set (param_yhats)
         """
@@ -226,20 +227,25 @@ class RADDCore(object):
             pkeys = np.sort(list(self.inits))
         if nsamples is None:
             nsamples = self.basinparams['nsamples']
-        self.param_sets = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list_of_dicts=True)
-        self.param_yhats = [self.opt.simulator.sim_fx(params_i) for params_i in self.param_sets]
+        if nkeep is None:
+            nkeep = self.basinparams['ninits']
+        unfiltered = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list=True)
+        self.filter_params(unfiltered, nsamples=nsamples, nkeep=nkeep)
         self.finished_sampling = True
 
-    def filter_param_sets(self):
+    def filter_params(self, p_sets=None, nsamples=None, nkeep=None):
         """ sample *nsamples* (default=5000, see set_fitparams) different
         parameter sets (param_sets) and get model yhat for each set (param_yhats)
         """
-        if not hasattr(self, 'param_sets'):
-            self.sample_param_sets()
-        nkeep = self.basinparams['ninits']
-        keep_method = self.basinparams['init_sample_method']
-        inits_list, globalmin = theta.filter_param_sets(self.param_sets, self.param_yhats, self.fitparams, nkeep=nkeep, keep_method=keep_method)
-        return inits_list, globalmin
+        if nsamples is None:
+            nsamples = self.basinparams['nsamples']
+        if nkeep is None:
+            nkeep = self.basinparams['ninits']
+        if p_sets is None:
+            p_sets = self.param_sets
+        p_fmins = [self.optimizer.simulator.cost_fx(p, sse=1) for p in p_sets]
+        method = self.basinparams['init_sample_method']
+        self.param_sets, self.gmin = theta.filter_params(p_sets, p_fmins, nkeep=nkeep, method=method)
 
     def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit
@@ -249,7 +255,7 @@ class RADDCore(object):
         fp = dict(deepcopy(self.fitparams))
         fp['yhat'] = self.yhat
         # lmfit-structured fit_report to write in log file
-        param_report = self.opt.param_report
+        param_report = self.optimizer.param_report
         # log all fit and meta information in working directory
         messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
 
@@ -277,23 +283,10 @@ class RADDCore(object):
         if hasattr(self, 'fitparams'):
             self.fitparams['model_id'] = self.model_id
 
-    def make_progress_bars(self, models=None):
-        """ initialize progress bars to track fit progress (subject fits,
-        init optimization, etc)
-        """
-        from radd.tools.utils import NestedProgress
-        n = self.basinparams['ninits']
-        self.pbars = NestedProgress(name='glb_basin', n=n, title='Global Basin', color='green')
-        self.pbars.add_bar(name='lcl_basin', bartype='infobar', title='Current Basin', color='red')
-        if self.is_nested:
-            self.pbars.add_bar(name='models', n=self.nmodels, title='Nested Fits', color='blue')
-            self.pbars.update(name='models', i=0)
-        self.track_basins=True
-        if self.fit_on=='subjects':
-            self.track_subjects = True
-            self.pbars.add_bar(name='idx', n=self.nidx, title='Subject Fits', color='blue')
-        self.fitparams['disp']=False
-        self.basinparams['disp']=False
+    def set_testing_params(self, tol=1e-3, nsuccess=10, nsamples=50, ninits=2, maxfev=200, progress=True):
+        self.set_fitparams(tol=tol, maxfev=maxfev)
+        self.set_basinparams(tol=tol, ninits=ninits, nsamples=nsamples, nsuccess=nsuccess)
+        self.optimizer.update(basinparams=self.basinparams, progress=progress)
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF

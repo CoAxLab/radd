@@ -13,11 +13,11 @@ import matplotlib as mpl
 from IPython.display import display, Latex
 
 
-def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=700):
-
+def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D']):
+    tr = np.mean(p['tr'])*1e3
     rtkeys = np.sort(rts.keys())
-    rt_dists = [np.asarray(rts[k])*1e3-(np.mean(p['tr'])*1e3) for k in rtkeys]
-    tb = np.ceil(np.max([np.max(rti) if len(rti)>0 else 0 for rti in rt_dists]))+100
+    rt_dists = [np.asarray(rts[k])*1e3-tr for k in rtkeys]
+    tb = np.ceil(np.max([np.max(rti) if len(rti)>0 else 0 for rti in rt_dists]))+50
 
     sns.set(style='white', font_scale=1.5)
     f, axes = build_multi_axis(p, tb=tb)
@@ -36,9 +36,9 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=700):
         axx.set_yticklabels([])
         if len(rt_dists[i])<=1:
             continue
-        sns.distplot(rt_dists[i], ax=axx, label=k, kde=False, norm_hist=True, color=clrs[i], bins=10)
-        text_str='$\mu_{%s}=%.fms$'%(names[i], np.mean(rt_dists[i]))
-        ax.text(x[0]-50, np.mean(p['a'])-.06, text_str, fontsize=21)
+        sns.distplot(rt_dists[i], ax=axx, label=k, kde=True, hist=False, color=clrs[i], bins=10)
+        text_str='$\mu_{%s}=%.fms$'%(names[i], tr+np.mean(rt_dists[i]))
+        ax.text(x[0]-50, np.mean(p['a'])-.1*np.mean(p['a']), text_str, fontsize=21)
 
 
 def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)', 'Change in P(card)', '$v^G_t$', '$v^N_t$'], plot_traces=False, p=None, tb=1000):
