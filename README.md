@@ -2,8 +2,8 @@
 
 This repository is associated with the manuscript [Competing basal-ganglia pathways determine the difference between stopping and deciding not to go](http://www.elifesciences.org/content/4/e08723) and contains code and documentation for fitting various inhibitory control and decision models to behavioral data.
 
-### Interactive Demo
-Click the button below to open up an interactive demo of radd in your browser (created using [binder](http://mybinder.org/)). Or view/download the demo notebook [here](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb)
+### Interactive Demo: [![Binder](http://mybinder.org/badge.svg)](http://mybinder.org:/repo/coaxlab/radd)
+Click "launch|binder" above to open up an interactive demo of radd in your browser (created using [binder](http://mybinder.org/)). Or view/download the demo notebook [here](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb)
 
 [![Binder](http://mybinder.org/badge.svg)](http://mybinder.org:/repo/coaxlab/radd)
 
