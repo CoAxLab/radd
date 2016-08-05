@@ -4,6 +4,7 @@ This repository is associated with the manuscript [Competing basal-ganglia pathw
 
 ### Interactive Demo
 Click the button below to open up an interactive demo of radd in your browser (created using [binder](http://mybinder.org/))
+
 [![Binder](http://mybinder.org/badge.svg)](http://mybinder.org:/repo/coaxlab/radd)
 
 #### [Static Demo](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb)
