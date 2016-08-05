@@ -283,7 +283,7 @@ class RADDCore(object):
         if hasattr(self, 'fitparams'):
             self.fitparams['model_id'] = self.model_id
 
-    def set_testing_params(self, tol=1e-3, nsuccess=10, nsamples=50, ninits=2, maxfev=200, progress=True):
+    def set_testing_params(self, tol=1e-10, nsuccess=20, nsamples=100, ninits=2, maxfev=500, progress=True):
         self.set_fitparams(tol=tol, maxfev=maxfev)
         self.set_basinparams(tol=tol, ninits=ninits, nsamples=nsamples, nsuccess=nsuccess)
         self.optimizer.update(basinparams=self.basinparams, progress=progress)
