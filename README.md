@@ -7,8 +7,9 @@ Click the button below to open up an interactive demo of radd in your browser (c
 
 [![Binder](http://mybinder.org/badge.svg)](http://mybinder.org:/repo/coaxlab/radd)
 
-### Install with pip (Python 2.\* only)
+### Install with pip
 ```sh
+# NOTE: requires Python 2.*
 pip install radd
 ```
 
