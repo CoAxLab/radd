@@ -75,6 +75,7 @@ class BasinCallback(object):
     def callback(self, x, fmin, accept):
         if fmin <= np.min(self.history) and fmin<=self.gbasin:
             self.gbasin = fmin
+            self.reset(history=True, bar=True)
         if accept:
             self.history.append(fmin)
             status=(MyFloat(x) for x in [fmin, self.gbasin])
