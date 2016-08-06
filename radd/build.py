@@ -41,19 +41,20 @@ class Model(RADDCore, Parameters):
     def optimize(self, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
-        plotfits (bool):
-            if True (default), plot model predictions over observed data
-        saveplot (bool):
-            if True (default), save plots to "~/<self.model_id>/"
-        saveresults (bool):
-            if True (default), save fitDF, yhatDF, and txt logs to "~/<self.model_id>/"
-        saveobserved (bool):
-            if True (default is False), save observedDF to "~/<self.model_id>/"
-        custompath (str):
-            path starting from any subdirectory of "~/" (e.g., home).
-            all saved output will write to "~/<custompath>/<self.model_id>/"
-        progress (bool):
-            track progress across ninits and basinhopping
+        ::Arguments::            
+            plotfits (bool):
+                if True (default), plot model predictions over observed data
+            saveplot (bool):
+                if True (default is False), save plots to "~/<self.model_id>/"
+            saveresults (bool):
+                if True (default), save fitDF, yhatDF, and txt logs to "~/<self.model_id>/"
+            saveobserved (bool):
+                if True (default is False), save observedDF to "~/<self.model_id>/"
+            custompath (str):
+                path starting from any subdirectory of "~/" (e.g., home).
+                all saved output will write to "~/<custompath>/<self.model_id>/"
+            progress (bool):
+                track progress across ninits and basinhopping
         """
         self.set_basinparams(progress=progress)
         if np.any([saveplot, saveresults]):
@@ -195,7 +196,7 @@ class Model(RADDCore, Parameters):
                 1d array if analyze is True, else ndarray of decision traces
         """
         if p is None:
-            p = self.popt 
+            p = self.popt
         p = deepcopy(p)
         yhat = self.simulator.sim_fx(p, analyze=analyze)
         if set_observed:
