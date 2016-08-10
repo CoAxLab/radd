@@ -152,7 +152,8 @@ class DataHandler(object):
         data_widx['idx'] = idxname
         fitDF.loc[row, self.f_cols] = data_widx
         self.fitDF = fitDF.copy()
-        self.model.fitDF = fitDF.copy()
+        return fitDF.copy()
+
 
     def fill_yhatDF(self, data, fitparams=None):
         """ fill yhatDF with model predictions
@@ -175,13 +176,12 @@ class DataHandler(object):
             data_series = pd.Series(data[i], index=keys)
             yhatDF.loc[row, keys] = data_series
             if self.fit_on=='average':
+                idxname = 'average'
                 if self.model.is_nested:
                     idxname = self.model.model_id.split('_')[1]
-                else:
-                    idxname = 'average'
                 yhatDF.loc[row, 'idx'] = idxname
         self.yhatDF = yhatDF.copy()
-        self.model.yhatDF = yhatDF.copy()
+        return yhatDF.copy()
 
     def determine_ssd_method(self, stopdf):
         ssd_n = [df.size for _, df in stopdf.groupby('ssd')]

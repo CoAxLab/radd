@@ -321,22 +321,22 @@ def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
 
 def scalarize_params(params, pc_map=None, is_flat=True):
     """ scalarize all parameters in params dict """
-    exclude = []
+    pvary = []
     if isinstance(params, pd.Series):
         params = params.to_dict()
     if pc_map is not None and not is_flat:
-        exclude = np.sort(list(pc_map))
-        p_conds = np.sort(listvalues(pc_map)).squeeze()
-        for pkc in exclude:
-            params[pkc] = array([params[pc] for pc in p_conds])
-    for pk in list(params):
-        if pk in exclude:
+        pvary = np.sort(list(pc_map))
+        for i, p in enumerate(pvary):
+            p_lvls = np.sort(pc_map[p])
+            params[p] = array([params[lvl] for lvl in p_lvls])
+    for p in list(params):
+        if p in pvary:
             continue
-        if hasattr(params[pk], '__iter__'):
+        if hasattr(params[p], '__iter__'):
             try:
-                params[pk] = np.asscalar(params[pk])
+                params[p] = np.asscalar(params[p])
             except ValueError:
-                params[pk] = np.mean(params[pk])
+                params[p] = np.mean(params[p])
     return params
 
 def init_distributions(pkey, kind='dpm', mu = None, sigma = None, nrvs=25, tb=.65):
@@ -408,7 +408,8 @@ def get_stepsize_scalars(keys, nlevels=1):
     to control stepsize of basinhopping algorithm for each parameter """
     scalar_dict = {'a': .5, 'tr': .1, 'v': 1.5, 'vi': 1.5, 'vd': 1.5,
                    'ssv': 1.5, 'z': .1, 'xb': 1.5, 'sso': .1}
-    stepsize_scalars = np.array([scalar_dict[k] for k in keys]*nlevels)
+    nl_ones = np.ones(nlevels)
+    stepsize_scalars = np.hstack([scalar_dict[k]*nl_ones for k in keys])
     if nlevels>1:
         stepsize_scalars = stepsize_scalars.squeeze()
     return stepsize_scalars
