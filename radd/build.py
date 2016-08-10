@@ -41,7 +41,7 @@ class Model(RADDCore, Parameters):
     def optimize(self, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
-        ::Arguments::            
+        ::Arguments::
             plotfits (bool):
                 if True (default), plot model predictions over observed data
             saveplot (bool):
@@ -130,10 +130,11 @@ class Model(RADDCore, Parameters):
                 track progress across model fits, ninits, and basinhopping
         """
         self.is_nested = True
+        self.nmodels = len(free)
         if progress:
             self.set_basinparams(progress=progress)
             pnames = [vis.parameter_name(param, True) for param in free]
-            self.mbar = utils.PBinJ(n=len(free)+1, color='b', status='{} Model')
+            self.mbar = utils.PBinJ(n=self.nmodels+1, color='b', status='{} Model')
             self.mbar.update(value=0, status='Flat')
         self.optimize_flat()
         for i, param in enumerate(free):
@@ -167,8 +168,8 @@ class Model(RADDCore, Parameters):
         """
         finfo, popt, yhat = self.set_results(finfo, popt, yhat)
         self.log_fit_info(finfo, popt, self.fitparams)
-        self.handler.fill_yhatDF(data=yhat, fitparams=self.fitparams)
-        self.handler.fill_fitDF(data=finfo, fitparams=self.fitparams)
+        self.yhatDF = self.handler.fill_yhatDF(data=yhat, fitparams=self.fitparams)
+        self.fitDF = self.handler.fill_fitDF(data=finfo, fitparams=self.fitparams)
 
     def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw=.008):
         """ wrapper for radd.tools.vis.plot_model_fits

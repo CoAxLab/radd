@@ -105,7 +105,7 @@ class Optimizer(object):
         for i, p in enumerate(inits):
             if self.progress:
                 self.ibar.update(value=i, status=i)
-                self.callback = self.gbar.reset(get_call=True)
+                #self.callback = self.gbar.reset(get_call=True)
             popt, fmin = self.run_basinhopping(p=p)
             xpopt.append(popt)
             xfmin.append(fmin)
@@ -150,7 +150,7 @@ class Optimizer(object):
         xopt = out.x
         funcmin = out.fun
         if nl > 1:
-            xopt = [array([xopt]).reshape(len(basin_keys), nl).squeeze()]
+            xopt = np.array(xopt).reshape(len(basin_keys), nl).squeeze()
         for i, k in enumerate(basin_keys):
             p[k] = xopt[i]
         return p, funcmin

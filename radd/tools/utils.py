@@ -24,7 +24,7 @@ class PBinJ(object):
         colordict = {'g': '#16a085', 'b': '#4168B7', 'r': "#e74c3c", 'y': "#f39c12"}
         self.bar = IntProgress(min=0, max=n, value=value)
         self.status = status
-        self.bar.color = colordict[color]
+        #self.bar.color = colordict[color]
         self.bar.width = width
         self.bar.height = height
 
