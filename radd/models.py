@@ -104,7 +104,7 @@ class Simulator(object):
         # simulate using filled params dictionary
         yhat = self.sim_fx(p)
         # calculate and return cost error
-        return np.sum((self.wts * (yhat - self.y))**2).astype(np.float32)
+        return np.sum((self.wts * (yhat - self.y))**2)
 
     def cost_fx(self, theta, sse=False):
         """ Main cost function used for fitting all models self.sim_fx
@@ -171,7 +171,7 @@ class Simulator(object):
             p (dict):
                 dictionary with all parameters as vectors
         """
-        nl_ones = np.ones(self.nlevels).astype(np.float32)
+        nl_ones = np.ones(self.nlevels)
         if 'si' in list(p):
             self.dx = np.sqrt(p['si'] * self.dt)
         if 'xb' not in list(p):
