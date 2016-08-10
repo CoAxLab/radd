@@ -83,6 +83,7 @@ class BasinCallback(object):
             if len(self.history)>=self.pbar.bar.max:
                 # halt run if candidate global minimum has
                 # not changed in nsuccess steps (return True)
+                self.reset(history=True, bar=True)
                 return True
 
     def clear(self):

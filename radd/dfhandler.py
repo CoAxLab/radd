@@ -29,7 +29,9 @@ class DataHandler(object):
         self.conds = model.conds
         self.nconds = model.nconds
         self.nlevels = model.nlevels
-        self.nrows = self.nidx * self.nlevels * self.nconds
+        self.cond_matrix = model.cond_matrix
+        self.nrows = self.nidx * model.nlevels
+        #self.nrows = self.nidx * self.nlevels
         self.grpData = self.data.groupby(self.groups)
 
     def make_dataframes(self):
@@ -76,7 +78,7 @@ class DataHandler(object):
         nan_data = np.zeros((nrows, ncols))*np.nan
 
         self.datdf = self.grpData.apply(self.rangl_data).sortlevel(0)
-        self.dfvals = [self.datdf.values[i].astype(float) for i in index]
+        self.dfvals = self.datdf.values
         self.observedDF = pd.DataFrame(nan_data, columns=masterDF_header, index=index)
         self.observedDF.loc[:, self.groups] = self.datdf.reset_index()[self.groups].values
         # make yhatDF to fill w/ model-predicted data arrays
@@ -232,7 +234,7 @@ class DataHandler(object):
         nidx = self.nidx
         nquant = self.model.quantiles.size
         groups = self.groups
-        nsplits = self.nlevels * self.nconds
+        nsplits = np.cumprod(self.cond_matrix)[-1]
         # get all trials with response recorded
         godf = self.data.query('response==1')
         # sort by ttype first so go(acc==1) occurs before stop(acc==0)
@@ -337,10 +339,12 @@ class DataHandler(object):
         """
         params = np.sort(list(self.inits))
         if not self.model.is_flat:
-            cond_param_names = listvalues(self.model.clmap)
+            #cond_param_names = listvalues(self.model.clmap)
+            cond_param_names = np.asarray(listvalues(self.model.clmap)).flatten()
             params = np.hstack([params, np.squeeze(cond_param_names)]).tolist()
         fit_cols = ['nfev', 'nvary', 'df', 'chi', 'rchi', 'logp', 'AIC', 'BIC', 'cnvrg']
         self.f_cols = np.hstack([['idx'], params, fit_cols]).tolist()
+        return fit_cols
 
     def save_results(self, save_observed=False):
         """ Saves yhatDF and fitDF results to model output dir

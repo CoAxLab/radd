@@ -71,6 +71,15 @@ class Simulator(object):
             self.dt = dt
         self.dx = np.sqrt(self.si * self.dt)
 
+    def initialize_model_parameters(self, constants={}, vary_pkeys=[]):
+        """ prepare simulator for global optimization using
+        scipy.optimize.basinhopping algorithm
+        """
+        # set all constant parameters in basin_params object
+        self.constants = constants
+        # set parameter names used to populate params dict
+        self.vary_pkeys = vary_pkeys
+
     def __prep_global__(self, basin_params={}, basin_keys=[]):
         """ prepare simulator for global optimization using
         scipy.optimize.basinhopping algorithm
@@ -143,6 +152,7 @@ class Simulator(object):
         self.go_RT = lambda ontime, rbool: ontime[:, na] + (rbool*np.where(rbool==0., np.nan, 1))
         self.ss_RT = lambda ontime, rbool: ontime[:, :, na] + (rbool*np.where(rbool==0., np.nan, 1))
         self.RTQ = lambda zpd: map((lambda x: mq(x[0][x[0] < x[1]], prob)), zpd)
+        self.chunk = lambda x, nl: [array(x[i:i+nl]) for i in range(0, len(x), nl)]
         if 'irace' in self.kind:
             self.ss_resp = self.ss_resp_up
         else:

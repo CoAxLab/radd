@@ -71,8 +71,7 @@ class Optimizer(object):
         self.pc_map = simulator.pc_map
         self.kind = simulator.kind
         self.basinparams = basinparams
-        self.pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso']
-        self.constants = deepcopy(['a', 'tr', 'v', 'xb'])
+        self.constants = ['a', 'tr', 'v', 'xb', 'z', 'ssv', 'sso', 'si']
         self.callback = None
         self.progress = False
 
@@ -107,8 +106,6 @@ class Optimizer(object):
             if self.progress:
                 self.ibar.update(value=i, status=i)
                 self.callback = self.gbar.reset(get_call=True)
-                if i>0:
-                    self.gbar.reset(bar=True)
             popt, fmin = self.run_basinhopping(p=p)
             xpopt.append(popt)
             xfmin.append(fmin)

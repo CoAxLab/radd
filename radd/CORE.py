@@ -13,7 +13,7 @@ from radd import theta, vis
 
 class RADDCore(object):
     """ Parent class for constructing attributes and methods used by
-    of Model objects. Not meant to be used directly.
+    of Model objects. Not meant to be used directly
 
     Contains methods for building dataframes, generating observed data vectors
     that are entered into cost function during fitting as well as calculating
@@ -159,6 +159,7 @@ class RADDCore(object):
         data = self.data.copy()
         self.depends_on = depends_on
         self.conds = np.unique(listvalues(self.depends_on)).tolist()
+        self.cond_matrix = np.array([data[c].unique().size for c in self.conds])
         if 'flat' in self.conds:
             self.is_flat = True
             data['flat'] = 'flat'
@@ -167,7 +168,9 @@ class RADDCore(object):
             self.is_flat = False
         self.nconds = len(self.conds)
         self.clmap = {c: np.sort(data[c].unique()) for c in self.conds}
-        self.nlevels = np.sum([len(lvls) for lvls in listvalues(self.clmap)])
+        #self.nlevels = np.sum([len(lvls) for lvls in listvalues(self.clmap)])
+        self.nlevels = np.cumprod(self.cond_matrix)[-1]
+        #self.cond_matrix= np.array([len(lvls) for lvls in listvalues(self.clmap)])
         self.groups = np.hstack([['idx'], self.conds]).tolist()
         self.__format_pcmap__()
         if hasattr(self, 'ssd'):
