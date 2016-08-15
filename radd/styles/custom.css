@@ -1,48 +1,75 @@
 <style>
-	@import url(https://fonts.googleapis.com/css?family=Droid+Sans);
-	@import url(https://fonts.googleapis.com/css?family=PT+Serif);
-	@import url(https://fonts.googleapis.com/css?family=Roboto+Mono:400,400italic);
+	@font-face {
+	 font-family: 'Open Sans';
+	 font-weight: normal;
+	 font-style: normal;
+	 src: local('Open Sans'), url('fonts/open-sans-regular.ttf') format('truetype');
+	}
+	@font-face {
+	 font-family: 'PT Serif';
+	 font-weight: normal;
+	 font-style: italic;
+	 src: local('PT Serif'), url('fonts/pt-serif-italic.ttf') format('truetype');
+	}
+	@font-face {
+	 font-family: 'PT Serif';
+	 font-weight: normal;
+	 font-style: normal;
+	 src: local('PT Serif'), url('fonts/pt-serif-regular.ttf') format('truetype');
+	}
+	@font-face {
+	 font-family: 'Source Code Pro';
+	 font-weight: normal;
+	 font-style: italic;
+	 src: local('Source Code Pro'), url('fonts/source-code-pro-italic.otf') format('opentype');
+	}
+	@font-face {
+	 font-family: 'Source Code Pro';
+	 font-weight: normal;
+	 font-style: normal;
+	 src: local('Source Code Pro'), url('fonts/source-code-pro.otf') format('opentype');
+	}
 	body {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 color: #2c2c2c;
 	 background-color: #ffffff;
 	 line-height: 1;
 	}
 	a {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 color: #2c2c2c;
 	}
 	div#notebook {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt;
 	 line-height: 170%;
 	 color: #303030;
 	}
 	div#notebook_toolbar div.dynamic-instructions {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 display: inline-block;
 	}
 	.toolbar_info {
-	 font-family: "Droid Sans", sans-serif;
+	 font-family: "Open Sans", sans-serif;
 	 color: #2c2c2c;
 	 border: none;
 	 text-shadow: none !important;
 	}
 	.list_container {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 color: #2c2c2c;
 	 border: none;
 	 text-shadow: none !important;
 	}
 	.list_container > div {
 	 border-bottom: 1px solid rgba(180,180,180,.20);
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	}
 	.list_container a {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 color: #2c2c2c;
 	 border: none;
 	 text-shadow: none !important;
@@ -68,14 +95,14 @@
 	 background-color: rgba(150,150,150,.07);
 	}
 	.breadcrumb > li {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 color: #2c2c2c;
 	 border: none;
 	 text-shadow: none !important;
 	}
 	ul#tabs a {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 border-color: transparent;
@@ -83,8 +110,8 @@
 	 text-shadow: none !important;
 	}
 	.nav-tabs {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 text-shadow: none !important;
@@ -94,8 +121,8 @@
 	.nav-tabs > li > a:hover,
 	.nav-tabs > li > a:active,
 	.nav-tabs > li > a:focus {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 color: #222222;
@@ -109,8 +136,8 @@
 	.nav-tabs > li.active > a,
 	.nav-tabs > li.active > a:hover,
 	.nav-tabs > li.active > a:focus {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 color: #000000;
@@ -120,8 +147,8 @@
 	 text-shadow: none !important;
 	}
 	div#notebook {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 padding-top: 5px;
 	}
 	.notebook_app {
@@ -134,7 +161,7 @@
 	 box-shadow: none;
 	}
 	.container {
-	 width: 970px;
+	 width: 980px;
 	}
 	.notebook_app #header {
 	 box-shadow: none !important;
@@ -142,8 +169,8 @@
 	 border-bottom: 1px solid rgba(180,180,180,.20);
 	}
 	#header {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 box-shadow: none;
 	 background-color: #ffffff;
 	}
@@ -157,8 +184,8 @@
 	 margin-bottom: -1px;
 	}
 	.navbar-default {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 background-color: #ffffff;
 	 border-color: #ffffff;
 	 padding-bottom: 0px;
@@ -174,8 +201,8 @@
 	 margin-bottom: 0px;
 	}
 	.navbar-default .navbar-nav > li > a {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 color: #2c2c2c;
 	 display: block;
 	 line-height: 1.2;
@@ -192,8 +219,11 @@
 	 background-color: rgba(180,180,180,.32);
 	 border-color: rgba(180,180,180,.32);
 	}
+	.nav {
+	 margin-bottom: 0;
+	}
 	.command_mode .modal_indicator:before {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	}
 	.item_icon {
 	 color: #1e70c7;
@@ -232,9 +262,21 @@
 	 border-color: #2c85f7;
 	 width: 100%;
 	}
+	span.checkpoint_status,
+	span.autosave_status {
+	 font-size: small;
+	 padding-left: 10px;
+	}
+	div#ipython_notebook {
+	 display: none;
+	}
+	#kernel_logo_widget,
+	#kernel_logo_widget .current_kernel_logo {
+	 display: none;
+	}
 	.dropdown-menu {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 box-shadow: none;
 	 padding: 0px;
 	 text-align: left;
@@ -244,16 +286,16 @@
 	 line-height: 1.2;
 	}
 	.dropdown-menu:hover {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 13pt;
 	 border: 2px solid rgba(180,180,180,.20);
 	 background-color: #efefef;
 	 box-shadow: none;
 	 line-height: 1.2;
 	}
 	.dropdown-header {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 12.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 12pt;
 	 display: block;
 	 color: #2c2c2c;
 	 text-decoration: underline;
@@ -262,8 +304,8 @@
 	 line-height: 1.2;
 	}
 	.dropdown-menu > li > a {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 display: block;
 	 clear: both;
 	 padding: 9px 19px;
@@ -275,8 +317,8 @@
 	 background: #efefef;
 	}
 	.dropdown-menu > li > a:hover {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 color: #222222;
 	 display: block;
 	 clear: both;
@@ -303,8 +345,8 @@
 	.dropdown-menu > .disabled > a,
 	.dropdown-menu > .disabled > a:hover,
 	.dropdown-menu > .disabled > a:focus {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 color: #aaaaaa;
 	 padding: none;
@@ -337,7 +379,7 @@
 	 background-image: none;
 	}
 	.btn-group > .btn-mini {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 border-radius: 2px;
 	 color: #2c2c2c;
@@ -348,7 +390,7 @@
 	 background-image: none;
 	}
 	.btn-group > .btn-mini:hover {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 color: #000000;
 	 background: rgba(180,180,180,.32);
@@ -358,7 +400,7 @@
 	}
 	.btn-xs,
 	.btn-group-xs > .btn {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 border-radius: 2px;
 	 display: table-row-group;
@@ -367,22 +409,22 @@
 	}
 	.btn-sm,
 	.btn-group-sm > .btn {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 border-radius: 2px;
 	 background: #ededed;
 	 background-color: #ededed;
 	}
 	.btn-group-sm > .btn:hover {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 color: #000000;
 	 background: rgba(180,180,180,.32);
 	 background-color: rgba(180,180,180,.32);
 	}
 	.btn-group,
 	.btn-group-vertical {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 border-radius: 2px;
 	 background: #ededed;
@@ -391,7 +433,7 @@
 	 vertical-align: bottom;
 	}
 	.btn-group-vertical:hover {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 color: #000000;
 	 background: rgba(180,180,180,.32);
@@ -399,7 +441,7 @@
 	 background-image: none;
 	}
 	.alternate_upload .btn-upload {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 border-radius: 2px;
 	 height: inherit;
@@ -408,7 +450,7 @@
 	 display: inline-table;
 	}
 	.alternate_upload .btn-upload:hover {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 border-radius: 2px;
 	 height: inherit;
@@ -449,8 +491,8 @@
 	 opacity: 0.9;
 	}
 	.modal-content {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 position: relative;
 	 background-color: #efefef;
 	 border: 1px solid rgba(180,180,180,.20);
@@ -460,8 +502,8 @@
 	 outline: 0px none;
 	}
 	.modal-header {
-	 font-family: "Droid Sans", sans-serif;
-	 font-size: 11.7pt;
+	 font-family: "Open Sans", sans-serif;
+	 font-size: 11.5pt;
 	 padding: 15px;
 	 border-bottom: 1px solid rgba(180,180,180,.32);
 	 min-height: 16.4286px;
@@ -470,7 +512,7 @@
 	 border-color: rgba(180,180,180,.20);
 	}
 	.panel {
-	 font-size: 11.7pt;
+	 font-size: 11.5pt;
 	 margin-bottom: 18px;
 	 background-color: #ffffff;
 	 color: #2c2c2c;
@@ -478,13 +520,13 @@
 	 box-shadow: none;
 	}
 	#running .panel-group .panel .panel-heading {
-	 font-size: 12.7pt;
+	 font-size: 13pt;
 	 background-color: #ffffff;
 	 padding: 4px 7px;
 	 line-height: 22px;
 	}
 	#running .panel-group .panel .panel-heading a:hover {
-	 font-size: 12.7pt;
+	 font-size: 13pt;
 	 color: #2c85f7;
 	}
 	#running .panel-group .panel .panel-body .list_container .list_item {
@@ -493,10 +535,9 @@
 	.form-control {
 	 display: block;
 	 width: 100%;
-	 height: 32px;
-	 padding: 6px 12px;
-	 font-size: 11.7pt;
-	 color: #2c2c2c;
+	 padding: 4px 9px;
+	 font-size: 11.5pt;
+	 color: #222222;
 	 background-color: #efefef;
 	 background-image: none;
 	 border: 1px solid rgba(180,180,180,.20);
@@ -635,7 +676,7 @@
 	.rendered_html table,
 	.rendered_html tr,
 	.rendered_html td {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt !important;
 	 line-height: 145% !important;
 	 border: 1px solid #d6d6d6;
@@ -650,7 +691,7 @@
 	}
 	.dataframe th,
 	.rendered_html th {
-	 font-family: "Droid Sans", sans-serif;
+	 font-family: "Open Sans", sans-serif;
 	 font-size: 10.5pt !important;
 	 font-weight: 450;
 	 border: 1px solid #c5c5c5;
@@ -658,7 +699,7 @@
 	}
 	.dataframe td,
 	.rendered_html td {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt !important;
 	 color: #353535;
 	 background: #ffffff;
@@ -668,7 +709,7 @@
 	}
 	.dataframe-summary-row tr:last-child,
 	.dataframe-summary-col td:last-child {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt !important;
 	 font-weight: 450;
 	 color: #353535;
@@ -683,7 +724,7 @@
 	}
 	.rendered_html pre,
 	div.text_cell_render pre {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt !important;
 	 line-height: 170% !important;
 	 color: #303030;
@@ -703,11 +744,18 @@
 	.rendered_html :link {
 	 font-family: "PT Serif", serif;
 	 color: #1e70c7;
-	 text-decoration: underline;
+	}
+	.rendered_html :link:hover {
+	 font-family: "PT Serif", serif;
+	 color: #2c85f7;
 	}
 	.rendered_html :visited {
-	 text-decoration: underline;
-	 color: #ff8132;
+	 font-family: "PT Serif", serif;
+	 color: #1e70c7;
+	}
+	.rendered_html :visited:hover {
+	 font-family: "PT Serif", serif;
+	 color: #2c85f7;
 	}
 	div.output_wrapper {
 	 background-color: #ffffff;
@@ -721,7 +769,7 @@
 	}
 	div.output_subarea.output_text.output_stream.output_stdout,
 	div.output_subarea.output_text {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt;
 	 line-height: 130% !important;
 	 background-color: #ffffff;
@@ -732,7 +780,7 @@
 	 border-bottom-right-radius: 2px;
 	}
 	div.output_area pre {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt !important;
 	 line-height: 130% !important;
 	 color: #303030;
@@ -761,16 +809,46 @@
 	 max-width: 90%;
 	}
 	div.widget-area {
-	 font-size: 11.5pt;
+	 font-size: 12pt;
 	 background-color: #ffffff;
 	 background: #ffffff;
 	 color: #303030;
 	}
 	div.widget_item.btn-group > button.btn.btn-default.widget-combo-btn {
 	 background: transparent;
-	 background-color: #f5f5f5;
+	 background-color: #f2f2f2;
 	 border: 1px solid #efefef;
+	 font-size: 12pt;
+	}
+	.widget-hbox {
+	 -webkit-box-align: inherit;
+	 -moz-box-orient: horizontal;
+	 -moz-box-align: stretch;
+	 display: inherit;
+	 flex-direction: inherit;
+	 align-items: inherit;
+	}
+	.widget-hbox .widget-label {
+	 font-family: "Open Sans", sans-serif;
 	 font-size: 11.5pt;
+	 min-width: 12ex;
+	 padding-right: 8px;
+	 padding-top: 5px;
+	 text-align: right;
+	 vertical-align: text-top;
+	}
+	.widget-hprogress {
+	 margin-top: 6px;
+	 min-width: 300px;
+	}
+	.progress {
+	 overflow: hidden;
+	 height: 22px;
+	 margin-bottom: 10px;
+	 background-color: #cbcbcb;
+	 border-radius: 3px;
+	 -webkit-box-shadow: none;
+	 box-shadow: none;
 	}
 	audio,
 	video {
@@ -780,21 +858,21 @@
 	 margin-left: 20%;
 	}
 	div.prompt {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 line-height: 170%;
-	 padding: .3em;
+	 padding: .2em;
 	 text-align: left !important;
-	 min-width: 12ex;
+	 min-width: 13ex;
 	}
 	div.prompt.input_prompt {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 line-height: 170%;
 	 color: #aaaaaa;
 	 background-color: #efefef;
 	 font-weight: normal;
-	 min-width: 12ex;
+	 min-width: 13ex;
 	 text-align: left !important;
 	 border-right: 2px solid rgba(240,147,43,.50);
 	 border-top-left-radius: 2px;
@@ -803,25 +881,25 @@
 	 border-bottom-right-radius: 0px;
 	}
 	div.cell.text_cell.rendered .input_prompt {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 line-height: 170%;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-right-color: transparent;
-	 min-width: 4ex;
+	 min-width: 0ex;
 	}
 	div.cell.text_cell.unrendered .input_prompt {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 line-height: 170%;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-right-color: transparent;
-	 min-width: 4ex;
+	 min-width: 0ex;
 	}
 	div.prompt.output_prompt {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 background-color: #ffffff;
 	 color: #ffffff;
@@ -831,17 +909,17 @@
 	 border-bottom-right-radius: 0px;
 	}
 	div.out_prompt_overlay.prompt {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 background-color: #ffffff;
 	 border-bottom-left-radius: 2px;
 	 border-top-right-radius: 0px;
 	 border-top-left-radius: 0px;
 	 border-bottom-right-radius: 0px;
-	 min-width: 12ex;
+	 min-width: 13ex;
 	}
 	div.out_prompt_overlay.prompt:hover {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 9.5pt;
 	 background-color: #ffffff;
 	 box-shadow: #e8e8e8 2px 1px 2px 2.5px inset;
@@ -853,7 +931,7 @@
 	}
 	div.CodeMirror,
 	div.CodeMirror pre {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt;
 	 line-height: 170%;
 	 color: #303030;
@@ -928,7 +1006,7 @@
 	 max-width: 800px;
 	}
 	.cm-s-ipython.CodeMirror {
-	 font-family: "Roboto Mono", monospace;
+	 font-family: "Source Code Pro", monospace;
 	 font-size: 10.5pt;
 	 background: #efefef;
 	 color: #303030;
@@ -1058,7 +1136,7 @@
 	 background: #e0e1e3;
 	}
 	div.text_cell_render h1 {
-	 font-family: "Droid Sans", sans-serif;
+	 font-family: "Open Sans", sans-serif;
 	 text-align: center;
 	 font-weight: lighter;
 	 background: #ffffff;
@@ -1070,7 +1148,7 @@
 	div.text_cell_render h4,
 	div.text_cell_render h5,
 	div.text_cell_render h6 {
-	 font-family: "Droid Sans", sans-serif;
+	 font-family: "Open Sans", sans-serif;
 	 text-align: left;
 	 font-weight: lighter;
 	 background: #ffffff;
@@ -1090,10 +1168,7 @@
 	#header-container {
 	 display: none !important;
 	}
-	div#ipython_notebook {
-	 display: none;
-	}
-
+	
 	/**********************************
 	 MathJax Settings and Style Script
 	**********************************/
@@ -1109,7 +1184,7 @@
 	.MathJax:focus, body :focus .MathJax {
 	    display: inline-block !important;
 	}
-
+	
 </style>
 <script>
     MathJax.Hub.Config({
@@ -1125,3 +1200,4 @@
         }
     });
 </script>
+

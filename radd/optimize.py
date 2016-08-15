@@ -104,14 +104,12 @@ class Optimizer(object):
         xpopt, xfmin = [], []
         for i, p in enumerate(inits):
             if self.progress:
-                self.ibar.update(value=i, status=i)
-                #self.callback = self.gbar.reset(get_call=True)
+                self.ibar.update(value=i, status=i+1)
             popt, fmin = self.run_basinhopping(p=p)
             xpopt.append(popt)
             xfmin.append(fmin)
         if self.progress:
             self.ibar.clear()
-            self.gbar.clear()
         # return parameters at the global basin
         return xpopt[np.argmin(xfmin)]
 
@@ -128,11 +126,15 @@ class Optimizer(object):
         nl = self.fitparams['nlevels']
         nsuccess = bp['nsuccess']
         if nl==1:
+            reset = 0
             basin_keys = np.sort(list(p))
             basin_params = theta.scalarize_params(deepcopy(p), is_flat=True)
         else:
+            reset = 1
             basin_keys = np.sort(list(self.pc_map))
             basin_params = deepcopy(p)
+        if self.progress:
+            self.callback = self.gbar.reset(get_call=True, gbasin=reset)
         self.simulator.__prep_global__(basin_params=basin_params, basin_keys=basin_keys)
         # make list of init values for all pkeys included in fit
         x0 = np.hstack(np.hstack([basin_params[pk]*np.ones(nl) for pk in basin_keys]))
@@ -223,4 +225,3 @@ class Optimizer(object):
             status='/'.join(['Inits {}', '{}'.format(ninits)])
             self.ibar = utils.PBinJ(n=ninits, color='g', status=status)
             self.gbar = utils.BasinCallback(n=bp['nsuccess'])
-            self.callback = self.gbar.callback

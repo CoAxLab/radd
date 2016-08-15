@@ -24,7 +24,7 @@ def get_cpals(name='all', aslist=False):
 
 def style_params(context='notebook', assorted=False):
     colors = ["#1abc9c", "#16a085", "#2ecc71", "#27ae60",
-              "#3498db", "#2980b9", "#4168B7", "#3A539B",
+              "#3498db", "#2980b9", "#4168B7", "#3A539B", '#3572C6'
               "#9B59B6", "#8E44AD", "#663399", "#674172",
               "#95A5A6", '#6C7A89', "#34495e", "#2c3e50",
               '#E26A6A', "#e16256", "#e74c3c", "#c0392b",
@@ -39,7 +39,7 @@ def param_color_map(param='all'):
         return param_color_map[param]
 
 def assorted_list():
-     return ["#3498db", "#e74c3c", "#8E44AD", "#16a085", "#f39c12", "#4168B7", '#6C7A89']
+     return ["#3498db", "#e74c3c", "#8E44AD", "#16a085", "#f39c12", "#4168B7", '#6C7A89', "#27ae60", "#e5344a", "#ff711a", "#4e27d8", "#3572C6", "#ff914d"]
 
 def get_cmaps():
     block = ['Blues', 'BuGn', 'BuPu', 'GnBu', 'Greens', 'Greys', 'Oranges', 'OrRd', 'PuBu',

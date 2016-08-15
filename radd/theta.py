@@ -261,7 +261,7 @@ def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None, as_list=False
         params = [{pk: params[pk][i] for pk in pkeys} for i in range(ninits)]
     return params
 
-def filter_params(p_sets, p_fmins, nkeep=5, method='best'):
+def filter_params(p_fmins, p_sets, nkeep=5, method='best'):
     # rank inits by costfx error low-to-high
     fmin_series = pd.Series(p_fmins)
     rankorder = fmin_series.sort_values()
@@ -285,7 +285,7 @@ def filter_params(p_sets, p_fmins, nkeep=5, method='best'):
         keep_ix = np.hstack([ix[:nl], np.array_split(ix,2)[0][-nm:], ix[-nh:]])
         inits = [p_sets[i] for i in keep_ix]
         inits_err = [fmin_series[i] for i in keep_ix]
-    return inits, np.min(inits_err)
+    return inits
 
 def loadParameters(inits=None, is_flat=False, kind=None, pc_map={}):
     """ Generates and returns an lmfit Parameters object with

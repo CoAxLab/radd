@@ -16,15 +16,15 @@ from ipywidgets import IntProgress, HTML, Box
 class PBinJ(object):
     """ initialize multiple progress bars for tracking nested stages of fitting routine
     """
-    def __init__(self, n=1, value=0, status='{}', color='r', width='50%', height='25px'):
+    def __init__(self, n=1, value=0, status='{}', color='r', width='50%', height='22px'):
         self.displayed = False
         self.style_bar(n=n, value=value, status=status, color=color, width=width, height=height)
 
-    def style_bar(self, n=1, value=0, status='{}', color='r', width='50%', height='25px'):
-        colordict = {'g': '#16a085', 'b': '#4168B7', 'r': "#e74c3c", 'y': "#f39c12"}
+    def style_bar(self, n=1, value=0, status='{}', color='r', width='50%', height='22px'):
+        colordict = {'g': '#27ae60', 'b': '#3572C6', 'r': "#e74c3c", 'y': "#f39c12"}
         self.bar = IntProgress(min=0, max=n, value=value)
         self.status = status
-        #self.bar.color = colordict[color]
+        self.bar.color = colordict[color]
         self.bar.width = width
         self.bar.height = height
 

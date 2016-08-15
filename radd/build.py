@@ -59,19 +59,22 @@ class Model(RADDCore, Parameters):
         self.set_basinparams(progress=progress)
         if np.any([saveplot, saveresults]):
             self.handler.make_results_dir(custompath=custompath)
+        if not self.finished_sampling:
+            self.sample_param_sets()
         for ix in range(len(self.observed)):
-            if not hasattr(self, 'flat_popt'):
-                self.set_fitparams(ix=ix, nlevels=1)
-                self.optimize_flat()
+            self.set_fitparams(ix=ix, nlevels=1)
+            flat_popt = self.optimize_flat(self.param_sets[ix])
             if not self.is_flat:
                 self.set_fitparams(ix=ix, nlevels=self.nlevels)
-                self.optimize_conditional()
+                self.optimize_conditional(flat_popt)
             if plotfits:
                 self.plot_model_fits(save=saveplot)
         if saveresults:
             self.handler.save_results(saveobserved)
+        if progress and not self.is_nested:
+            self.optimizer.gbar.clear()
 
-    def optimize_flat(self):
+    def optimize_flat(self, init_list_ix):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             None
@@ -82,17 +85,16 @@ class Model(RADDCore, Parameters):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
-        if not self.finished_sampling:
-            self.sample_param_sets()
+        init_list_ix = deepcopy(init_list_ix)
         # Global Optimization w/ Basinhopping (+TNC)
-        p = self.optimizer.hop_around(inits=self.param_sets)
+        p = self.optimizer.hop_around(inits=init_list_ix)
         # Flat Simplex Optimization of Parameters at Global Minimum
         self.finfo, self.popt, self.yhat = self.optimizer.gradient_descent(p=p)
-        self.flat_popt = deepcopy(self.popt)
         if self.is_flat:
             self.write_results()
+        return self.popt
 
-    def optimize_conditional(self):
+    def optimize_conditional(self, flat_popt):
         """ optimizes full model to all conditions in data
         ::Arguments::
             None
@@ -104,21 +106,20 @@ class Model(RADDCore, Parameters):
             popt (dict): optimized parameters dictionary
             flat_popt (dict): deepcopy of popt
         """
-        p = self.__check_inits__(deepcopy(self.flat_popt))
+        p = self.__check_inits__(deepcopy(flat_popt))
         # Pretune Conditional Parameters
         p, fmin = self.optimizer.run_basinhopping(p)
         # Final Simplex Optimization
         self.finfo, self.popt, self.yhat = self.optimizer.gradient_descent(p=p, flat=False)
         self.write_results()
 
-    def nested_optimize(self, free=[], cond=None, saveplot=True, plotfits=True, custompath=None, progress=False):
+    def nested_optimize(self, models=[], saveplot=True, plotfits=True, custompath=None, progress=False):
         """ optimize a series of models using same init parameters where the i'th model
-            has depends_on = {<models[i]> : <cond>}. (NOTE: only for models with fit_on='average')
+            has depends_on = {<models[i]> : <cond>}.
+            NOTE: only for models with fit_on='average'
         ::Arguments::
-            free (list):
-                list of parameter id's to allow free acros levels of <cond> (see below)
-            cond (str):
-                name of column in self.data to groupby for conditional fits
+            models (list):
+                list of depends_on dictionaries to fit using a single set of init parameters (self.flat_popt)
             plotfits (bool):
                 if True (default), plot model predictions over observed data
             saveplot (bool):
@@ -130,38 +131,43 @@ class Model(RADDCore, Parameters):
                 track progress across model fits, ninits, and basinhopping
         """
         self.is_nested = True
-        self.nmodels = len(free)
+        if np.any([saveplot, saveresults]):
+            self.handler.make_results_dir(custompath=custompath)
         if progress:
             self.set_basinparams(progress=progress)
-            pnames = [vis.parameter_name(param, True) for param in free]
-            self.mbar = utils.PBinJ(n=self.nmodels+1, color='b', status='{} Model')
-            self.mbar.update(value=0, status='Flat')
-        self.optimize_flat()
-        for i, param in enumerate(free):
+            self.make_nested_progress(models)
+        flat_popt = self.optimize_flat(self.param_sets[0])
+        for i, depends_on in enumerate(models):
             if progress:
-                self.mbar.update(value=i+1, status=pnames[i])
-            self.set_fitparams(depends_on={param: cond})
-            self.optimize(plotfits=plotfits, progress=progress, saveplot=saveplot, custompath=custompath)
+                self.mbar.update(value=i+1, status=self.pnames[i])
+            self.set_fitparams(depends_on=depends_on)
+            self.optimize_conditional(flat_popt)
+            if plotfits:
+                self.plot_model_fits(save=saveplot)
         if progress:
             self.mbar.clear()
+            self.optimizer.gbar.clear()
 
-    def recover_model(self, nsamples=None, plotparams=True, plotfits=False, progress=False):
+    def recover_model(self, popt=None, yhat=None, nsamples=None, ninits=None, plotparams=True, plotfits=False, progress=False):
         """ fit model to synthetic data similar to observed y-vector
         and compare init params to recovered params to test model identifiabilty
         """
+        # set nlevels so simulator result has "conditional" shape
+        self.set_fitparams(force_conditional=True)
+        if popt is None:
+            popt = self.popt
+        if yhat is None:
+            yhat = self.simulate(p=popt, set_observed=True)
         if nsamples is None:
             nsamples = self.basinparams['nsamples']
+        if ninits is None:
+            ninits = self.basinparams['ninits']
         nkeep = self.basinparams['ninits']+1
         self.sample_param_sets(nsamples=nsamples, nkeep=nkeep)
-        inits = self.param_sets.pop(0)
-        # set nlevels so simulator result has "conditional" shape
-        self.set_fitparams(nlevels=self.nlevels)
-        # simulate synthetic data and set as observed
-        yhat = self.simulate(inits, set_observed=True)
         self.optimize(progress=progress, plotfits=plotfits)
         if plotparams:
             # plot init_params agains optimized param estimates
-            vis.compare_param_estimates(inits, self.popt, self.depends_on)
+            vis.compare_param_estimates(popt, self.popt, self.depends_on)
 
     def write_results(self, finfo=None, popt=None, yhat=None):
         """ logs fit info to txtfile, fills yhatDF and fitDF
