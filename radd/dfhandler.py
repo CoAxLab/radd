@@ -31,7 +31,6 @@ class DataHandler(object):
         self.nlevels = model.nlevels
         self.cond_matrix = model.cond_matrix
         self.nrows = self.nidx * model.nlevels
-        #self.nrows = self.nidx * self.nlevels
         self.grpData = self.data.groupby(self.groups)
 
     def make_dataframes(self):
@@ -93,12 +92,19 @@ class DataHandler(object):
             # fill observedDF one row at a time, using idx_rows
             self.observedDF.loc[rowi, self.idx_cols[rowi]] = self.dfvals[rowi]
         if self.model.weighted:
+            def fill_nan_vals(coldata):
+                coldata = coldata.copy()
+                coldata[coldata.isnull()] = np.nanmean(coldata.values)
+                return coldata
             # Calculate p(resp) and rt quantile costfx weights
             idx_qwts, idx_pwts = self.estimate_cost_weights()
             # fill wtsDF with idx quantile wts (ratios)
             self.wtsDF.loc[:, self.q_cols] = idx_qwts
             # fill wtsDF with resp. probability wts (ratios)
             self.wtsDF.loc[:, self.p_cols] = idx_pwts
+            wts_numeric = self.wtsDF.loc[:, 'acc':]
+            self.wtsDF.loc[:, 'acc':] = wts_numeric.apply(fill_nan_vals, axis=1)
+
         else:
             self.wtsDF.loc[:, self.p_cols+self.q_cols] = 1
         if self.fit_on=='average':
@@ -145,14 +151,14 @@ class DataHandler(object):
         if self.fit_on=='average':
             idxname = 'average'
             if self.model.is_nested:
-                idxname = self.model.model_id.split('_')[1]
+                idxname = '_'.join(list(self.model.depends_on))
         else:
-            idxname = self.idx[fitparams['idx']]
+            idxname = self.idx[fitparams['ix']]
         data_widx = data.copy()
         data_widx['idx'] = idxname
         fitDF.loc[row, self.f_cols] = data_widx
         self.fitDF = fitDF.copy()
-        return fitDF.copy()
+        return fitDF.dropna(axis=0)
 
 
     def fill_yhatDF(self, data, fitparams=None):
@@ -178,10 +184,10 @@ class DataHandler(object):
             if self.fit_on=='average':
                 idxname = 'average'
                 if self.model.is_nested:
-                    idxname = self.model.model_id.split('_')[1]
+                    idxname = '_'.join(list(self.model.depends_on))
                 yhatDF.loc[row, 'idx'] = idxname
         self.yhatDF = yhatDF.copy()
-        return yhatDF.copy()
+        return yhatDF.dropna(axis=0)
 
     def determine_ssd_method(self, stopdf):
         ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
@@ -409,6 +415,19 @@ class DataHandler(object):
         os.chdir(self.resultsdir)
         if get_path:
             return self.resultsdir
+
+    def load_nested_popt_dictionaries(self, fitdf):
+        mparams = list(self.model.inits)
+        params_dict = {}
+        for mid in fitdf.idx.values:
+            freeparams = mid.split('_')
+            constants = [p for p in mparams if p not in freeparams]
+            select_params = fitdf[fitdf.idx==mid][mparams]
+            pdict = select_params.to_dict('records')[0]
+            for p in constants:
+                pdict[p] = pdict[p] * np.ones(self.nlevels)
+            params_dict[mid] = pdict
+        return params_dict
 
     def params_io(p={}, io='w', path=None, iostr='popt'):
         """ read // write parameters dictionaries

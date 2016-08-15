@@ -236,28 +236,29 @@ def compare_nested_models(fitDF, model_ids, plot_stats=True, verbose=False):
     return gof
 
 def plot_model_gof(gof_dict, aicwinner, models=None):
-    sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
+    sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.1)
     if models is None:
         models = np.sort(list(gof_dict))
     nmodels = len(models)
-    f, ax = plt.subplots(1, figsize=(8,6))
+    f, ax = plt.subplots(1, figsize=(10,7))
     x = np.arange(1, nmodels*2, 2)
-    clrs = colors.param_color_map()
+    #clrs = colors.param_color_map()
+    clrs = colors.assorted_list()
     lbls = {m_id: parameter_name(m_id,True) for m_id in models}
     for i, m_id in enumerate(models):
         yaic, ybic = gof_dict[m_id][['AIC', 'BIC']]
         lbl = lbls[m_id]
         if m_id==aicwinner:
             lbl+='*'
-        ax.bar(x[i]-.25, yaic, color=clrs[m_id], width=.5, align='center', edgecolor=clrs[m_id], label=lbl)
-        ax.bar(x[i]+.25, ybic, color=clrs[m_id], alpha=.7, width=.5, align='center', edgecolor=clrs[m_id])
+        ax.bar(x[i]-.25, yaic, color=clrs[i], width=.5, align='center', edgecolor=clrs[i], label=lbl)
+        ax.bar(x[i]+.25, ybic, color=clrs[i], alpha=.7, width=.5, align='center', edgecolor=clrs[i])
     vals = np.hstack(gof_dict.values()).astype(float)
     yylim = (vals.max()*.95, vals.min()*1.05)
     plt.setp(ax, xticks=x, ylim=yylim, xlim=(0, x[-1]+1), ylabel='IC')
-    ax.set_xticklabels(['AIC | BIC']*nmodels, fontsize=18)
+    ax.set_xticklabels(['AIC|BIC']*nmodels, fontsize=14)
     ax.invert_yaxis()
     sns.despine()
-    ax.legend(loc=0, fontsize=22)
+    ax.legend(loc=0, fontsize=14)
 
 def plot_param_distributions(p, nsamples=1000):
     from radd import theta
@@ -267,7 +268,7 @@ def plot_param_distributions(p, nsamples=1000):
     clrs = colors.param_color_map()
     lbls = {pk: parameter_name(pk,True) for pk in pkeys}
     ncols = np.ceil(nparams/2.).astype(int)
-    fig, axes = plt.subplots(2, ncols, figsize=(10,5))
+    fig, axes = plt.subplots(2, ncols, figsize=(10,5), dpi=600)
     axes = axes.flatten()
     for i, pk in enumerate(pkeys):
         sns.distplot(p_dists[pk], label=lbls[pk], color=clrs[pk], ax=axes[i])
@@ -298,6 +299,9 @@ def get_plot_labels(fitparams):
     return labels
 
 def parameter_name(param, tex=False):
+    ix = 0
+    if tex:
+        ix = 1
     param_name = {'v':['Drift', '$v_{G}$'],
         'ssv': ['ssDrift', '$v_{S}$'],
         'a': ['Threshold', '$a_{G}$'],
@@ -305,6 +309,8 @@ def parameter_name(param, tex=False):
         'xb': ['Dynamic Gain', '$xb_{G}$'],
         'sso': ['ssOnset', '$so_{S}$'],
         'flat': ['Flat', '']}
-    if tex:
-        return param_name[param][1]
-    return param_name[param][0]
+    if '_' in param:
+        param = param.split('_')
+    if hasattr(param, '__iter__'):
+        return ' + '.join([param_name[p][ix] for p in param])
+    return param_name[param][ix]

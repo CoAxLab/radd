@@ -159,18 +159,17 @@ class RADDCore(object):
         data = self.data.copy()
         self.depends_on = depends_on
         self.conds = np.unique(listvalues(self.depends_on)).tolist()
-        self.cond_matrix = np.array([data[c].unique().size for c in self.conds])
+        self.nconds = len(self.conds)
         if 'flat' in self.conds:
             self.is_flat = True
             data['flat'] = 'flat'
             self.data = data.copy()
         else:
             self.is_flat = False
-        self.nconds = len(self.conds)
-        self.clmap = {c: np.sort(data[c].unique()) for c in self.conds}
-        #self.nlevels = np.sum([len(lvls) for lvls in listvalues(self.clmap)])
+        clevels = [np.sort(data[c].unique()) for c in self.conds]
+        self.clmap = {c: lvls for c, lvls in zip(self.conds, clevels)}
+        self.cond_matrix = np.array([lvls.size for lvls in clevels])
         self.nlevels = np.cumprod(self.cond_matrix)[-1]
-        #self.cond_matrix= np.array([len(lvls) for lvls in listvalues(self.clmap)])
         self.groups = np.hstack([['idx'], self.conds]).tolist()
         self.__format_pcmap__()
         if hasattr(self, 'ssd'):
@@ -232,11 +231,12 @@ class RADDCore(object):
             nsamples = self.basinparams['nsamples']
         if nkeep is None:
             nkeep = self.basinparams['ninits']
-        unfiltered = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list=True)
-        self.filter_params(unfiltered, nsamples=nsamples, nkeep=nkeep)
+        self.p_sets = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list=True)
+        self.p_yhats = [self.simulator.sim_fx(p) for p in self.p_sets]
+        self.filter_params(self.p_sets, self.p_yhats, nsamples=nsamples, nkeep=nkeep)
         self.finished_sampling = True
 
-    def filter_params(self, p_sets=None, nsamples=None, nkeep=None):
+    def filter_params(self, p_sets, p_yhats, nsamples=None, nkeep=None):
         """ sample *nsamples* (default=5000, see set_fitparams) different
         parameter sets (param_sets) and get model yhat for each set (param_yhats)
         """
@@ -244,11 +244,26 @@ class RADDCore(object):
             nsamples = self.basinparams['nsamples']
         if nkeep is None:
             nkeep = self.basinparams['ninits']
-        if p_sets is None:
-            p_sets = self.param_sets
-        p_fmins = [self.optimizer.simulator.cost_fx(p, sse=1) for p in p_sets]
-        method = self.basinparams['init_sample_method']
-        self.param_sets, self.gmin = theta.filter_params(p_sets, p_fmins, nkeep=nkeep, method=method)
+        # get columns for building flat y dataframe
+        cols = self.observedDF.loc[:, 'acc':].columns
+        p_sets = np.array(p_sets)
+        # dataframe with (nsampled param sets X ndata)
+        pyhats = pd.DataFrame(p_yhats, columns=cols, index=np.arange(nsamples))
+        # if fit_on==subjects shape is (n_idx X ndata)
+        # if fit_on==average shape is (1 X ndata)
+        y = pd.DataFrame(np.array(self.observed_flat), columns=cols)
+        wts = pd.DataFrame(np.array(self.flat_wts), columns=cols)
+        # row-wise costfx, comparing y against yhat, where yhat is
+        # the pred. data generated from a sampled parameter set
+        costfx = lambda yhat: np.sum((wts * (yhat.values - y))**2, axis=1)
+        # column-wise ranking function, where each p_fmin is a column from pfmin_idx
+        sortvals = lambda p_fmin: p_fmin.sort_values().index
+        pfmin_idx = pyhats.apply(costfx, axis=1)
+        idx_prank = pfmin_idx.apply(sortvals, axis=0)
+        # get arrays of indices for each of best nkeep param_sets for each subject
+        idx_p_indices = [idx_prank.loc[:nkeep, idxcol].values  for idxcol in idx_prank]
+        # self.param_sets: subjectwise list of "best" sampled param sets
+        self.param_sets = [p_sets[idx_pindex].tolist() for idx_pindex in idx_p_indices]
 
     def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit
@@ -290,6 +305,13 @@ class RADDCore(object):
         self.set_fitparams(tol=tol, maxfev=maxfev)
         self.set_basinparams(tol=tol, ninits=ninits, nsamples=nsamples, nsuccess=nsuccess)
         self.optimizer.update(basinparams=self.basinparams, progress=progress)
+
+    def make_nested_progress(self, models):
+        self.set_basinparams(progress=True)
+        model_params = [list(depends) for depends in models]
+        self.pnames = [vis.parameter_name(p, True) for p in model_params]
+        self.mbar = utils.PBinJ(n=len(pnames)+1, color='b', status='{} Model')
+        self.mbar.update(value=0, status='Flat')
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF
