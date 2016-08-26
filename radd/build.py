@@ -6,11 +6,10 @@ import pandas as pd
 from numpy import array
 from radd.models import Simulator
 from radd.CORE import RADDCore
-from radd.theta import Parameters
 from radd import vis
 from radd.tools import utils
 
-class Model(RADDCore, Parameters):
+class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
     Inherits from RADDCore parent class (see CORE module).
     ::Arguments::
@@ -38,7 +37,7 @@ class Model(RADDCore, Parameters):
 
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
 
-    def optimize(self, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
+    def optimize(self, flat_popt=None, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         ::Arguments::
@@ -47,7 +46,7 @@ class Model(RADDCore, Parameters):
             saveplot (bool):
                 if True (default is False), save plots to "~/<self.model_id>/"
             saveresults (bool):
-                if True (default), save fitDF, yhatDF, and txt logs to "~/<self.model_id>/"
+                if True (default), save fitdf, yhatdf, and txt logs to "~/<self.model_id>/"
             saveobserved (bool):
                 if True (default is False), save observedDF to "~/<self.model_id>/"
             custompath (str):
@@ -56,23 +55,27 @@ class Model(RADDCore, Parameters):
             progress (bool):
                 track progress across ninits and basinhopping
         """
-        self.set_basinparams(progress=progress)
+        self.toggle_pbars(progress=progress)
         if np.any([saveplot, saveresults]):
             self.handler.make_results_dir(custompath=custompath)
-        if not self.finished_sampling:
+        if flat_popt is None:
             self.sample_param_sets()
         for ix in range(len(self.observed)):
-            self.set_fitparams(ix=ix, nlevels=1)
-            flat_popt = self.optimize_flat(self.param_sets[ix])
+            if hasattr(self, 'idxbar'):
+                self.idxbar.update(value=ix, status=self.idx[ix])
+            if flat_popt is None:
+                self.set_fitparams(ix=ix, nlevels=1)
+                flat_popt = self.optimize_flat(self.param_sets[ix])
             if not self.is_flat:
                 self.set_fitparams(ix=ix, nlevels=self.nlevels)
                 self.optimize_conditional(flat_popt)
             if plotfits:
                 self.plot_model_fits(save=saveplot)
-        if saveresults:
-            self.handler.save_results(saveobserved)
+            if saveresults:
+                self.handler.save_results(saveobserved)
         if progress and not self.is_nested:
             self.optimizer.gbar.clear()
+            self.optimizer.ibar.clear()
 
     def optimize_flat(self, init_list_ix):
         """ optimizes flat model to data collapsing across all conditions
@@ -113,7 +116,7 @@ class Model(RADDCore, Parameters):
         self.finfo, self.popt, self.yhat = self.optimizer.gradient_descent(p=p, flat=False)
         self.write_results()
 
-    def nested_optimize(self, models=[], saveplot=True, plotfits=True, custompath=None, progress=False):
+    def nested_optimize(self, models=[], flat_popt=None, saveplot=True, plotfits=True, custompath=None, progress=False, saveresults=True, saveobserved=False):
         """ optimize a series of models using same init parameters where the i'th model
             has depends_on = {<models[i]> : <cond>}.
             NOTE: only for models with fit_on='average'
@@ -133,20 +136,27 @@ class Model(RADDCore, Parameters):
         self.is_nested = True
         if np.any([saveplot, saveresults]):
             self.handler.make_results_dir(custompath=custompath)
-        if progress:
-            self.set_basinparams(progress=progress)
-            self.make_nested_progress(models)
-        flat_popt = self.optimize_flat(self.param_sets[0])
+        if flat_popt is None:
+            models = [{'all': 'flat'}] + models
+            self.sample_param_sets()
+        pnames = self.toggle_pbars(progress=progress, models=models)
+        # loop over depends_on dictionaries and optimize cond models
         for i, depends_on in enumerate(models):
-            if progress:
-                self.mbar.update(value=i+1, status=self.pnames[i])
             self.set_fitparams(depends_on=depends_on)
+            if progress:
+                self.mbar.update(value=i, status=pnames[i])
+            if flat_popt is None:
+                flat_popt = self.optimize_flat(self.param_sets[0])
+                continue
             self.optimize_conditional(flat_popt)
             if plotfits:
                 self.plot_model_fits(save=saveplot)
+            if saveresults:
+                self.handler.save_results(saveobserved)
         if progress:
             self.mbar.clear()
             self.optimizer.gbar.clear()
+            self.optimizer.ibar.clear()
 
     def recover_model(self, popt=None, yhat=None, nsamples=None, ninits=None, plotparams=True, plotfits=False, progress=False):
         """ fit model to synthetic data similar to observed y-vector
@@ -170,14 +180,15 @@ class Model(RADDCore, Parameters):
             vis.compare_param_estimates(popt, self.popt, self.depends_on)
 
     def write_results(self, finfo=None, popt=None, yhat=None):
-        """ logs fit info to txtfile, fills yhatDF and fitDF
+        """ logs fit info to txtfile, fills yhatdf and fitdf
         """
         finfo, popt, yhat = self.set_results(finfo, popt, yhat)
         self.log_fit_info(finfo, popt, self.fitparams)
-        self.yhatDF = self.handler.fill_yhatDF(data=yhat, fitparams=self.fitparams)
-        self.fitDF = self.handler.fill_fitDF(data=finfo, fitparams=self.fitparams)
+        self.yhatdf = self.handler.fill_yhatdf(yhat=yhat, fitparams=self.fitparams)
+        self.fitdf = self.handler.fill_fitdf(finfo=finfo, fitparams=self.fitparams)
+        self.poptdf = self.handler.fill_poptdf(popt=popt, fitparams=self.fitparams)
 
-    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw=.008):
+    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw=.008, savestr=None):
         """ wrapper for radd.tools.vis.plot_model_fits
         """
         if y is None:
@@ -189,7 +200,7 @@ class Model(RADDCore, Parameters):
                 yhat = deepcopy(y)
         if self.fit_on=='average' and err is None:
             err = self.handler.observed_err
-        vis.plot_model_fits(y, yhat, self.fitparams, err=err, save=save, bw=bw)
+        vis.plot_model_fits(y, yhat, self.fitparams, err=err, save=save, bw=bw, savestr=savestr)
 
     def simulate(self, p=None, analyze=True, set_observed=False):
         """ simulate yhat vector using

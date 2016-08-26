@@ -16,19 +16,20 @@ from ipywidgets import IntProgress, HTML, Box
 class PBinJ(object):
     """ initialize multiple progress bars for tracking nested stages of fitting routine
     """
-    def __init__(self, n=1, value=0, status='{}', color='r', width='50%', height='22px'):
+    def __init__(self, n=1, value=0, status='{}', color='b', width='50%', height='22px'):
         self.displayed = False
         self.style_bar(n=n, value=value, status=status, color=color, width=width, height=height)
 
-    def style_bar(self, n=1, value=0, status='{}', color='r', width='50%', height='22px'):
-        colordict = {'g': '#27ae60', 'b': '#3572C6', 'r': "#e74c3c", 'y': "#f39c12"}
-        self.bar = IntProgress(min=0, max=n, value=value)
+    def style_bar(self, n=1, value=0, status='{}', color='b', width='50%', height='22px'):
+        colordict = {'g': 'success', 'b': '', 'r': 'danger', 'y': 'warning', 'c': 'info'}
+        bar_style = colordict[color]
+        self.bar = IntProgress(min=0, max=n, value=value, bar_style=bar_style)
         self.status = status
-        self.bar.color = colordict[color]
+        self.bar.bar_style = bar_style
         self.bar.width = width
         self.bar.height = height
 
-    def reset_bar(self):
+    def reset_bar(self, color=False):
         self.update(value=0)
 
     def update(self, value=None, status=None):
@@ -59,9 +60,9 @@ class BasinCallback(object):
             whether or not that minimum was accepted
     """
     def __init__(self,  n=1, value=0, status='{:.3fz} / {:.3fz}', color='r'):
-        self.pbar = PBinJ(n=n, value=value, status=status, color='r')
+        self.pbar = PBinJ(n=n, value=value, status=status, color=color)
         self.reset(history=1, gbasin=1, get_call=0)
-
+        self.xhistory = []
     def reset(self, history=True, bar=False, gbasin=False, get_call=False):
         if history:
             self.history = [MyFloat(1.)]
@@ -75,16 +76,17 @@ class BasinCallback(object):
     def callback(self, x, fmin, accept):
         if fmin <= np.min(self.history) and fmin<=self.gbasin:
             self.gbasin = fmin
+            self.xhistory.append((fmin, x))
             self.reset(history=True, bar=True)
         if accept:
             self.history.append(fmin)
             status=(MyFloat(x) for x in [fmin, self.gbasin])
             self.pbar.update(value=len(self.history), status=status)
-            if len(self.history)>=self.pbar.bar.max:
-                # halt run if candidate global minimum has
-                # not changed in nsuccess steps (return True)
-                self.reset(history=True, bar=True)
-                return True
+            # if len(self.history)>=self.pbar.bar.max:
+            #     # halt run if candidate global minimum has
+            #     # not changed in nsuccess steps (return True)
+            #     self.reset(history=True, bar=True)
+            #     return True
 
     def clear(self):
         self.pbar.clear()

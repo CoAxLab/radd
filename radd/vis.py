@@ -1,6 +1,7 @@
 #!/usr/local/bin/env python
 from __future__ import division
 import sys
+from future.utils import listvalues
 from copy import deepcopy
 import pandas as pd
 import numpy as np
@@ -22,7 +23,7 @@ cool = cdict['cool']
 slate = cdict['slate']
 sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.2)
 
-def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=False, cdf=True, bw=.01):
+def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=False, cdf=True, bw=.01, savestr=None):
     """ main plotting function for displaying model fit predictions over data
     """
     sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.5)
@@ -32,8 +33,14 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
     quantiles = fitparams.quantiles
 
     # make colors and labels
-    palettes = colors.get_cpals(aslist=True)[:nlevels]
-    clrs = [pal(2) for pal in palettes]
+    try:
+        params = '_'.join(list(fitparams.depends_on))
+        clrs = [[colors.param_color_map(p)]*2 for p in params]
+    except Exception:
+        color_list = colors.assorted_list()
+        clrs = [[c]*2 for c in color_list]
+    #palette = colors.get_cpals(random=True)
+    #clrs = [[c]*2 for c in palette(nlevels)]
     lbls = get_plot_labels(fitparams)
     f, axes = plt.subplots(nlevels, 3, figsize=(14, 5*nlevels), sharey=True)
     # make two dimensional for iterating 1st dim
@@ -58,9 +65,11 @@ def plot_model_fits(y, yhat, fitparams, err=None, palettes=[gpal, bpal], save=Fa
         plot_quantiles(qpdata, err=qp_err[i], quantiles=quantiles, colors=clrs[i], axes=[ax2,ax3], kde=y_kde[i], bw=bw)
     axes = format_axes(axes)
     if save:
-        plt.savefig(fitparams['model_id']+'.png', dpi=600)
-    if fitparams['fit_on']=='subjects' and save:
-        plt.close('all')
+        if savestr is None:
+            savestr = fitparams.model_id
+        plt.savefig('.'.join([savestr, 'png']), dpi=600)
+        if fitparams.fit_on=='subjects':
+            plt.close('all')
 
 def scurves(data, err=None, colors=None, labels=None, ssd=None, ax=None, get_pse=False, pretune_fx='interpolate', **kwargs):
     """ plotting function for displaying model-predicted
@@ -219,41 +228,45 @@ def format_axes(axes):
     plt.tight_layout()
     return axes
 
-def compare_nested_models(fitDF, model_ids, plot_stats=True, verbose=False):
+def compare_nested_models(fitdf, model_ids, yerr=None, plot_stats=True, verbose=False):
     gof = {}
-    fitDF = fitDF[fitDF.idx.isin(model_ids)]
+    fitdf = fitdf[fitdf.pvary.isin(model_ids)]
     # print GOF stats for both models
     for i, p in enumerate(model_ids):
         name = parameter_name(p)
-        gof[p] = fitDF.loc[i, ['AIC', 'BIC']]
+        gof[p] = fitdf.loc[i, ['AIC', 'BIC']]
     # Which model provides a better fit to the data?
     aicwinner = model_ids[np.argmin([gof[mid][0] for mid in model_ids])]
     bicwinner = model_ids[np.argmin([gof[mid][1] for mid in model_ids])]
     if verbose:
         print('AIC likes {} model'.format(aicwinner))
         print('BIC likes {} model'.format(bicwinner))
-    plot_model_gof(gof, aicwinner, model_ids)
+    plot_model_gof(gof, aicwinner, model_ids, yerr=yerr)
     return gof
 
-def plot_model_gof(gof_dict, aicwinner, models=None):
+def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
     sns.set(style='darkgrid', rc={'figure.facecolor':'white'}, font_scale=1.1)
-    if models is None:
-        models = np.sort(list(gof_dict))
-    nmodels = len(models)
+
+    if pvary is None:
+        pvary = np.sort(list(gof_dict))
+    nmodels = len(pvary)
+    if yerr is None:
+        yerr = [np.zeros(2) for i in range(nmodels)]
     f, ax = plt.subplots(1, figsize=(10,7))
     x = np.arange(1, nmodels*2, 2)
-    #clrs = colors.param_color_map()
-    clrs = colors.assorted_list()
-    lbls = {m_id: parameter_name(m_id,True) for m_id in models}
-    for i, m_id in enumerate(models):
-        yaic, ybic = gof_dict[m_id][['AIC', 'BIC']]
-        lbl = lbls[m_id]
-        if m_id==aicwinner:
+    clrs = [colors.param_color_map(p) for p in pvary]
+    #clrs = colors.assorted_list()
+    lbls = {p: parameter_name(p,True) for p in pvary}
+    for i, p in enumerate(pvary):
+        yaic, ybic = gof_dict[p][['AIC', 'BIC']]
+        aic_err, bic_err = yerr[i]
+        lbl = lbls[p]
+        if p==aicwinner:
             lbl+='*'
-        ax.bar(x[i]-.25, yaic, color=clrs[i], width=.5, align='center', edgecolor=clrs[i], label=lbl)
-        ax.bar(x[i]+.25, ybic, color=clrs[i], alpha=.7, width=.5, align='center', edgecolor=clrs[i])
+        ax.bar(x[i]-.32, yaic, yerr=aic_err, color=clrs[i], ecolor="#34495e", error_kw={'linewidth':3, 'alpha':1}, alpha=.8, width=.64, align='center', edgecolor=clrs[i], label=lbl)
+        ax.bar(x[i]+.32, ybic, yerr=bic_err, color=clrs[i], ecolor="#34495e", error_kw={'linewidth':3, 'alpha':1}, alpha=.65, width=.64, align='center', edgecolor=clrs[i])
     vals = np.hstack(gof_dict.values()).astype(float)
-    yylim = (vals.max()*.95, vals.min()*1.05)
+    yylim = (vals.max()*.97, vals.min()*1.07)
     plt.setp(ax, xticks=x, ylim=yylim, xlim=(0, x[-1]+1), ylabel='IC')
     ax.set_xticklabels(['AIC|BIC']*nmodels, fontsize=14)
     ax.invert_yaxis()
@@ -294,8 +307,16 @@ def compare_param_estimates(p1, p2, depends_on=None):
     _ = plt.setp(plt.gca(), xlim=(x[0]-.5, x[-1]+.5), xticks=x, xticklabels=pnames)
 
 def get_plot_labels(fitparams):
-    lbls = np.hstack(fitparams['clmap'].values())
-    labels = [[lbl + dtype for dtype in [' data', ' model']] for lbl in lbls]
+    from itertools import product
+    clmap = fitparams['clmap']
+    nconds = len(list(clmap))
+    clevels = [levels for levels in listvalues(clmap)]
+    if nconds>1:
+        level_data = list(product(*clevels))
+        clevels = ['_'.join(lvls) for lvls in level_data]
+    else:
+        clevels = np.hstack(clevels)
+    labels = [[lvl + dtype for dtype in [' data', ' model']] for lvl in clevels]
     return labels
 
 def parameter_name(param, tex=False):
@@ -308,7 +329,8 @@ def parameter_name(param, tex=False):
         'tr': ['Onset', '$tr_{G}$'],
         'xb': ['Dynamic Gain', '$xb_{G}$'],
         'sso': ['ssOnset', '$so_{S}$'],
-        'flat': ['Flat', '']}
+        'flat': ['Flat', 'Flat'],
+        'all': ['Flat', 'Flat']}
     if '_' in param:
         param = param.split('_')
     if hasattr(param, '__iter__'):

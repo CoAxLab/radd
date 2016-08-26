@@ -6,9 +6,135 @@ import os
 from numpy import array
 from sklearn.neighbors import KernelDensity
 from scipy.stats.mstats import mquantiles as mq
+from scipy.stats.mstats_extras import mjci
 from scipy import optimize
 import functools
 from scipy.interpolate import interp1d
+
+def rangl_data(data, quantiles=np.arange(.1, 1.,.1), ssd_method='all'):
+    """ called by DataHandler.__make_dataframes__ to generate
+    observed data arrays
+    """
+    data = data.copy()
+    gac = data.query('ttype=="go"').acc.mean()
+    grt = data.query('response==1 & acc==1').rt.values
+    ert = data.query('response==1 & acc==0').rt.values
+    gq = mq(grt, prob=quantiles)
+    eq = mq(ert, prob=quantiles)
+    data_vector = [gac, gq, eq]
+    if 'ssd' in data.columns:
+        stopdf = data.query('ttype=="stop"')
+        if ssd_method=='all':
+            sacc=stopdf.groupby('ssd').mean()['acc'].values
+        elif ssd_method=='central':
+            sacc = np.array([stopdf.mean()['acc']])
+        data_vector.insert(1, sacc)
+    return np.hstack(data_vector)
+
+
+def idx_quant_weights(data, groups, nlevels=1, quantiles=np.arange(.1, 1.,.1), max_wt=3):
+    """ calculates weight vectors for reactive RT quantiles by
+    first estimating the SEM of RT quantiles for corr. and err. responses.
+    (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
+    Then representing these variances as ratios.
+    e.g.
+          QSEM = mjci(rtvectors)
+          wts = median(QSEM)/QSEM
+    """
+    idx_mjci = lambda x: mjci(x.rt, prob=quantiles)
+    nidx = data.idx.unique().size
+    nquant = quantiles.size
+    nsplits = nlevels
+    # get all trials with response recorded
+    godf = data.query('response==1')
+    # sort by ttype first so go(acc==1) occurs before stop(acc==0)
+    ttype_ordered_groups = np.hstack([groups, 'ttype', 'acc']).tolist()
+    godf_grouped = godf.groupby(ttype_ordered_groups)
+    # apply self.idx_mjci() to estimate quantile CI's
+    quant_err = np.vstack(godf_grouped.apply(idx_mjci).values)
+    # reshape [nidx   x   ncond * nquant * nacc]
+    idx_qerr = quant_err.reshape(nidx, nsplits * nquant * 2)
+    # calculate subject median across all conditions quantiles and accuracy
+    # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
+    # for conditions with greater number of observations (i.e., more acc==1 in godf)
+    idx_medians = np.nanmedian(idx_qerr, axis=1)
+    idx_qratio = idx_medians[:, None] / idx_qerr
+    # set extreme values to max_wt arg val
+    idx_qratio[idx_qratio >= max_wt] = max_wt
+    # reshape to fit in wtsDF[:, q_cols]
+    return idx_qratio.reshape(nidx * nsplits, nquant * 2)
+
+
+def idx_acc_weights(data, conds=['flat'], ssd_method='all'):
+    """ count number of observed responses across levels, transform into ratios
+    (counts_at_each_level / np.median(counts_at_each_level)) for weight
+    subject-level p(response) values in cost function.
+    ::Arguments::
+        df (DataFrame): group-level dataframe
+        var (str): column header for variable to count responses
+        conds (list): depends_on.values()
+    """
+    df = data.copy()
+    index=['idx']
+    if not 'flat' in conds:
+        index = index + conds
+    if 'ssd' in df.columns:
+        if ssd_method=='all':
+            df = df[df.ttype=='stop'].copy()
+            split_by = 'ssd'
+        else:
+            split_by = 'ttype'
+    else:
+        split_by = conds
+        _ = index.remove(split_by)
+    df['n'] = 1
+    countdf = df.pivot_table('n', index=index, columns=split_by, aggfunc=np.sum)
+    idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
+    if ssd_method=='all':
+        go_wts = np.ones(countdf.shape[0])
+        idx_pwts = np.concatenate((go_wts[:,None], idx_pwts), axis=1)
+    return idx_pwts
+
+
+def determine_ssd_method(stopdf):
+    ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
+    # test if equal # of trials per ssd & return ssd_n
+    all_equal_counts = ssd_n[1:] == ssd_n[:-1]
+    if all_equal_counts:
+        return 'all'
+    else:
+        return'central'
+
+
+def get_model_ssds(stopdf, conds, ssd_method='all', scale=.001):
+    if ssd_method == 'all':
+        get_df_ssds = lambda df: df.groupby(conds).ssd.unique().values
+        cond_ssds =  [get_df_ssds(df) for _,df in stopdf.groupby('idx')]
+    elif ssd_method == 'central':
+        mean_cond_ssd_df = stopdf.pivot_table('ssd', index='idx', columns=conds)
+        cond_ssds = list(mean_cond_ssd_df.values)
+    ssds = [np.sort(np.vstack(ssds))*scale for ssds in cond_ssds]
+    return ssds
+
+def load_nested_popt_dictionaries(fitdf, params={}, nlevels=1):
+    mparams = list(params)
+    params_dict = {}
+    for mid in fitdf.idx.values:
+        freeparams = mid.split('_')
+        constants = [p for p in mparams if p not in freeparams]
+        select_params = fitdf[fitdf.idx==mid][mparams]
+        pdict = select_params.to_dict('records')[0]
+        for p in constants:
+            pdict[p] = pdict[p] * np.ones(nlevels)
+        params_dict[mid] = pdict
+    return params_dict
+
+
+def fill_nan_vals(coldata):
+    coldata = coldata.copy()
+    coldata[coldata.isnull()] = np.nanmean(coldata.values)
+    return coldata
+
 
 def remove_outliers(data, sd=1.5, verbose=False):
     df = data.copy()

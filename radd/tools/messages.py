@@ -14,20 +14,20 @@ def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='a
     name_equals = lambda name, strvector: '{0} = array([{1}])'.format(name, strvector)
     stringify = lambda x: name_equals(x[0], ', '.join('{:f}'.format(n) for n in x[1]))
     # brief-ify fitparams reference
-    fp = dict(deepcopy(fitparams))
+    fp = deepcopy(fitparams)
     # list flattened y, wts, and yhat arrays
     arrays = [fp[k].flatten() for k in array_names]
     # write arays to strings for easy logging
     names_arrays = zip(array_names, arrays)
     y_str, wts_str, yhat_str = map(stringify, names_arrays)
-
+    model_id = fp['model_id']
     if fp['nlevels']==1:
-        fit_on = ' '.join([fit_on, 'FLAT'])
+        fit_on = '  |  '.join([model_id, fit_on, fp['idx'], '(flat)'])
         dep_id = "flat model (no conditional parameters)"
         fname = './' + kind + '_flat.txt'
     else:
         depends_on = fp['depends_on']
-        fit_on = ' '.join([fit_on, 'FULL'])
+        fit_on = '  |  '.join([model_id, fit_on, fp['idx'], '(conditional)'])
         pkeys = '_'.join(list(depends_on))
         pconds = '_'.join(listvalues(depends_on))
         dep_id = "{0} depends on {1}".format(pconds, pkeys)

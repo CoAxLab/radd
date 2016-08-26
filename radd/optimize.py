@@ -102,14 +102,14 @@ class Optimizer(object):
             parameter set with the best fit
         """
         xpopt, xfmin = [], []
+        if self.progress:
+            self.ibar.reset_bar()
         for i, p in enumerate(inits):
             if self.progress:
                 self.ibar.update(value=i, status=i+1)
             popt, fmin = self.run_basinhopping(p=p)
             xpopt.append(popt)
             xfmin.append(fmin)
-        if self.progress:
-            self.ibar.clear()
         # return parameters at the global basin
         return xpopt[np.argmin(xfmin)]
 
@@ -128,7 +128,7 @@ class Optimizer(object):
         if nl==1:
             reset = 0
             basin_keys = np.sort(list(p))
-            basin_params = theta.scalarize_params(deepcopy(p), is_flat=True)
+            basin_params = theta.scalarize_params(deepcopy(p))
         else:
             reset = 1
             basin_keys = np.sort(list(self.pc_map))
@@ -200,11 +200,13 @@ class Optimizer(object):
         # gen dict of lmfit optimized Parameters object
         popt = dict(self.lmMin.params.valuesdict())
         # un-vectorize all parameters except conditionals
-        popt = theta.scalarize_params(popt, pc_map=self.pc_map, is_flat=flat)
-        finfo = pd.Series(popt)
+        popt = theta.scalarize_params(popt, self.pc_map)
+        finfo = pd.Series()
         # get model-predicted yhat vector
         fp['yhat'] = (self.lmMin.residual / wts) + y
         # fill finfo dict with goodness-of-fit info
+        finfo['idx'] = fp.idx
+        finfo['pvary'] = '_'.join(list(fp.depends_on))
         finfo['cnvrg'] = self.lmMin.success
         finfo['nfev'] = self.lmMin.nfev
         finfo['nvary'] = len(self.lmMin.var_names)

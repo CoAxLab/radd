@@ -8,7 +8,7 @@ import pandas as pd
 from numpy import array
 from scipy.stats.mstats import mquantiles as mq
 from lmfit import fit_report
-from radd.tools import messages
+from radd.tools import messages, utils
 from radd import theta, vis
 
 class RADDCore(object):
@@ -83,9 +83,11 @@ class RADDCore(object):
         # list of flattened data arrays (averaged across conditions)
         self.observed_flat = self.handler.observed_flat
         # dataframe with same dim as observeddf for storing model predictions
-        self.yhatDF = self.handler.yhatDF
-        # dataframe with same dim as observeddf for storing fit info
-        self.fitDF = self.handler.fitDF
+        self.yhatdf = self.handler.yhatdf
+        # dataframe with same dim as observeddf for storing fit info (& popt)
+        self.fitdf = self.handler.fitdf
+        # dataframe with same dim as observeddf for storing optimized params as matrix
+        self.poptdf = self.handler.poptdf
         # dataframe containing cost_function wts (see dfhandler docs)
         self.wtsDF = self.handler.wtsDF
         # list of arrays containing conditional costfx weights
@@ -101,8 +103,8 @@ class RADDCore(object):
         """
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_wts
-            self.fitparams = {'ix':0, 'ntrials': 20000, 'tol': 1.e-30, 'method': 'nelder',
-                'maxfev': 3000, 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
+            self.fitparams = {'ix':0, 'ntrials': 20000, 'tol': 1.e-25, 'method': 'nelder',
+                'maxfev': 2000, 'tb': self.tb, 'nlevels': 1, 'fit_on': self.fit_on,
                 'kind': self.kind, 'clmap': self.clmap, 'quantiles': self.quantiles,
                 'model_id': self.model_id,  'depends_on': self.depends_on}
             self.fitparams = pd.Series(self.fitparams)
@@ -129,8 +131,8 @@ class RADDCore(object):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'ninits': 3, 'nsamples': 3000, 'interval': 10, 'T': 1.,
-            'stepsize': .05,  'niter': 100, 'nsuccess': 60, 'tol': 1.e-20, 'method': 'TNC',
+            self.basinparams =  {'ninits': 4, 'nsamples': 800, 'interval': 10, 'T': .8,
+            'stepsize': .05,  'niter': 300, 'nsuccess': 60, 'tol': 1.e-20, 'method': 'TNC',
             'init_sample_method': 'best', 'progress': False, 'disp': False}
         else:
             # fill with kwargs for the upcoming fit
@@ -154,6 +156,30 @@ class RADDCore(object):
         else:
             self.fitparams['y'] = self.observed_flat[i]
             self.fitparams['wts'] = self.flat_wts[i]
+        if self.fit_on=='subjects':
+            self.fitparams['idx']=str(self.idx[i])
+        else:
+            self.fitparams['idx'] = self.model_id
+
+    def sample_param_sets(self):
+        """ sample *nsamples* (default=5000, see set_fitparams) different
+        parameter sets (param_sets) and get model yhat for each set (param_yhats)
+        """
+        if self.finished_sampling:
+            return None
+        pkeys = np.sort(list(self.inits))
+        nsamples = self.basinparams['nsamples']
+        nkeep = self.basinparams['ninits']
+        # get columns for building flat y dataframe
+        cols = self.observedDF.loc[:, 'acc':].columns
+        p_sets = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list=True)
+        p_yhats = [self.simulator.sim_fx(p) for p in p_sets]
+        # dataframe with (nsampled param sets X ndata)
+        p_yhats = pd.DataFrame(p_yhats, columns=cols, index=np.arange(nsamples))
+        flat_y = pd.DataFrame(np.array(self.observed_flat), columns=cols)
+        flat_wts = pd.DataFrame(np.array(self.flat_wts), columns=cols)
+        self.param_sets = theta.filter_params(p_sets, p_yhats, flat_y, flat_wts, nsamples, nkeep)
+        self.finished_sampling = True
 
     def set_conditions(self, depends_on=None):
         data = self.data.copy()
@@ -176,7 +202,7 @@ class RADDCore(object):
             self.__set_ssd_info__()
         if hasattr(self, 'fitparams'):
             self.generate_model_id()
-            self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap)
+            self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap, model_id=self.model_id)
 
     def __format_pcmap__(self):
         """ dict used by Simulator to extract conditional parameter values by name
@@ -221,61 +247,17 @@ class RADDCore(object):
         self.fitparams['y'] = self.observed_flat[self.fitparams['ix']]
         self.fitparams['wts'] = self.flat_wts[self.fitparams['ix']]
 
-    def sample_param_sets(self, pkeys=None, nsamples=None, nkeep=None):
-        """ sample *nsamples* (default=5000, see set_fitparams) different
-        parameter sets (param_sets) and get model yhat for each set (param_yhats)
-        """
-        if pkeys is None:
-            pkeys = np.sort(list(self.inits))
-        if nsamples is None:
-            nsamples = self.basinparams['nsamples']
-        if nkeep is None:
-            nkeep = self.basinparams['ninits']
-        self.p_sets = theta.random_inits(pkeys, ninits=nsamples, kind=self.kind, as_list=True)
-        self.p_yhats = [self.simulator.sim_fx(p) for p in self.p_sets]
-        self.filter_params(self.p_sets, self.p_yhats, nsamples=nsamples, nkeep=nkeep)
-        self.finished_sampling = True
-
-    def filter_params(self, p_sets, p_yhats, nsamples=None, nkeep=None):
-        """ sample *nsamples* (default=5000, see set_fitparams) different
-        parameter sets (param_sets) and get model yhat for each set (param_yhats)
-        """
-        if nsamples is None:
-            nsamples = self.basinparams['nsamples']
-        if nkeep is None:
-            nkeep = self.basinparams['ninits']
-        # get columns for building flat y dataframe
-        cols = self.observedDF.loc[:, 'acc':].columns
-        p_sets = np.array(p_sets)
-        # dataframe with (nsampled param sets X ndata)
-        pyhats = pd.DataFrame(p_yhats, columns=cols, index=np.arange(nsamples))
-        # if fit_on==subjects shape is (n_idx X ndata)
-        # if fit_on==average shape is (1 X ndata)
-        y = pd.DataFrame(np.array(self.observed_flat), columns=cols)
-        wts = pd.DataFrame(np.array(self.flat_wts), columns=cols)
-        # row-wise costfx, comparing y against yhat, where yhat is
-        # the pred. data generated from a sampled parameter set
-        costfx = lambda yhat: np.sum((wts * (yhat.values - y))**2, axis=1)
-        # column-wise ranking function, where each p_fmin is a column from pfmin_idx
-        sortvals = lambda p_fmin: p_fmin.sort_values().index
-        pfmin_idx = pyhats.apply(costfx, axis=1)
-        idx_prank = pfmin_idx.apply(sortvals, axis=0)
-        # get arrays of indices for each of best nkeep param_sets for each subject
-        idx_p_indices = [idx_prank.loc[:nkeep, idxcol].values  for idxcol in idx_prank]
-        # self.param_sets: subjectwise list of "best" sampled param sets
-        self.param_sets = [p_sets[idx_pindex].tolist() for idx_pindex in idx_p_indices]
-
     def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit
         to logfile (.txt) in working directory
         """
         finfo, popt, yhat =self.set_results(finfo, popt, yhat)
-        fp = dict(deepcopy(self.fitparams))
+        fp = deepcopy(self.fitparams)
         fp['yhat'] = self.yhat
         # lmfit-structured fit_report to write in log file
         param_report = self.optimizer.param_report
         # log all fit and meta information in working directory
-        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind)
+        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=self.kind, fit_on=self.fit_on)
 
     def set_results(self, finfo=None, popt=None, yhat=None):
         if finfo is None:
@@ -301,17 +283,23 @@ class RADDCore(object):
         if hasattr(self, 'fitparams'):
             self.fitparams['model_id'] = self.model_id
 
-    def set_testing_params(self, tol=1e-10, nsuccess=20, nsamples=100, ninits=2, maxfev=500, progress=True):
+    def set_testing_params(self, tol=1e-20, nsuccess=50, nsamples=1000, ninits=2, maxfev=1000, progress=True):
         self.set_fitparams(tol=tol, maxfev=maxfev)
         self.set_basinparams(tol=tol, ninits=ninits, nsamples=nsamples, nsuccess=nsuccess)
         self.optimizer.update(basinparams=self.basinparams, progress=progress)
 
-    def make_nested_progress(self, models):
-        self.set_basinparams(progress=True)
-        model_params = [list(depends) for depends in models]
-        self.pnames = [vis.parameter_name(p, True) for p in model_params]
-        self.mbar = utils.PBinJ(n=len(pnames)+1, color='b', status='{} Model')
-        self.mbar.update(value=0, status='Flat')
+    def toggle_pbars(self, progress=False, models=None):
+        self.set_basinparams(progress=progress)
+        if not progress:
+            return None
+        if self.fit_on=='subjects':
+            status = ''.join(['Subj {}', '/{}'.format(self.nidx)])
+            self.idxbar = utils.PBinJ(n=self.nidx, color='g', status=status)
+        if models is not None:
+            pvary = [list(depends_on) for depends_on in models]
+            pnames = [vis.parameter_name(p, True) for p in pvary]
+            self.mbar = utils.PBinJ(n=len(pnames), color='', status='{} Model')
+            return pnames
 
     def __remove_outliers__(self, sd=1.5, verbose=False):
         """ remove slow rts (>sd above mean) from main data DF

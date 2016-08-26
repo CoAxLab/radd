@@ -1,5 +1,9 @@
 ## Race Against Drift Diffusion (RADD) model
-
+|||
+|:--|:--|
+| Authors | [K. Dunovan](http://www.github.com/dunovank), [J. Huang](http://www.github.com/jeremyahuang), & T. Verstynen |
+| Lab Website | http://www.coaxlab.com |
+||||
 This repository is associated with the manuscript [Competing basal-ganglia pathways determine the difference between stopping and deciding not to go](http://www.elifesciences.org/content/4/e08723) and contains code and documentation for fitting various inhibitory control and decision models to behavioral data.
 
 Click the "launch binder" button below to open up an interactive demo of radd in your browser (created using [binder](http://mybinder.org/)). Or view/download the demo notebook [here](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/dev/index.ipynb).
