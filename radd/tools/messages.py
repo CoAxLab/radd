@@ -5,11 +5,17 @@ from future.utils import listvalues
 import numpy as np
 from numpy.random import randint
 from lmfit import fit_report
+from time import strftime
 
-def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='average', array_names = ['y', 'wts', 'yhat']):
+
+def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='average', array_names = ['y', 'wts', 'yhat']):
     """ logs information by opening and appending to an existing log file
     (named according to parameter dependencies) or creating a new log.
     """
+    newSection = '==' * 40 + '\n'
+    newHeader = lambda x: x + '\n' + '-' * len(x) + '\n'
+    if savepath is None:
+        savepath = os.path.expanduser('~')
     # functions for writing numpy arrays to strings (ex. "y = np.array([1,2,3])"")
     name_equals = lambda name, strvector: '{0} = array([{1}])'.format(name, strvector)
     stringify = lambda x: name_equals(x[0], ', '.join('{:f}'.format(n) for n in x[1]))
@@ -19,41 +25,46 @@ def logger(param_report, finfo={}, popt={}, fitparams={}, kind='xdpm', fit_on='a
     arrays = [fp[k].flatten() for k in array_names]
     # write arays to strings for easy logging
     names_arrays = zip(array_names, arrays)
-    y_str, wts_str, yhat_str = map(stringify, names_arrays)
-    model_id = fp['model_id']
+    y_str, wts_str, yhat_str = [stringify(narr) for narr in names_arrays]
+    fit_on = '  |  '.join(fp['model_id'].split('_'))
     if fp['nlevels']==1:
-        fit_on = '  |  '.join([model_id, fit_on, fp['idx'], '(flat)'])
         dep_id = "flat model (no conditional parameters)"
         fname = './' + kind + '_flat.txt'
     else:
         depends_on = fp['depends_on']
-        fit_on = '  |  '.join([model_id, fit_on, fp['idx'], '(conditional)'])
-        pkeys = '_'.join(list(depends_on))
-        pconds = '_'.join(listvalues(depends_on))
-        dep_id = "{0} depends on {1}".format(pconds, pkeys)
-        fname = '_'.join(['./' + kind, pconds + '.txt'])
+        dep_id = "\n"
+        for p, conds in depends_on.items():
+            if not isinstance(conds, list):
+                dep_id += "{0} depends on {1}\n".format(p, conds)
+            else:
+                dep_id += "{0} depends on {1}\n".format(p, ', '.join(np.hstack(conds)))
+        dparams = '_'.join(np.hstack(list(depends_on)))
+        fname = '_'.join(['./' + kind, dparams + '.txt'])
+
+    fname = os.path.abspath(os.path.join(savepath, fname))
 
     with open(fname, 'a') as f:
         f.write('\n\n')
-        f.write('==' * 30 + '\n\n')
+        f.write(newSection)
+        f.write(newHeader('MODEL INFO:'))
+        f.write(' '.join(['TIMESTAMP:', strftime('%m/%d/%y %I:%M%p'), '\n']))
         f.write(str(fit_on) + '\n')
-        f.write(str(kind) + '\n')
         f.write(str(dep_id) + '\n\n')
+        f.write(newHeader('DATA, YHAT & WEIGHTS:'))
         f.write(wts_str + '\n\n')
         f.write(yhat_str + '\n\n')
         f.write(y_str + '\n\n')
-        f.write('--' * 30 + '\n')
-        f.write("FIT REPORT")
-        f.write('\n' + '--' * 30 + '\n')
+        f.write(newHeader("FIT REPORT:"))
         f.write(param_report)
-        f.write('\n' + '--' * 30 + '\n')
+        f.write('\n' + '--' * 40 + '\n')
         f.write('='.join(['popt', repr(popt)]) + '\n')
         f.write('AIC: %.8f' % finfo['AIC'] + '\n')
         f.write('BIC: %.8f' % finfo['BIC'] + '\n')
         f.write('chi: %.8f' % finfo['chi'] + '\n')
         f.write('rchi: %.8f' % finfo['rchi'] + '\n')
-        f.write('converged: %s' % finfo['cnvrg'] + '\n\n')
-        f.write('==' * 30 + '\n\n\n')
+        f.write('converged: %s' % finfo['cnvrg'] + '\n')
+        f.write(newSection + '\n\n\n')
+
 
 def saygo(depends_on={}, cond_map=None, kind='xdpm', fit_on='subjects'):
     """ generate confirmation message that model is prepared and ready to fit.
@@ -73,6 +84,7 @@ def saygo(depends_on={}, cond_map=None, kind='xdpm', fit_on='subjects'):
       allowing %s to vary across levels of %s (%s)
       %s \n""" % strings)
     return True
+
 
 def describe_model(depends_on=None):
     """ get names of any conditional parameters included in the model

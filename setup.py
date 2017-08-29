@@ -1,14 +1,14 @@
 from setuptools import setup, find_packages
 import numpy as np
 import os
-package_data = {'radd':['docs/*.md', 'docs/*.txt', 'examples/*.csv', 'examples/*.mp4', 'styles/*.css']}
+package_data = {'radd':['docs/*.md', 'docs/*.txt', 'styles/*.css', 'docs/datasets/*', 'docs/examples/*.csv', 'docs/examples/*.mp4']}
 setup(
     name='RADD',
-    version='0.2.3',
+    version='0.3.0',
     author='Kyle Dunovan, Timothy Verstynen',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
-    packages=['radd', 'radd.rl', 'radd.tools', 'radd.examples'],
+    packages=['radd', 'radd.compiled', 'radd.adapt', 'radd.tools', 'radd.docs', 'radd.docs.examples'],
     package_data=package_data,
     description='RADD (Race Against Drift-Diffusion model) is a python package for fitting & simulating cognitive models of reinforcement learning and decision-making',
     install_requires=['numpy>=1.8.2', 'scipy>=0.16.1', 'matplotlib>=1.4.3', 'seaborn>=0.5.1', 'pandas>=0.15.1', 'lmfit>=0.9.1', 'scikit-learn>=0.17.1', 'progressbar2>=3.9.3', 'future'],
@@ -22,6 +22,10 @@ setup(
                 'Programming Language :: Python',
                 'Programming Language :: Python :: 2',
                 'Programming Language :: Python :: 2.7',
+                'Programming Language :: Python :: 3',
+                'Programming Language :: Python :: 3.2',
+                'Programming Language :: Python :: 3.4',
+                'Programming Language :: Python :: 3.6',
                 'Topic :: Scientific/Engineering',
                 ],
 )

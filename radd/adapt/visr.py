@@ -12,17 +12,43 @@ from copy import deepcopy
 import matplotlib as mpl
 from IPython.display import display, Latex
 
+def plot_rt_dists(simdf, axes=None):
+    targets=['A', 'B', 'C', 'D']
+    targetColors = dict(zip(targets, ['#3572C6',  '#c44e52', '#8172b2', '#83a83b']))
+    sns.set(style='white')
+    if axes is None:
+        f, axes = plt.subplots(2, 2, figsize=(9, 6), sharex=True)
+    axes = axes.flatten()
+    for i, ax in enumerate(axes):
+        target = targets[i]
+        rts = simdf[simdf.choice==target].rt.values
+        sns.distplot(rts, kde=False, hist_kws={'alpha':.9}, norm_hist=True, bins=10, ax=ax, color=targetColors[target])
+        top = ax.get_ylim()[1]*.75
+        ax.text(750, top,  target, color=targetColors[target], fontsize=19)
+    x = np.array([0,300,600,900])
+    axes = np.asarray(f.axes)
+    axes[0].set_ylabel('Probability Mass', fontsize=17)
+    axes[2].set_ylabel('Probability Mass', fontsize=17)
+    axes[2].set_xlabel('Time (ms)', fontsize=17)
+    axes[3].set_xlabel('Time (ms)', fontsize=17)
+    for ax in axes.flatten():
+        ax.set_title('')
+        ax.set_xticks(x)
+        ax.set_yticklabels('')
+        ax.set_xlim(0,900)
+    axes[2].set_xticklabels(x, fontsize=12)
+    axes[3].set_xticklabels(x, fontsize=12)
+    sns.despine()
 
-def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D']):
+def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D'], tb=1000):
     tr = np.mean(p['tr'])*1e3
     rtkeys = np.sort(rts.keys())
     rt_dists = [np.asarray(rts[k])*1e3-tr for k in rtkeys]
     tb = np.ceil(np.max([np.max(rti) if len(rti)>0 else 0 for rti in rt_dists]))+50
-
     sns.set(style='white', font_scale=1.5)
     f, axes = build_multi_axis(p, tb=tb)
-    clrs = sns.color_palette('muted', 5)
-    for i in xrange(len(all_traces)):
+    clrs = ['#3572C6',  '#c44e52', '#8172b2', '#83a83b']
+    for i in range(len(all_traces)):
         for ii, ax in enumerate(axes.flatten()):
             x=np.arange(len(all_traces[i][ii]))
             ax.plot(x, all_traces[i][ii], color=clrs[ii], alpha=.3, lw=.75)
@@ -36,51 +62,90 @@ def plot_traces_rts(p, all_traces, rts, names=['A', 'B', 'C', 'D']):
         axx.set_yticklabels([])
         if len(rt_dists[i])<=1:
             continue
-        sns.distplot(rt_dists[i], ax=axx, label=k, kde=True, hist=False, color=clrs[i], bins=10)
+        sns.distplot(rt_dists[i], ax=axx, label=k, kde=True, hist=True, color=clrs[i], bins=20)
         text_str='$\mu_{%s}=%.fms$'%(names[i], tr+np.mean(rt_dists[i]))
         ax.text(x[0]-50, np.mean(p['a'])-.1*np.mean(p['a']), text_str, fontsize=21)
 
-
-def plot_summary(outcomes, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)', 'Change in P(card)', '$v^G_t$', '$v^N_t$'], plot_traces=False, p=None, tb=1000):
-
+def plot_summary(outcomes, plot_traces=False, p=None, tb=1000, ntime=5):
+    targets=['A', 'B', 'C', 'D']
     sns.set_palette('muted')
-    f, axes = plt.subplots(3, 2, figsize=(14,16))
+    f, axes = plt.subplots(3, 2, figsize=(12,14))
     a1, a2, a3, a4, a5, a6 = axes.flatten()
     choices, rts, all_traces, qdict, choicep, vdhist, vihist = outcomes
-
     names = np.sort(qdict.keys())
-    name_labels = [name.upper() for name in names]
+    clrs = ['#3572C6',  '#c44e52', '#8172b2', '#83a83b']
+    targetColors = dict(zip(targets,clrs))
+    choices = np.asarray(choices)
+    counts = [len(choices[choices==i]) for i in range(4)]
+    rtMeans = [np.mean(rts[target])*1000 for target in targets]
+    targetTC = {target:np.array([np.mean(ts)*1000 for ts in np.array_split(np.asarray(rts[target]), ntime)]) for target in targets}
 
-    a1.plot(choices, lw=0, marker='o')
-    a1.set_ylim(-.5, 3.5); a1.set_yticks(np.arange(4))
-    a1.set_yticklabels(name_labels)
+    FreqDict = {'Low':np.mean([targetTC['A'], targetTC['C']], axis=0),
+               'High': np.mean([targetTC['B'], targetTC['D']], axis=0)}
+    ValDict = {'Low':np.mean([targetTC['A'], targetTC['B']], axis=0),
+            'High': np.mean([targetTC['C'], targetTC['D']], axis=0)}
 
-    a2.hist(np.asarray(choices))
-    a2.set_xticks(np.arange(4))
-    a2.set_xticklabels(name_labels)
+    sns.barplot(x=targets, y=rtMeans, ax=a1, order=targets, palette=targetColors, ci=0)
+    sns.barplot(x=targets, y=counts, ax=a2, order=targets, palette=targetColors, ci=0)
+    x = np.arange(ntime).astype(int)
+    a3.plot(x, FreqDict['Low'], label='Low', color="#3498db")
+    a3.plot(x, FreqDict['High'], label='High', color="#9B59B6")
+    a4.plot(x, ValDict['Low'], label='Low', color="#e74c3c")
+    a4.plot(x, ValDict['High'], label='High', color="#27ae60")
+
+    a1.set_ylabel('Response Time (ms)', fontsize=14)
+    a2.set_ylabel('# Times Chosen', fontsize=14)
+    a3.set_xlabel('Trial Blocks', fontsize=14)
+    a4.set_xlabel('Trial Blocks', fontsize=14)
+    a3.set_ylabel('RT', fontsize=14)
+    a4.set_ylabel('RT', fontsize=14)
+    # plt.subplots_adjust(wspace=.4)
 
     for i, n in enumerate(names):
-        a3.plot(np.array(qdict[n])*100, label=name_labels[i])
-        a4.plot(choicep[n], label=name_labels[i])
-        a5.plot(vdhist[n], label=name_labels[i])
-        a6.plot(vihist[n], label=name_labels[i])
-
+        # a3.plot(np.array(qdict[n])*100, label=targets[i], color=clrs[i])
+        # a4.plot(choicep[n], label=targets[i], color=clrs[i])
+        a5.plot(vdhist[n], label=targets[i], color=clrs[i])
+        a6.plot(vihist[n], label=targets[i], color=clrs[i])
     a3.legend(loc=0)
     a4.legend(loc=0)
-    a5.legend(loc=0)
-    a6.legend(loc=0)
-
     f.subplots_adjust(hspace=.35, wspace=.4)
-
-    for i, ax in enumerate(axes.flatten()):
+    titles = ['$v^G_t$', '$v^N_t$']
+    for i, ax in enumerate(axes.flatten()[-2:]):
         ax.set_title(titles[i])
         sns.despine(ax=ax)
     if plot_traces and p is not None:
         plot_traces_rts(p, all_traces, rts, tb=tb)
+    sns.despine()
 
+def plot_simdf_summary(simdf):
+    f, axes = plt.subplots(2, 2, figsize=(12,8))
+    a1, a2, a3, a4 = axes.flatten()
+    targets=['A', 'B', 'C', 'D']
+    clrs = ['#3572C6',  '#c44e52', '#8172b2', '#83a83b']
+    targetColors = dict(zip(targets,clrs))
+    sns.barplot(x='choice', y='rt', data=simdf, ax=a1, order=targets, palette=targetColors)
+    sns.barplot(x='choice', y='switch', data=simdf, ax=a2, order=targets, palette=targetColors)
+    a1.set_ylabel('Response Time (ms)', fontsize=13)
+    a2.set_ylabel('P(Switch)', fontsize=13)
+    rts = simdf.groupby('choice').mean().rt.values
+    sw = simdf.groupby('choice').mean().switch.values
+    a1.set_ylim(rts.min()*.85, rts.max()*1.15)
+    a2.set_ylim(sw.min()*.50, sw.max()*1.20)
+    for i, target in enumerate(targets):
+        tcolor=targetColors[target]
+        tdf = simdf[simdf.choice=='target'].reset_index()
+        sns.timeseries.tsplot(data=simdf, time='trial', unit='agent', value='vd'+target, ax=a3, color=tcolor)
+        sns.timeseries.tsplot(data=simdf, time='trial', unit='agent', value='vi'+target, ax=a4, color=tcolor)
+    a3.legend(loc=0)
+    f.subplots_adjust(hspace=.35, wspace=.4)
+    a3.set_ylabel('$v^G_t$', fontsize=16)
+    a4.set_ylabel('$v^N_t$', fontsize=16)
+    a3.set_xlabel('Trial ( $t$ )', fontsize=13)
+    a4.set_xlabel('Trial ( $t$ )', fontsize=13)
+    plt.subplots_adjust(wspace=.4)
+    sns.despine()
 
 def get_avg_slope_trace(traces, nalt=4):
-
     slope_func = lambda x0,x1,y0,y1: (y1-y0)/(x1-x0)
     rise, run, slopes=[], [], []
     for alt_n in range(nalt):
@@ -166,7 +231,7 @@ def plot_reactivity_strategy(trialsdf, igtdf, cm='rainbow', save=False, pq='P', 
         f.savefig(''.join(['reactivity_strategy_', measure, savestr, '.png']), dpi=400)
 
 
-def build_multi_axis(p, nresp=4, tb=1000):
+def build_multi_axis(p, nresp=4, tb=800):
     sns.set(style='white', font_scale=1.5)
     bound = p['a']
     onset = p['tr']
@@ -181,6 +246,7 @@ def build_multi_axis(p, nresp=4, tb=1000):
     start = onset - 80
     axes=axes.flatten()
     # c=["#e74c3c", '#27ae60', '#4168B7', '#8E44AD']
+
     for i, ax in enumerate(axes):
         plt.setp(ax, xlim=(start - 1, w + 1), ylim=(0 - (.01 * h), h + (.01 * h)))
         ax.hlines(y=h, xmin=start, xmax=w, color='k')

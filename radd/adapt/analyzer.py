@@ -21,7 +21,7 @@ def igt_scores(choices):
     return P, Q
 
 
-def analyze_learning_dynamics(fd, broadcast=True):
+def analyze_learning_dynamics(fd, broadcast=True, targets=['A', 'B', 'C', 'D']):
 
     choices = fd['choices']
     vd_all = fd['vd_all']
@@ -30,26 +30,25 @@ def analyze_learning_dynamics(fd, broadcast=True):
     qdict = fd['qdict']
     nrows = len(choices)
 
-    choice_vec = [np.sort(qdict.keys())[i] for i in choices]
+    choice_vec = [targets[i] for i in choices]
     fd['choice']=choice_vec
     rts_copy = deepcopy(fd['rts'])
     fd['rt'] = [rts_copy[choice].pop(0) for i, choice in enumerate(choice_vec)]
     qcopy = deepcopy(qdict)
     fd['qval'] = [qcopy[choice].pop(0) for choice in choice_vec]
 
-    fd['vd'] = [vd_all.loc[i, choice] for choice in choice_vec]
-    fd['vi'] = [vi_all.loc[i, choice] for choice in choice_vec]
-    fd['vdiff'] = [vdiff_all.loc[i, choice] for choice in choice_vec]
-    fd['vdiff_all'] = [vdiff_all.loc[i, choice] for choice in choice_vec]
-    vopt = vdiff_all['c'].values + vdiff_all['d'].values
-    vsub = vdiff_all['a'].values + vdiff_all['b'].values
+    fd['vd'] = [vd_all.loc[i, choice] for i, choice in enumerate(choice_vec)]
+    fd['vi'] = [vi_all.loc[i, choice] for i, choice in enumerate(choice_vec)]
+    fd['vdiff'] = [vdiff_all.loc[i, choice] for i, choice in enumerate(choice_vec)]
+    fd['vdiff_all'] = [vdiff_all.loc[i, choice] for i, choice in enumerate(choice_vec)]
+    vopt = vdiff_all['C'].values + vdiff_all['D'].values
+    vsub = vdiff_all['A'].values + vdiff_all['B'].values
 
-    vimp = vdiff_all['b'].values + vdiff_all['d'].values
-    vnon = vdiff_all['a'].values + vdiff_all['c'].values
+    vimp = vdiff_all['B'].values + vdiff_all['D'].values
+    vnon = vdiff_all['A'].values + vdiff_all['C'].values
     fd['v_opt_diff'] = vopt - vsub
     fd['v_imp_diff'] = vimp - vnon
     #fd['agent'] = [fd['agent']*nrows]
-
     #q_go = fd['qdict_go']
     #q_no = fd['qdict_no']
     #qgo_copy = deepcopy(q_go)

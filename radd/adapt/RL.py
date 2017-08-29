@@ -69,11 +69,9 @@ class Agent(Environment):
 
 
     def iter_params(self):
-
         for i in self.blocksdf.index.values:
             ap, an, b = self.blocksdf.loc[i, ['ap', 'an', 'b']].values
             self.set_params(ap=ap, an=an, b=b)
-
             P, Q = self.simulate_task(return_scores=True)
             self.blocksdf.loc[i, 'P'] = P
             self.blocksdf.loc[i, 'Q'] = Q
@@ -83,7 +81,7 @@ class Agent(Environment):
 
         self.qdict={k:[0] for k in self.names}
         self.choice_prob={k:[1./self.nalt] for k in self.names}
-
+        self.likelihood = []
         for t in self.trials:
             rew_vals = self.cards.iloc[t, :].values
             qvals = np.array([self.qdict[name][-1] for name in self.names])
@@ -103,7 +101,7 @@ class Agent(Environment):
             Qup = q + (alpha * rpe)
             self.qdict[wname].append(Qup)
             self.choice_prob[wname].append(self.updateP(self.qdict, wname, self.b))
-
+            self.likelihood.append(self.choice_prob[wname][-1])
             for loser in self.names[self.names!=wname]:
                 self.qdict[loser].append(self.qdict[loser][-1])
                 self.choice_prob[loser].append(self.updateP(self.qdict, loser, self.b))
@@ -125,23 +123,24 @@ class Agent(Environment):
         Q = (B+D) - (A+C)
         return [P, Q]
 
-    def plot_summary(self, titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)',
-        'Change in P(card)']):
+    def plot_summary(self):
         sns.set(style='darkgrid', context='paper', font_scale=1.4)
+        titles=['Order of Choices','Number of Choices per Card', 'Change in Q(card)',
+            'Change in P(card)']
         f, axes = plt.subplots(2, 2, figsize=(10,8))
         a1, a2, a3, a4 = axes.flatten()
-
+        choice_names = [n.upper() for n in self.names]
         a1.plot(self.choices, lw=0, marker='o')
         a1.set_ylim(-.5, 3.5); a1.set_yticks(np.arange(self.nalt))
-        a1.set_yticklabels(self.names.upper())
+        a1.set_yticklabels(choice_names)
 
         a2.hist(np.asarray(self.choices))
         a2.set_xticks(np.arange(self.nalt))
-        a2.set_xticklabels(self.names.upper())
+        a2.set_xticklabels(choice_names)
 
-        for n in idx.names:
-            a3.plot(self.qdict[n], label=n)
-            a4.plot(self.choice_prob[n], label=n)
+        for n in self.names:
+            a3.plot(self.qdict[n], label=n.upper())
+            a4.plot(self.choice_prob[n], label=n.upper())
 
         a3.legend()
         a4.legend()

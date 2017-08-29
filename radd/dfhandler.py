@@ -8,16 +8,18 @@ import numpy as np
 from numpy import array
 from radd.tools import analyze
 from radd import theta
+from itertools import product
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=2.5):
+    def __init__(self, model, max_wt=3.5):
         self.model = model
         self.data = model.data
         self.inits = model.inits
         self.model_id = model.model_id
         self.idx = model.idx
         self.nidx = model.nidx
+        self.weighted = model.weighted
         self.max_wt = max_wt
         self.ssd_method = model.ssd_method
         self.kind = model.kind
@@ -25,11 +27,13 @@ class DataHandler(object):
         self.quantiles = model.quantiles
         self.groups = model.groups
         self.depends_on = model.depends_on
-        self.pc_map = model.pc_map
+        self.pcmap = model.pcmap
+        self.clmap = model.clmap
         self.conds = model.conds
         self.nconds = model.nconds
         self.nlevels = model.nlevels
         self.cond_matrix = model.cond_matrix
+        self.bwfactors = model.bwfactors
         self.nrows = self.nidx * model.nlevels
         self.grpData = self.data.groupby(self.groups)
 
@@ -78,50 +82,58 @@ class DataHandler(object):
         """
         odf_header = self.make_headers()
         data = self.data.copy()
-        nrows = self.nrows
-        nan_data = np.zeros((nrows, len(odf_header)))*np.nan
-        qprob = self.quantiles
         ssdmethod = self.ssd_method
-        datdf = self.grpData.apply(analyze.rangl_data, qprob, ssdmethod).sortlevel(0)
+        self.grpData = data.groupby(np.hstack([self.conds, 'idx']).tolist())
+        datdf = self.grpData.apply(analyze.rangl_data, ssdmethod, self.quantiles).sortlevel(0)
+        # self.datdf = datdf
         groupvalues = datdf.reset_index()[self.groups].values
-        self.observedDF = pd.DataFrame(nan_data, columns=odf_header, index=range(nrows))
+        nan_data = np.zeros((groupvalues.shape[0], len(odf_header)), dtype=np.int64)
+        self.observedDF = pd.DataFrame(nan_data, columns=odf_header, index=range(nan_data.shape[0]))
         self.observedDF.loc[:, self.groups] = groupvalues
         self.wtsDF = self.make_wts_df()
-        for rowi in range(nrows):
+        for rowi in self.observedDF.index.values:
             # fill observedDF one row at a time, using idx_rows
             self.observedDF.loc[rowi, self.idx_cols[rowi]] = datdf.values[rowi]
         if self.fit_on=='average':
-            observed_err = self.observedDF.groupby(self.conds).sem()*2
+            observed_err = self.observedDF.groupby(self.conds).sem()*1.96
             self.observed_err = observed_err.loc[:, 'acc':].values.squeeze()
         else:
             self.varDF=None
 
-    def make_wts_df(self, weighted=True):
+    def make_wts_df(self):
         """ calculate and store cost_function weights
         for all subjects/conditions in data
         """
-        wtsdf = self.observedDF.copy()
-        if weighted:
+        wtsDF = self.observedDF.copy()
+        if self.weighted:
             # calc & fill wtsDF with idx quantile and accuracy weights (ratios)
             quant_wts, acc_wts = self.calc_empirical_weights()
-            wtsdf.loc[:, self.q_cols] = quant_wts
-            wtsdf.loc[:, self.p_cols] = acc_wts
-            wts_numeric = wtsdf.loc[:, 'acc':]
-            wtsdf.loc[:, 'acc':] = wts_numeric.apply(analyze.fill_nan_vals, axis=1)
+            qwts = np.vstack(quant_wts).reshape(wtsDF.shape[0], -1)
+            awts = np.vstack(acc_wts).reshape(wtsDF.shape[0], -1)
+            wtsDF.loc[:, self.q_cols] = qwts
+            wtsDF.loc[:, self.p_cols] = awts
+            wts_numeric = wtsDF.loc[:, 'acc':]
+            wtsDF.loc[:, 'acc':] = wts_numeric.apply(analyze.fill_nan_vals, axis=1)
         else:
-            wtsdf.loc[:, self.p_cols+self.q_cols] = 1.
-        return wtsdf.copy()
+            wtsDF.loc[:, self.p_cols+self.q_cols] = 1.
+        return wtsDF.copy()
+
 
     def calc_empirical_weights(self):
         """ calculates weight vectors for observed correct & err RT quantiles and
         go and stop accuracy for each subject (see funcs in radd.tools.analyze)
         """
         data = self.data.copy()
-        # calculate weights for RT quantiles (correct & error trials seperately)
-        quant_wts = analyze.idx_quant_weights(data=data, groups=self.groups, nlevels=self.nlevels, quantiles=self.quantiles, max_wt=self.max_wt)
-        # calculate weights for accuracy (go and stop trials separately)
-        acc_wts = analyze.idx_acc_weights(data, conds=self.conds, ssd_method=self.ssd_method)
+        quant_wts = [analyze.idx_quant_weights(df, conds=self.conds, max_wt=self.max_wt, quantiles=self.quantiles, bwfactors=self.bwfactors) for i, df in data.groupby('idx')]
+        acc_wts = [analyze.idx_acc_weights(df, conds=self.conds, ssd_method=self.ssd_method) for i, df in data.groupby('idx')]
         return quant_wts, acc_wts
+
+
+    def get_cond_combos(self):
+        clevels = [list(self.clmap[c]) for c in np.sort(list(self.clmap))]
+        level_data = list(product(*clevels))
+        return pd.DataFrame(level_data, columns=self.groups[1:])
+
 
     def make_yhat_df(self):
         """ make empty dataframe for storing model predictions (yhat)
@@ -129,12 +141,13 @@ class DataHandler(object):
         yhatcols = self.observedDF.columns
         indx = np.arange(self.nlevels)
         yhatdf = pd.DataFrame(np.nan, index=indx, columns=yhatcols)
-        minfo = self.observedDF[self.groups[1:]].iloc[:self.nlevels, :]
+        minfo = self.get_cond_combos()
         yhatdf.loc[:, minfo.columns] = minfo
         yhatdf = yhatdf.copy()
         yhatdf.insert(len(self.groups), 'pvary', np.nan)
         self.empty_yhatdf = yhatdf.copy()
         return yhatdf
+
 
     def make_popt_df(self):
         """ make empty dataframe for storing popt after each fit
@@ -142,7 +155,7 @@ class DataHandler(object):
         indx = np.arange(self.nlevels)
         poptcols = self.groups + self.poptdf_cols
         poptdf = pd.DataFrame(np.nan, index=indx, columns=poptcols)
-        minfo = self.observedDF[self.groups[1:]].iloc[:self.nlevels, :]
+        minfo = self.get_cond_combos()
         poptdf[minfo.columns] = minfo
         poptdf.insert(len(self.groups), 'pvary', np.nan)
         self.empty_poptdf = poptdf.copy()
@@ -154,6 +167,7 @@ class DataHandler(object):
         fitdf = pd.DataFrame(np.nan, index=[0], columns=self.f_cols)
         self.empty_fitdf = fitdf.copy()
         return fitdf
+
 
     def fill_poptdf(self, popt, fitparams=None):
         """ fill fitdf with fit statistics
@@ -178,6 +192,7 @@ class DataHandler(object):
             poptdf = pd.concat([self.poptdf, poptdf], axis=0)
         self.poptdf = poptdf.reset_index(drop=True)
         return self.poptdf
+
 
     def fill_fitdf(self, finfo, fitparams=None):
         """ fill fitdf with fit statistics
@@ -206,6 +221,7 @@ class DataHandler(object):
         self.fitdf = fitdf.reset_index(drop=True)
         return self.fitdf
 
+
     def fill_yhatdf(self, yhat, fitparams=None):
         """ fill yhatdf with model predictions
         ::Arguments::
@@ -230,21 +246,39 @@ class DataHandler(object):
         self.yhatdf = yhatdf.reset_index(drop=True)
         return self.yhatdf
 
+
     def set_model_ssds(self, stopdf, index=['idx']):
         """ set model attr "ssd" as list of np.arrays
         ssds to use when simulating data during optimization
         """
         if self.ssd_method is None:
             self.ssd_method = analyze.determine_ssd_method(stopdf)
-        self.model.ssd = analyze.get_model_ssds(stopdf, self.conds, self.ssd_method)
+            self.model.ssd_method = self.ssd_method
+
+        bwfactors = self.bwfactors
+        if bwfactors is not None:
+            stop_dfs = stopdf.groupby(bwfactors)
+        else:
+            stop_dfs = [[None, stopdf]]
+
+        ssdList = []
+        for lvl, df in stop_dfs:
+            sdf = analyze.get_model_ssds(df, conds=self.conds, ssd_method=self.ssd_method, bwfactors=bwfactors)
+            if lvl is not None:
+                sdf[bwfactors] = lvl
+            ssdList.append(sdf)
+
+        self.ssdDF = pd.concat(ssdList)
+
 
     def make_headers(self, ssd_list=None):
         g_cols = self.groups
         if 'ssd' in self.data.columns:
             # get ssd's for fits if in datacols
-            if 'ssd' in self.data.columns:
-                stopdf = self.data[self.data.ttype=='stop']
-                self.set_model_ssds(stopdf)
+            stopdf = self.data[self.data.ttype=='stop']
+            if 'probe' in stopdf.columns and self.ssd_method=='all':
+                stopdf = stopdf[stopdf.probe==1]
+            self.set_model_ssds(stopdf)
             if self.ssd_method=='all':
                 get_df_ssds = lambda df: df.ssd.unique()
                 ssds = [get_df_ssds(df) for _, df in stopdf.groupby(g_cols)]
@@ -254,6 +288,7 @@ class DataHandler(object):
         self.make_idx_cols(ssd_list)
         masterDF_header = g_cols + self.p_cols + self.q_cols
         return masterDF_header
+
 
     def make_idx_cols(self, ssd_list=None):
         """ make idx-specific headers in event of missing data
@@ -289,83 +324,44 @@ class DataHandler(object):
             self.p_cols = self.p_cols + ssd_unique.tolist()
 
     def make_f_cols(self):
-        """ make header names for various fit statistics in fitdf 
+        """ make header names for various fit statistics in fitdf
         (model parameters, goodness-of-fit measures, etc)
         """
         self.poptdf_cols = np.sort(list(self.inits)).tolist()
         self.f_cols = ['idx', 'pvary', 'nvary', 'AIC', 'BIC', 'nfev', 'df', 'ndata', 'chi', 'rchi', 'logp', 'cnvrg']
 
-    def save_results(self, save_observed=False):
+    def save_results(self, saveobserved=False):
         """ Saves yhatdf and fitdf results to model output dir
         ::Arguments::
-            save_observed (bool):
+            saveobserved (bool):
                 if True will write observedDF & wtsDF to
                 model output dir
         """
         fname = self.model.model_id
         if self.model.is_nested:
             fname='nested_models'
-        make_fname = lambda savestr: '_'.join([fname, savestr+'.csv'])
-        self.model.yhatdf.to_csv(make_fname('yhat'), index=False)
-        self.model.fitdf.to_csv(make_fname('finfo'), index=False)
-        self.model.poptdf.to_csv(make_fname('popt'), index=False)
-        if save_observed:
-            self.observedDF.to_csv(make_fname('observed_data'))
-            self.wtsDF.to_csv(make_fname('cost_weights'))
-
-    def read_results(self, ftype='finfo', fname=None, dropcols='Unnamed: 0'):
-        """ read fits/yhat csv files into pandas DF
-        ::Arguments::
-            ftype (str):
-                data type: if 'finfo' reads fitdf, if 'yhat' reads yhatdf
-            path (str):
-                custom path if not reading from self.resultsdir
-            fname (str):
-                custom file name if not nested_models or model_id
-        ::Returns::
-            df (DataFrame): pandas df with requested data
-        """
-        path = self.resultsdir
-        if fname is None:
-            if self.model.is_nested:
-                fname='nested_models'
-            else:
-                fname = self.model.model_id
-        fname = '_'.join([fname, ftype])
-        full_fpath = os.path.join(path, ''.join([fname, '.csv']))
-        df = pd.read_csv(full_fpath)
-        if 'Unnamed: 0' in df.columns:
-            df = df.drop('Unnamed: 0', axis=1)
-        return df.dropna()
+        make_fname = lambda savestr: os.path.join(self.resultsdir, '_'.join([fname, savestr+'.csv']))
+        yName, fName, pName = [make_fname(dfType) for dfType in ['yhat', 'finfo', 'popt']]
+        self.model.yhatdf.to_csv(yName, index=False)
+        self.model.fitdf.to_csv(fName, index=False)
+        self.model.poptdf.to_csv(pName, index=False)
+        if saveobserved:
+            self.observedDF.to_csv(os.path.join(self.resultsdir, make_fname('observed_data')))
+            self.wtsDF.to_csv(os.path.join(self.resultsdir, make_fname('cost_weights')))
 
     def make_results_dir(self, custompath=None, get_path=False):
         """ make directory for writing model output and figures
         dir is named according to model_id, navigate to dir
         after ensuring it exists
         """
-        parentdir = os.path.expanduser('~')
+        self.resultsdir = os.path.abspath(os.path.expanduser('~'))
         if custompath is not None:
-            parentdir = os.path.join(parentdir, custompath)
-        abspath = os.path.abspath(parentdir)
-        if self.model.is_nested:
-            self.resultsdir = os.path.join(abspath, "nested_models")
+            self.resultsdir = os.path.join(self.resultsdir, custompath)
+        elif self.model.is_nested:
+            self.resultsdir = os.path.join(self.resultsdir, "nested_models")
         else:
-            self.resultsdir = os.path.join(abspath, self.model.model_id)
+            self.resultsdir = os.path.join(self.resultsdir, self.model.model_id)
         if not os.path.isdir(self.resultsdir):
             os.makedirs(self.resultsdir)
-        os.chdir(self.resultsdir)
         if get_path:
             return self.resultsdir
-
-    def params_io(p={}, io='w', path=None, iostr='popt'):
-        """ read // write parameters dictionaries
-        """
-        if path is None:
-            path = self.resultsdir
-        fname = os.path.join(path, ''.join([iostr, '.csv']))
-        if io == 'w':
-            pd.Series(p).to_csv(fname)
-        elif io == 'r':
-            p = pd.read_csv(fname, index_col=0)#, header=None)
-            #p = dict(zip(ps[0], ps[1]))
-            return p
