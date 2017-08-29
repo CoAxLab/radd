@@ -16,6 +16,7 @@ warnings.simplefilter('ignore', np.RankWarning)
 warnings.filterwarnings("ignore", module="matplotlib")
 
 
+
 class BasinBounds(object):
     """ sets conditions for step acceptance during
     basinhopping optimization routine

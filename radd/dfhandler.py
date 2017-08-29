@@ -10,6 +10,7 @@ from radd.tools import analyze
 from radd import theta
 from itertools import product
 
+
 class DataHandler(object):
 
     def __init__(self, model, max_wt=3.5):

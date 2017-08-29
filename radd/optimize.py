@@ -16,7 +16,6 @@ from scipy.optimize import basinhopping
 from numpy.random import uniform
 from lmfit import minimize, fit_report
 
-
 class Optimizer(object):
 
     def __init__(self, fitparams=None, inits=None, param_sets=None, basinparams=None, progress=True, custompath=None, nruns=10):

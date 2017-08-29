@@ -11,6 +11,7 @@ from scipy.stats.mstats import mquantiles as mq
 from radd import theta
 from radd.compiled.jitfx import ufunc_where
 
+
 class Simulator(object):
     """ Core code for simulating models. All cond, trials, &
     timepoints are simulated simultaneously

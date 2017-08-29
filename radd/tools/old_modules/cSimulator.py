@@ -11,6 +11,7 @@ from radd.tools.analyze import blockify_trials, pandaify_results
 from radd.compiled import jitfx
 import itertools
 
+
 class Simulator(object):
     def __init__(self, inits, data=None, fitparams=None, constants=[], ssdMethod='central', nblocks=25):
         self.analyzeProbes = False

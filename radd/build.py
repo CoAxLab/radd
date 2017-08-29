@@ -99,7 +99,6 @@ class Model(RADDCore):
             self.write_results()
         return self.popt
 
-
     def optimize_conditional(self, flatp, hop=False):
         """ optimizes full model to all conditions in data
         ::Arguments::

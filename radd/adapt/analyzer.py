@@ -9,6 +9,7 @@ from radd import vis
 from copy import deepcopy
 
 
+
 def igt_scores(choices):
     A=len(choices[choices==0])
     B=len(choices[choices==1])

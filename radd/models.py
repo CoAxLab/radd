@@ -16,6 +16,7 @@ from radd.tools.utils import pandaify_results
 from numpy import hstack as hs
 from radd.compiled.jitfx import *
 
+
 class Simulator(object):
 
     def __init__(self, inits, fitparams=None, ssdMethod='all', **kwargs):

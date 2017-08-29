@@ -13,6 +13,7 @@ from radd import theta, vis
 from itertools import product
 
 
+
 class RADDCore(object):
     """ Parent class for constructing attributes and methods used by
     of Model objects. Not meant to be used directly
