@@ -5,18 +5,18 @@ modules = glob.glob(os.path.dirname(__file__)+"/*.py")
 __all__ = [ os.path.basename(f)[:-3] for f in modules]
 
 _package_dir = os.path.dirname(os.path.realpath(__file__))
-__version__ = '0.2.2'
+__version__ = '0.3.0'
 
 def load_example_data():
     import pandas as pd
-    _examples_dir = os.path.join(_package_dir, 'examples')
+    _examples_dir = os.path.join(_package_dir, 'docs/examples')
     data_fpath = os.path.join(_examples_dir, 'reactive_example_idx.csv')
     return pd.read_csv(data_fpath).copy()
 
 def load_dpm_animation():
     import io, base64
     from IPython.display import HTML
-    _examples_dir = os.path.join(_package_dir, 'examples')
+    _examples_dir = os.path.join(_package_dir, 'docs/examples')
     mov_fpath = os.path.join(_examples_dir, 'anim.mp4')
     video = io.open(mov_fpath, 'r+b').read()
     encoded = base64.b64encode(video)

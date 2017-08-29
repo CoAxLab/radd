@@ -6,54 +6,45 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from radd import theta
 from IPython.display import HTML
+from matplotlib import animation
+
+def anim_to_html(anim):
+    from tempfile import NamedTemporaryFile
+    VIDEO_TAG = """<video controls>
+             <source src="data:video/x-m4v;base64,{0}" type="video/mp4">
+             Your browser does not support the video tag.
+            </video>"""
+    if not hasattr(anim, '_encoded_video'):
+        with NamedTemporaryFile(suffix='.mp4') as f:
+            anim.save(f.name, extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
+            video = open(f.name, "rb").read()
+        anim._encoded_video = video.encode("base64")
+    return VIDEO_TAG.format(anim._encoded_video)
+
 
 def render_animation(anim):
     plt.close(anim._fig)
     return HTML(anim_to_html(anim))
 
+
 def animate_dpm(model):
     """ to render animation within a notebook :
         vis.render_animation(vis.animated_dpm_example(MODEL))
     """
-    from matplotlib import animation
+    model.set_fitparams(dt=.001)
     params = deepcopy(model.inits)
     bound=theta.scalarize_params(params)['a']
-    x, gtraces, straces, xi, yi, nframes = gen_re_traces(model, params)
+    # generate reactive model simulations
+    x, goTraces, brakeTraces, xi, yi, nframes = gen_re_traces(model)
     f, axes = build_decision_axis(onset=x[0][0], bound=bound)
-    glines = [axes[i].plot([], [], linewidth=1.5)[0] for i, n in enumerate(gtraces)]
-    slines = [axes[i].plot([xi[i]], [yi[i]], linewidth=1.5)[0] for i, n in enumerate(straces)]
-    f_args = (x, gtraces, glines, straces, slines, params, xi, yi)
+    # axes line object for "go" process
+    goLine = [axes[i].plot([], [], linewidth=1.5)[0] for i, n in enumerate(gtraces)]
+    # axes line object for "brake" process
+    brakeLine = [axes[i].plot([xi[i]], [yi[i]], linewidth=1.5)[0] for i, n in enumerate(straces)]
+    f_args = (x, goTraces, goLine, brakeTraces, brakeLine, params, xi, yi)
     anim=animation.FuncAnimation(f, re_animate_multiax, fargs=f_args, frames=nframes, interval=1, blit=True)
     return anim
 
-def gen_re_traces(model, params):
-    sim = deepcopy(model.opt.simulator)
-    sim.__update_steps__(dt=.001)
-    ssd, nssd, nss, nss_per, ssd_ix = sim.ssd_info
-    nsstot = nss * nssd
-    params = sim.vectorize_params(params)
-    bound = params['a'][0]
-    Pg, Tg, xtb = sim.__update_go_process__(params)
-    Ps, Ts = sim.__update_stop_process__(params)
-    Ts=[Ts[0, i] for i in [2, -1]]
-    dvg, dvs = sim.sim_fx(params, analyze=False)
-    dvg = dvg[0, :nss, :].reshape(nssd, nss_per, dvg.shape[-1])
-    gtraces = [dvg[i, 0] for i in [2, -1]]
-    straces = [dvs[0, i, 0] for i in [2, -1]]
-    gtraces = [gt[gt <= bound] for gt in gtraces]
-    ssi, xinit_ss, integrated, dvgs, dvss = [], [], [], [], []
-    for i, (g, s) in enumerate(zip(gtraces, straces)):
-        xinit_ss.append(Tg[0] - Ts[i])
-        ssi.append(g[:xinit_ss[i]])
-        ss = s[:Ts[i]]
-        s = np.append(g[:xinit_ss[i]], ss[ss >= 0])
-        ixmin = np.min([len(g), len(s)])
-        dvgs.append(g[:ixmin])
-        dvss.append(s[:ixmin])
-    nframes = [len(gt) for gt in dvgs]
-    x = params['tr'][0] * 1000 + [np.arange(nf) for nf in nframes]
-    sim.__update_steps__(dt=.005)
-    return [x, dvgs, dvss, xinit_ss, ssi, np.max(nframes)]
 
 def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
     # init figure, axes, properties
@@ -78,6 +69,33 @@ def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
     sns.despine(top=True, right=True, bottom=True, left=True)
     return f, axes
 
+
+def gen_re_traces(model):
+    params = deepcopy(model.inits)
+    dvg, dvs = model.simulate(params, analyze=False)
+    params = model.simulator.vectorize_params(params)
+    bound = params['a'][0]
+    tr = params['tr'][0]
+    nTime = np.ceil((model.simulator.tb - tr) / model.simulator.dt).astype(int)
+    ssOn = np.ceil((model.simulator.tb - ssd) / model.simulator.dt).astype(int)
+    ssOn = ssOn.squeeze()
+    gtraces = [dvg[0, i] for i in [1, -1]]
+    straces = [dvs[0, i, 0] for i in [1, -1]]
+    gtraces = [gt[gt <= bound] for gt in gtraces]
+    ssi, xinit_ss, integrated, dvgs, dvss = [], [], [], [], []
+    for i, (g, s) in enumerate(zip(gtraces, straces)):
+        xinit_ss.append(ssOn[i])
+        ssi.append(g[:xinit_ss[i]])
+        ss = s[:ssOn[i]]
+        s = np.append(g[:xinit_ss[i]], ss[ss >= 0])
+        ixmin = np.min([len(g), len(s)])
+        dvgs.append(g[:ixmin])
+        dvss.append(s[:ixmin])
+    nframes = [len(gt) for gt in dvgs]
+    x = params['tr'][0] * 1000 + [np.arange(nf) for nf in nframes]
+    return [x, dvgs, dvss, xinit_ss, ssi, np.max(nframes)]
+
+
 def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
     gcolor = '#27ae60'
     scolor = '#e74c3c'
@@ -92,16 +110,3 @@ def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
             return sl, gl
         #f.savefig('animation_frames/movie/img' + str(i) +'.png', dpi=300)
     return sl, gl
-
-def anim_to_html(anim):
-    from tempfile import NamedTemporaryFile
-    VIDEO_TAG = """<video controls>
-             <source src="data:video/x-m4v;base64,{0}" type="video/mp4">
-             Your browser does not support the video tag.
-            </video>"""
-    if not hasattr(anim, '_encoded_video'):
-        with NamedTemporaryFile(suffix='.mp4') as f:
-            anim.save(f.name, extra_args=['-vcodec', 'libx264', '-pix_fmt', 'yuv420p'])
-            video = open(f.name, "rb").read()
-        anim._encoded_video = video.encode("base64")
-    return VIDEO_TAG.format(anim._encoded_video)

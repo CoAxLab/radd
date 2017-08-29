@@ -1,4 +1,4 @@
-    #!/usr/local/bin/env python
+#!/usr/local/bin/env python
 from __future__ import division
 from copy import deepcopy
 import numpy as np
@@ -6,11 +6,12 @@ import pandas as pd
 from numpy import array
 from radd.models import Simulator
 from radd.CORE import RADDCore
-from radd.theta import Parameters
 from radd import vis
-from radd.tools import utils
+from radd.tools import utils, analyze
+from radd.tools.analyze import pandaify_results, rangl_data
 
-class Model(RADDCore, Parameters):
+
+class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
     Inherits from RADDCore parent class (see CORE module).
     ::Arguments::
@@ -34,20 +35,21 @@ class Model(RADDCore, Parameters):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, quantiles=np.arange(.1, 1.,.1)):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), learn=False, bwfactors=None, custompath=None):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath)
 
-    def optimize(self, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
+
+    def optimize(self, flat_popt=None, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
-        ::Arguments::            
+        ::Arguments::
             plotfits (bool):
                 if True (default), plot model predictions over observed data
             saveplot (bool):
                 if True (default is False), save plots to "~/<self.model_id>/"
             saveresults (bool):
-                if True (default), save fitDF, yhatDF, and txt logs to "~/<self.model_id>/"
+                if True (default), save fitdf, yhatdf, and txt logs to "~/<self.model_id>/"
             saveobserved (bool):
                 if True (default is False), save observedDF to "~/<self.model_id>/"
             custompath (str):
@@ -56,22 +58,29 @@ class Model(RADDCore, Parameters):
             progress (bool):
                 track progress across ninits and basinhopping
         """
-        self.set_basinparams(progress=progress)
-        if np.any([saveplot, saveresults]):
-            self.handler.make_results_dir(custompath=custompath)
+        self.toggle_pbars(progress=progress)
+        self.custompath=custompath
+
         for ix in range(len(self.observed)):
-            if not hasattr(self, 'flat_popt'):
-                self.set_fitparams(ix=ix, nlevels=1)
-                self.optimize_flat()
+            if hasattr(self, 'idxbar'):
+                self.idxbar.update(value=ix, status=self.idx[ix])
+            if flat_popt is None:
+                self.set_fitparams(ix=ix, force='flat', nlevels=1)
+                self.sample_param_sets()
+                flat_popt = self.optimize_flat(self.param_sets)
             if not self.is_flat:
-                self.set_fitparams(ix=ix, nlevels=self.nlevels)
-                self.optimize_conditional()
+                self.set_fitparams(ix=ix, force='cond')
+                self.optimize_conditional(flat_popt)
             if plotfits:
                 self.plot_model_fits(save=saveplot)
-        if saveresults:
-            self.handler.save_results(saveobserved)
+            if saveresults:
+                self.handler.save_results(saveobserved)
+        if progress and not self.is_nested:
+            self.opt.gbar.clear()
+            self.opt.ibar.clear()
 
-    def optimize_flat(self):
+
+    def optimize_flat(self, param_sets=None):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             None
@@ -82,17 +91,15 @@ class Model(RADDCore, Parameters):
             finfo_flat (pd.Series): fit info (AIC, BIC, chi2, redchi, etc)
             popt_flat (dict): optimized parameters dictionary
         """
-        if not self.finished_sampling:
-            self.sample_param_sets()
         # Global Optimization w/ Basinhopping (+TNC)
-        p = self.optimizer.hop_around(inits=self.param_sets)
+        p = self.opt.hop_around(param_sets)
         # Flat Simplex Optimization of Parameters at Global Minimum
-        self.finfo, self.popt, self.yhat = self.optimizer.gradient_descent(p=p)
-        self.flat_popt = deepcopy(self.popt)
+        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=p)
         if self.is_flat:
             self.write_results()
+        return self.popt
 
-    def optimize_conditional(self):
+    def optimize_conditional(self, flatp, hop=False):
         """ optimizes full model to all conditions in data
         ::Arguments::
             None
@@ -104,21 +111,24 @@ class Model(RADDCore, Parameters):
             popt (dict): optimized parameters dictionary
             flat_popt (dict): deepcopy of popt
         """
-        p = self.__check_inits__(deepcopy(self.flat_popt))
+        flatp = self.__check_inits__(deepcopy(flatp))
+        self.set_fitparams(force='cond', inits=flatp)
         # Pretune Conditional Parameters
-        p, fmin = self.optimizer.run_basinhopping(p)
+        if hop:
+            flatp, fmin = self.opt.run_basinhopping(flatp)
+            self.opt.update(inits=flatp)
         # Final Simplex Optimization
-        self.finfo, self.popt, self.yhat = self.optimizer.gradient_descent(p=p, flat=False)
-        self.write_results()
+        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=flatp)
+        # self.write_results()
 
-    def nested_optimize(self, free=[], cond=None, saveplot=True, plotfits=True, custompath=None, progress=False):
+
+    def nested_optimize(self, models=[], flatp=None, saveplot=True, plotfits=True, custompath=None, progress=False, saveresults=True, saveobserved=False):
         """ optimize a series of models using same init parameters where the i'th model
-            has depends_on = {<models[i]> : <cond>}. (NOTE: only for models with fit_on='average')
+            has depends_on = {<models[i]> : <cond>}.
+            NOTE: only for models with fit_on='average'
         ::Arguments::
-            free (list):
-                list of parameter id's to allow free acros levels of <cond> (see below)
-            cond (str):
-                name of column in self.data to groupby for conditional fits
+            models (list):
+                list of depends_on dictionaries to fit using a single set of init parameters (self.flat_popt)
             plotfits (bool):
                 if True (default), plot model predictions over observed data
             saveplot (bool):
@@ -130,61 +140,118 @@ class Model(RADDCore, Parameters):
                 track progress across model fits, ninits, and basinhopping
         """
         self.is_nested = True
-        if progress:
-            self.set_basinparams(progress=progress)
-            pnames = [vis.parameter_name(param, True) for param in free]
-            self.mbar = utils.PBinJ(n=len(free)+1, color='b', status='{} Model')
-            self.mbar.update(value=0, status='Flat')
-        self.optimize_flat()
-        for i, param in enumerate(free):
+        self.custompath = custompath
+        if flatp is None:
+            models = [{'all': 'flat'}] + models
+            self.param_sets = self.opt.sample_param_sets()
+
+        pnames = self.toggle_pbars(progress=progress, models=models)
+        # loop over depends_on dictionaries and optimize cond models
+        for i, depends_on in enumerate(models):
+            self.set_fitparams(depends_on=depends_on)
             if progress:
-                self.mbar.update(value=i+1, status=pnames[i])
-            self.set_fitparams(depends_on={param: cond})
-            self.optimize(plotfits=plotfits, progress=progress, saveplot=saveplot, custompath=custompath)
+                self.mbar.update(value=i, status=pnames[i])
+            if flatp is None:
+                self.param_sets = self.opt.sample_param_sets()
+                flatp = self.optimize_flat(self.param_sets)
+                continue
+            self.optimize_conditional(flatp)
+            if plotfits:
+                self.plot_model_fits(save=saveplot)
+            if saveresults:
+                self.handler.save_results(saveobserved=saveobserved)
         if progress:
             self.mbar.clear()
+            self.opt.gbar.clear()
+            self.opt.ibar.clear()
 
-    def recover_model(self, nsamples=None, plotparams=True, plotfits=False, progress=False):
+
+    def recover_model(self, popt=None, yhat=None, nsamples=None, ninits=None, plotparams=True, plotfits=False, progress=False):
         """ fit model to synthetic data similar to observed y-vector
         and compare init params to recovered params to test model identifiabilty
         """
+        # set nlevels so simulator result has "conditional" shape
+        self.set_fitparams(force_conditional=True)
+        if popt is None:
+            popt = self.popt
+        if yhat is None:
+            yhat = self.simulate(p=popt, set_observed=True)
         if nsamples is None:
             nsamples = self.basinparams['nsamples']
+        if ninits is None:
+            ninits = self.basinparams['ninits']
         nkeep = self.basinparams['ninits']+1
         self.sample_param_sets(nsamples=nsamples, nkeep=nkeep)
-        inits = self.param_sets.pop(0)
-        # set nlevels so simulator result has "conditional" shape
-        self.set_fitparams(nlevels=self.nlevels)
-        # simulate synthetic data and set as observed
-        yhat = self.simulate(inits, set_observed=True)
         self.optimize(progress=progress, plotfits=plotfits)
         if plotparams:
             # plot init_params agains optimized param estimates
-            vis.compare_param_estimates(inits, self.popt, self.depends_on)
+            vis.compare_param_estimates(popt, self.popt, self.depends_on)
+
+
+    def log_fit_info(self, finfo=None, popt=None, yhat=None):
+        """ write meta-information about latest fit
+        to logfile (.txt) in working directory
+        """
+        fp = deepcopy(self.fitparams)
+        fp['yhat'] = yhat
+        # lmfit-structured fit_report to write in log file
+        param_report = self.param_report
+        # log all fit and meta information in working directory
+        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=fp.kind, fit_on=fp.fit_on, savepath=self.resultsdir)
+
 
     def write_results(self, finfo=None, popt=None, yhat=None):
-        """ logs fit info to txtfile, fills yhatDF and fitDF
+        """ logs fit info to txtfile, fills yhatdf and fitdf
         """
-        finfo, popt, yhat = self.set_results(finfo, popt, yhat)
-        self.log_fit_info(finfo, popt, self.fitparams)
-        self.handler.fill_yhatDF(data=yhat, fitparams=self.fitparams)
-        self.handler.fill_fitDF(data=finfo, fitparams=self.fitparams)
 
-    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw=.008):
+        finfo, popt, yhat = self.set_results(finfo, popt, yhat)
+        self.log_fit_info(finfo, popt, yhat)
+
+        self.yhatdf = self.handler.fill_yhatdf(yhat=yhat, fitparams=self.fitparams)
+        self.fitdf = self.handler.fill_fitdf(finfo=finfo, fitparams=self.fitparams)
+        self.poptdf = self.handler.fill_poptdf(popt=popt, fitparams=self.fitparams)
+
+
+    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw='scott', savestr=None, same_axis=True, clrs=None, lbls=None, cumulative=True, simdf=None, suppressLegend=False, simData=None, condData=None, shade=True, plot_error_rts=True, figure=None):
         """ wrapper for radd.tools.vis.plot_model_fits
         """
+        data = self.handler.data.copy()
+
         if y is None:
             y = self.fitparams.y
+
         if yhat is None:
             try:
                 yhat = self.yhat
             except AttributeError:
-                yhat = deepcopy(y)
-        if self.fit_on=='average' and err is None:
-            err = self.handler.observed_err
-        vis.plot_model_fits(y, yhat, self.fitparams, err=err, save=save, bw=bw)
+                print("No Model Predictions to Plot (need yhat argument)")
+                yhat = analyze.rangl_data(simdf, quantiles=self.quantiles)
+        if save:
+            if savestr is None:
+                savestr = self.fitparams.model_id
+            if self.fitparams['fit_on']=='subjects':
+                savestr = savestr + str(self.fitparams['idx'])
 
-    def simulate(self, p=None, analyze=True, set_observed=False):
+        if err is None:
+            err = self.handler.observed_err
+
+        if lbls is None and self.fitparams.nlevels>1:
+            from itertools import product
+            levels = [self.clmap[cond] for cond in self.conds]
+            level_data = list(product(*levels))
+            lbls = ['_'.join([str(lvl) for lvl in lvls]) for lvls in level_data]
+
+        if self.ssd_method == 'central':
+            ssd = self.ssdDF.groupby(self.conds).mean()[0].values
+            ssderr = self.ssdDF.groupby(self.conds).sem()[0].values
+        else:
+            ssd = self.fitparams.ssd_info[0]
+            ssderr = None
+
+        fig = vis.plot_model_fits(y, yhat, err=err, quantiles=self.quantiles, ssd=ssd, ssderr=ssderr, bw=bw, same_axis=same_axis, clrs=clrs, lbls=lbls, cumulative=cumulative, save=save, savestr=savestr, suppressLegend=suppressLegend, shade=shade, plot_error_rts=plot_error_rts, figure=figure)
+
+
+    def simulate(self, p=None, analyze=True, set_observed=False, raw_data=False):
         """ simulate yhat vector using
         :: Arguments ::
             p (dict):
@@ -196,11 +263,35 @@ class Model(RADDCore, Parameters):
                 1d array if analyze is True, else ndarray of decision traces
         """
         if p is None:
-            p = self.popt
+            try:
+                p = self.popt
+            except Exception:
+                p = self.__get_default_inits()
         p = deepcopy(p)
-        yhat = self.simulator.sim_fx(p, analyze=analyze)
+        yhat = self.sim.sim_fx(p, analyze=analyze)
         if set_observed:
             yhat = yhat.reshape(self.observed[0].shape)
             self.observed = [yhat]
             self.observed_flat = [yhat.mean(axis=0)]
+        elif raw_data:
+            p = self.sim.vectorize_params(deepcopy(p))
+            return self.make_simulated_dataframe(yhat[0], yhat[1], p)
         return yhat
+
+
+    def make_simulated_dataframe(self, DVg, DVs, p):
+        """ get rt and accuracy of go and stop process for simulated
+        conditions generated from simulate_dpm
+        """
+        ssd, nssd, nss, nss_per, ssd_ix = self.sim.ssd_info
+        nl, ntot = self.sim.nlevels, self.sim.ntot
+        gdec = self.sim.go_resp(DVg, p['a'])
+        # if dpm, simply ss_resp() uses 0
+        # as boundary simply ignores sec. arg
+        sdec = self.sim.ss_resp(DVs, p['a'])
+        gort = self.sim.go_RT(p['tr'], gdec)
+        ssrt = self.sim.ss_RT(ssd, sdec)
+        ert = gort[:, :nss].reshape(nl, nssd, nss_per);
+        gort[np.isnan(gort)] = self.fitparams['tb'] + self.sim.dt
+        ssrt[np.isnan(ssrt)] = self.fitparams['tb'] + self.sim.dt
+        return pandaify_results(gort, ssrt, clmap=self.clmap, ssd=ssd)

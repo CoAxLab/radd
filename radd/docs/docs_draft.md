@@ -164,12 +164,12 @@ print('BIC likes {} model'.format(bicwinner))
 # Examine fits
 ```python
 # the fit summary (goodness of fit measures, etc.)
-model_v.fitDF
+model_v.fitdf
 
 # model predictions
-# to save as csv file: model_v.yhatDF.to_csv("save_path", index=False)
-# to extract values as numpy ndarray: model_v.yhatDF.loc[:, 'acc':].values
-model_v.yhatDF
+# to save as csv file: model_v.yhatdf.to_csv("save_path", index=False)
+# to extract values as numpy ndarray: model_v.yhatdf.loc[:, 'acc':].values
+model_v.yhatdf
 
 # best-fit parameter estimates also stored in popt dictionary
 model_v.popt
