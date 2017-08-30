@@ -109,9 +109,14 @@ class Optimizer(object):
             pdict = dict(zip(self.simRL.pvary, popt_arr))
             pdict.update(self.simRL.fixedParams)
         elif self.sim.nlevels>1:
-            nfree = self.sim.pvary.shape[0]
-            optVals = np.asarray(popt_arr).reshape(nfree, -1)
-            pdict = {self.sim.pvary[i]: optVals[i] for i in range(nfree)}
+            nvary = self.sim.nvary
+            pvary = self.sim.pvary
+            # optVals = np.asarray(popt_arr).reshape(nfree, -1)
+            # pdict = {self.sim.pvary[i]: optVals[i] for i in range(nfree)}
+            pdict = {}; start = 0
+            for i, n in enumerate(nvary):
+                pdict[pvary[i]] = np.array(popt_arr[start:start+n])
+                start = n
         else:
             pdict = dict(zip(self.sim.pvary, popt_arr))
         return pdict
