@@ -111,8 +111,6 @@ class Optimizer(object):
         elif self.sim.nlevels>1:
             nvary = self.sim.nvary
             pvary = self.sim.pvary
-            # optVals = np.asarray(popt_arr).reshape(nfree, -1)
-            # pdict = {self.sim.pvary[i]: optVals[i] for i in range(nfree)}
             pdict = {}; start = 0
             for i, n in enumerate(nvary):
                 pdict[pvary[i]] = np.array(popt_arr[start:start+n])
@@ -484,10 +482,10 @@ class HopStep(object):
         """ returns an array of scalars used by for controlling
         stepsize of basinhopping algorithm for each parameter
         """
-        scalar_dict={'a': .25,
+        scalar_dict={'a': .3,
                     'tr': .2,
-                    'v': .3,
-                    'ssv': .3,
+                    'v': .25,
+                    'ssv': .2,
                     'xb': .2,
                     'si': .01,
                     'z': .1,

@@ -2,7 +2,6 @@
 # Authors:
 #   Kyle Dunovan (ked64@pitt.edu) &
 #   Jeremy Huang (jeremyhuang@cmu.edu)
-
 from __future__ import division
 from future.utils import listvalues
 from copy import deepcopy
@@ -23,6 +22,7 @@ class Simulator(object):
         self.ssdMethod = ssdMethod
         self.update(fitparams=fitparams, inits=inits)
         self.__init_analyze_functions__()
+
 
     def update(self, force=False, **kwargs):
         kw_keys = list(kwargs)
@@ -55,6 +55,7 @@ class Simulator(object):
         self.format_cond_params(lmParamsNames=lmParamsNames)
         self.make_io_vectors()
 
+
     def __init_analyze_functions__(self):
         """ initiates the analysis function used in
         optimization routine to produce the yhat vector
@@ -63,9 +64,11 @@ class Simulator(object):
         # self.RTQ = lambda zpd: map((lambda x: mquantiles(x[0][x[0] < x[1]], prob)), zpd)
         self.RTQ = lambda zpd: [mquantiles(rt[rt < deadline], prob) for rt, deadline in zpd]
 
+
     def cost_fx(self, theta_array):
         yhat = self.simulate_model(theta_array)
         return np.sum((self.wts * (yhat - self.y))**2)
+
 
     def cost_fx_lmfit(self, lmParams, sse=False):
         thetaSeries = pd.Series(lmParams.valuesdict())[self.lmParamsNames]
@@ -75,6 +78,7 @@ class Simulator(object):
             return np.sum(residuals**2)
         return residuals
 
+
     def simulate_model(self, params, analyze=True):
         xtb, vProb, vsProb, bound, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
         dvg, goRT, ssRT = self.get_io_copies()
@@ -82,6 +86,7 @@ class Simulator(object):
         if analyze:
             return self.analyze(goRT, ssRT)
         return pandaify_results(goRT, ssRT, ssd=self.ssd, bootstrap=False, clmap=self.clmap)
+
 
     def analyze(self, rts, ssrts):
         """ get rt and accuracy of go and stop process for simulated
@@ -97,6 +102,7 @@ class Simulator(object):
         cq = self.RTQ(zip(rts, [self.tb] * nl))
         eq = self.RTQ(zip(erts, ssrts))
         return hs([hs([i[ii] for i in [gacc, sacc, cq, eq]]) for ii in range(nl)])
+
 
     def params_to_array(self, params, preprocess=False):
         if type(params)==dict:

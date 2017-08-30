@@ -157,14 +157,20 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, m
     """
 
     if mu is None:
-        mu = {'a': .15, 'tr': .015, 'v': .7, 'ssv': -.7, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
+        # mu = {'a': .1, 'tr': .015, 'v': .9, 'ssv': -.9, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
+        mu = {'a': .05, 'tr': .01, 'v': .1, 'ssv': -1.9, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
 
     if sigma is None:
-        sigma = {'a': .5, 'tr': .35, 'v': .6, 'ssv': .6, 'z': .05, 'xb': 1.99, 'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
+        # sigma = {'a': .4, 'tr': .2, 'v': .45, 'ssv': .45, 'z': .05, 'xb': 1.99, 'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
+        sigma = {'a': .4, 'tr': .49, 'v': 1.9, 'ssv': 1.9, 'z': .05, 'xb': 1.99, 'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
 
-    normal_params = ['tr', 'v', 'vd', 'ssv', 'z', 'sso', 'Beta']
-    gamma_params = ['a', 'tr']
-    uniform_params = ['vi', 'xb', 'C', 'B', 'R', 'si']
+    # normal_params = ['tr', 'v', 'vd', 'ssv', 'z', 'sso', 'Beta']
+    # gamma_params = ['a', 'tr']
+    # uniform_params = ['vi', 'xb', 'C', 'B', 'R', 'si']
+    normal_params = ['vd', 'z', 'sso', 'Beta']
+    gamma_params = ['blah']
+    uniform_params = ['a', 'tr', 'v', 'ssv', 'xb', 'si', 'vi', 'C', 'B', 'R']
+
     if 'race' in kind:
         sigma['ssv'] = abs(mu['ssv'])
     if multi:
@@ -173,6 +179,7 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, m
         bounds = get_bounds(kind=kind)[pkey]
     loc = mu[pkey]
     scale = sigma[pkey]
+
     # init and freeze dist shape
     if pkey in normal_params:
         dist = norm(loc, scale)
@@ -180,8 +187,10 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, m
         dist = gamma(1.0, loc, scale)
     elif pkey in uniform_params:
         dist = uniform(loc, scale)
+
     # generate random variates
     rvinits = dist.rvs(nrvs)
+
     while rvinits.min() < bounds[0]:
         # apply lower limit
         ix = rvinits.argmin()
@@ -197,7 +206,7 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, m
     return rvinits
 
 
-def get_bounds(kind='dpm', a=(.1, .8), tr=(.01, .5), v=(.1, 2.), z=(.01, .9), ssv=(-2., -.1), xb=(.1, 2.5), si=(.001, .15), sso=(.01, .5), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08)):
+def get_bounds(kind='dpm', a=(.1, .6), tr=(.02, .45), v=(.15, 1.99), z=(.01, .9), ssv=(-1.99, -.15), xb=(.1, 2.5), si=(.001, .15), sso=(.01, .5), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """

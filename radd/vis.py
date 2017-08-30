@@ -433,10 +433,11 @@ def plot_param_distributions(p, nsamples=1000):
     clrs = colors.param_color_map('all')
     lbls = {pk: parameter_name(pk,True) for pk in pkeys}
     ncols = np.ceil(nparams/2.).astype(int)
-    fig, axes = plt.subplots(2, ncols, figsize=(12,7))#, dpi=600)
+    fig, axes = plt.subplots(2, ncols)
     axes = axes.flatten()
     for i, pk in enumerate(pkeys):
-        sns.kdeplot(p_dists[pk], ax=axes[i], color=clrs[pk], shade=True, label=lbls[pk], linewidth=3, alpha=.7)
+        sns.distplot(p_dists[pk], kde=False, ax=axes[i], norm_hist=True, color=clrs[pk], label=lbls[pk], hist_kws={'alpha':.6})
+        sns.kdeplot(p_dists[pk], ax=axes[i], color=clrs[pk], shade=True, linewidth=0, alpha=.4)
     for ax in axes:
         ax.legend(loc=1, fontsize=18)
     plt.tight_layout()
