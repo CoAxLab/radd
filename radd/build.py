@@ -7,7 +7,7 @@ from numpy import array
 from radd.models import Simulator
 from radd.CORE import RADDCore
 from radd import vis
-from radd.tools import utils, analyze
+from radd.tools import utils, analyze, messages
 from radd.tools.analyze import pandaify_results, rangl_data
 
 
@@ -98,6 +98,7 @@ class Model(RADDCore):
         if self.is_flat:
             self.write_results()
         return self.popt
+
 
     def optimize_conditional(self, flatp, hop=False):
         """ optimizes full model to all conditions in data
@@ -192,12 +193,7 @@ class Model(RADDCore):
         """ write meta-information about latest fit
         to logfile (.txt) in working directory
         """
-        fp = deepcopy(self.fitparams)
-        fp['yhat'] = yhat
-        # lmfit-structured fit_report to write in log file
-        param_report = self.param_report
-        # log all fit and meta information in working directory
-        messages.logger(param_report, finfo=finfo, popt=popt, fitparams=fp, kind=fp.kind, fit_on=fp.fit_on, savepath=self.resultsdir)
+        self.opt.log_fit_info(finfo, popt, yhat)
 
 
     def write_results(self, finfo=None, popt=None, yhat=None):

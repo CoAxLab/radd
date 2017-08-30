@@ -438,6 +438,7 @@ class Optimizer(object):
             self.callback = self.lbar.reset(get_call=True)
 
 
+
 class BasinBounds(object):
     """ sets conditions for step acceptance during
     basinhopping optimization routine
@@ -445,6 +446,7 @@ class BasinBounds(object):
         xmin (list): lower boundaries for each parameter
         xmax (list): upper boundaries for each parameter
     """
+
     def __init__(self, xmin, xmax):
         self.xmin = np.array(xmin)
         self.xmax = np.array(xmax)
@@ -455,6 +457,7 @@ class BasinBounds(object):
         tmax = bool(np.all(x <= self.xmax))
         return tmin and tmax
 
+
 class HopStep(object):
     """ scale stepsize of basinhopping optimization according to
     individual parameters ranges (smaller steps for more sensitive params).
@@ -464,11 +467,13 @@ class HopStep(object):
         nlevels (list): list of levels per parameter
         stepsize (list): initial stepsize
     """
+
     def __init__(self, keys, nlevels, stepsize=.05):
         self.stepsize_scalars = self.get_stepsize_scalars(keys, nlevels)
         self.stepsize = stepsize
         self.np = self.stepsize_scalars.size
         self.stepsizeList = []
+
 
     def get_stepsize_scalars(self, keys, nlevels):
         """ returns an array of scalars used by for controlling
@@ -501,11 +506,13 @@ class HopStep(object):
         x = np.array([x[i] + uniform(-ss[i]*s, ss[i]*s) for i in range(self.np)])
         return x
 
+
 def format_local_bounds(xmin, xmax):
     """ groups (xmin, xmax) for each parameter """
     tupler = lambda xlim: tuple([xlim[0], xlim[1]])
     # return map((tupler), zip(xmin, xmax))
     return [tupler(xl) for xl in zip(xmin, xmax)]
+
 
 def format_basinhopping_bounds(basin_keys, nvary, kind='xdpm'):
     """ returns separate lists of all parameter

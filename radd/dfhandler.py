@@ -182,7 +182,7 @@ class DataHandler(object):
         if fitparams is None:
             fitparams = self.model.fitparams
         poptdf = self.empty_poptdf.copy()
-        popt = self.model.simulator.vectorize_params(popt)
+        # popt = self.model.simulator.vectorize_params(popt)
         popt_vals = np.array([popt[pkey] for pkey in self.poptdf_cols]).T
         poptdf.loc[:, self.poptdf_cols] = popt_vals
         poptdf['idx'] = str(fitparams.idx)

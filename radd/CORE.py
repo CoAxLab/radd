@@ -130,8 +130,8 @@ class RADDCore(object):
                             'dt':.002,
                             'tol': 1.e-25,
                             'method': 'nelder',
-                            'maxfev': 400,
-                            'maxiter': 400,
+                            'maxfev': 250,
+                            'maxiter': 250,
                             'nlevels': 1,
                             'tb': self.tb,
                             'kind': self.kind,
@@ -255,7 +255,7 @@ class RADDCore(object):
     def set_conditions(self, depends_on=None, bwfactors=None):
         data = self.data.copy()
         self.depends_on = depends_on
-        self.conds = np.unique(listvalues(self.depends_on)).tolist()
+        self.conds = np.unique(np.hstack(listvalues(self.depends_on))).tolist()
         self.nconds = len(self.conds)
         if 'flat' in self.conds:
             self.is_flat = True

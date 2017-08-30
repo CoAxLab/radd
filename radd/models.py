@@ -234,16 +234,19 @@ class Simulator(object):
         c_levels = [lvl for lvl in listvalues(self.clmap)]
         level_data = list(product(*c_levels))
         condsdf = pd.DataFrame(level_data, columns=self.conds, index=index)
+
         # concat (along axis 1) conditional level names and depends_on param columns
         pmatrix = pd.concat([condsdf, pmatrix], axis=1)
         for pvary in self.pvary:
             pv_cond = self.depends_on[pvary]
-            if not isinstance(pv_cond, list):
-                pv_cond = [pv_cond]
-            for pvc in pv_cond:
-                levels = self.clmap[pvc]
+            if isinstance(pv_cond, list):
+                p_levels = self.fitparams['pcmap'][pvary]
+                pvary_ix = np.arange(len(p_levels))
+                pmatrix[pvary] = pvary_ix
+            else:
+                levels = self.clmap[pv_cond]
                 for i, level_name in enumerate(levels):
-                    pmatrix.ix[pmatrix[pvc]==level_name, pvary]=i
+                    pmatrix.ix[pmatrix[pv_cond]==level_name, pvary]=i
         pmatrix = pmatrix.iloc[:, self.nconds:].apply(pd.to_numeric)
         return pmatrix
 

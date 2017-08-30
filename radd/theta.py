@@ -58,6 +58,7 @@ def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
     pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso', 'C', 'B', 'R']
     pfit = list(set(inits.keys()).intersection(pnames))
     bounds = get_bounds(kind=kind)
+
     for pkey, pclist in pcmap.items():
         if is_flat:
             break  # exit
@@ -156,12 +157,10 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, m
     """
 
     if mu is None:
-        mu = {'a': .1, 'tr': .015, 'v': .8, 'ssv': -.8, 'z': .1, 'xb': .01,
-        'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
+        mu = {'a': .15, 'tr': .015, 'v': .7, 'ssv': -.7, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
 
     if sigma is None:
-        sigma = {'a': .8, 'tr': .35, 'v': .8, 'ssv': .8, 'z': .05, 'xb': 2.,
-        'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.1}
+        sigma = {'a': .5, 'tr': .35, 'v': .6, 'ssv': .6, 'z': .05, 'xb': 1.99, 'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
 
     normal_params = ['tr', 'v', 'vd', 'ssv', 'z', 'sso', 'Beta']
     gamma_params = ['a', 'tr']
@@ -264,12 +263,16 @@ def get_default_inits(kind='dpm', depends_on={}, learn=False):
     grab default dictionary of init params reasonably suited for Model kind
     """
     inits = {'a': 0.5, 'v': 1., 'tr': 0.2}
+    pdep = list(depends_on)
+
     if 'dpm' in kind:
         inits['ssv'] = -1.
     elif 'race' in kind:
         inits['ssv'] = 1
     if 'x' in kind and 'xb' not in list(inits):
         inits['xb'] = 1.5
+    if 'si' in pdep:
+        inits['si'] = .01
     if learn:
         inits['C'] = .02
         inits['B'] = .15
