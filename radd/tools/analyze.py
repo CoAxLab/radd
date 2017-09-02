@@ -14,6 +14,7 @@ from scipy.interpolate import interp1d
 from scipy import stats
 from scipy.optimize import leastsq, minimize, curve_fit
 
+
 def blockify_trials(data, nblocks=5, conds=None, groups=['idx']):
     datadf = data.copy()
     if conds is not None:
@@ -29,6 +30,7 @@ def blockify_trials(data, nblocks=5, conds=None, groups=['idx']):
         idxdf[colname] = blocks
         idxdflist.append(idxdf)
     return pd.concat(idxdflist)
+
 
 def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on='average'):
     """ called by DataHandler.__make_dataframes__ to generate
@@ -57,6 +59,7 @@ def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on
             sacc = np.array([stopdf.mean()['acc']])
         data_vector.insert(1, sacc)
     return np.hstack(data_vector)
+    
 
 def calculate_qpdata(data, quantiles=np.linspace(.02,.98,10)):
     data = data[data.response==1].copy()
@@ -164,7 +167,8 @@ def pandaify_results(gort, ssrt, tb=.7, bootstrap=False, bootinfo={'nsubjects':2
     for i in range(nl):
         ert = gort[i, :nss].reshape(ssrt[i].shape)
         goTrialOutcomes = np.hstack(np.where(gort[i, nss:] < tb, 1, 0))
-        ssTrialOutcomes = np.hstack(np.hstack(np.where(ert <= ssrt[i], 1, 0)))
+        # ssTrialOutcomes = np.hstack(np.hstack(np.where(ert <= ssrt[i], 1, 0)))
+        ssTrialOutcomes = np.hstack(np.hstack(np.where(ssrt[i] <= ert, 0, 1)))
         delays = np.append(np.hstack([[delay]*nssPer for delay in ssd[i]]), [1000]*nss)
         response = np.append(ssTrialOutcomes, goTrialOutcomes)
         responseTime = gort[i]
@@ -176,8 +180,12 @@ def pandaify_results(gort, ssrt, tb=.7, bootstrap=False, bootinfo={'nsubjects':2
         dfData = [cond, ttype, delays, response, acc, responseTime, ssResponseTime, trial]
         df = pd.DataFrame(dict(zip(dfColumns, dfData)), index=dfIndex)
         dfList.append(df[dfColumns])
-    resultsdf = pd.concat(dfList)
-    resultsdf.reset_index(drop=True, inplace=True)
+    df = pd.concat(dfList)
+    df.reset_index(drop=True, inplace=True)
+    # stopdf = resultsdf[resultsdf.ttype==0.]
+    df.loc[(df.rt==1000.)&(df.ssrt==1000.)&(df.ttype==0.), 'response'] = 0
+    df.loc[(df.rt==1000.)&(df.ssrt==1000.)&(df.ttype==0.), 'acc'] = 1
+
     if bootstrap:
         resultsdf = bootstrap_data(resultsdf, nsubjects=bootinfo['nsubjects'], n=bootinfo['ntrials'], groups=bootinfo['groups'])
     return resultsdf

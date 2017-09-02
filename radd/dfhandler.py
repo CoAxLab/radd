@@ -78,6 +78,7 @@ class DataHandler(object):
             self.observed_flat = [flatvalues(odf.mean())]
             self.flat_wts = [flatvalues(wdf.mean())]
 
+
     def make_observed_groupDFs(self):
         """ concatenate all idx data vectors into a dataframe
         """
@@ -95,11 +96,9 @@ class DataHandler(object):
         for rowi in self.observedDF.index.values:
             # fill observedDF one row at a time, using idx_rows
             self.observedDF.loc[rowi, self.idx_cols[rowi]] = datdf.values[rowi]
-        if self.fit_on=='average':
-            observed_err = self.observedDF.groupby(self.conds).sem()*1.96
-            self.observed_err = observed_err.loc[:, 'acc':].values.squeeze()
-        else:
-            self.varDF=None
+        observed_err = self.observedDF.groupby(self.conds).sem()*1.96
+        self.observed_err = observed_err.loc[:, 'acc':].values.squeeze()
+
 
     def make_wts_df(self):
         """ calculate and store cost_function weights

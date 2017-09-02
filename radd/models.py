@@ -21,7 +21,6 @@ class Simulator(object):
     def __init__(self, inits, fitparams=None, ssdMethod='all', **kwargs):
         self.ssdMethod = ssdMethod
         self.update(fitparams=fitparams, inits=inits)
-        self.__init_analyze_functions__()
 
 
     def update(self, force=False, **kwargs):
@@ -54,6 +53,7 @@ class Simulator(object):
         self.ssd, nssd, nss, nss_per, ssd_ix = self.fitparams.ssd_info
         self.format_cond_params(lmParamsNames=lmParamsNames)
         self.make_io_vectors()
+        self.__init_analyze_functions__()
 
 
     def __init_analyze_functions__(self):
@@ -135,7 +135,8 @@ class Simulator(object):
         a, si, sso, ssv, tr, v, xb = theta_array
         xtb = np.cosh(xb[:,None] * self.xtime)
         ssd = sso[:, None] + self.ssd
-        dx = np.sqrt(si * self.dt)
+        # dx = np.sqrt(si * self.dt)
+        dx = si * np.sqrt(self.dt)
         vProb = 0.5 * (1 + v * dx / si)
         vsProb = 0.5 * (1 + ssv * dx / si)
         gOnset = get_onset_index(tr, self.dt)
@@ -150,28 +151,6 @@ class Simulator(object):
         self.si = si
         return [xtb] + [vProb, vsProb, a, gOnset, ssOnset, dx]
 
-    # def preproc_params(self, p, asarray=False):
-    #     params = deepcopy(self.pflat)
-    #     if isinstance(p, np.ndarray):
-    #         p = dict(zip(self.pvary, p))
-    #     params.update(p)
-    #
-    #     try:
-    #         self.Beta = params['B']
-    #         self.Alpha = params['C']
-    #         self.Rho = params['R']
-    #     except Exception:
-    #         pass
-    #
-    #     self.bound = params['a']
-    #     self.xtb = np.cosh(params['xb'] * self.xtime).squeeze()
-    #     self.vProb = 0.5 * (1 + params['v'] * self.dx / self.si)
-    #     self.vsProb = 0.5 * (1 + params['ssv'] * self.dx / self.si)
-    #     self.gOnset = params['tr'] / self.dt
-    #
-    #     if asarray:
-    #         pSeries = pd.Series(params)[self.pvary]
-    #         return pSeries.values
 
     def format_cond_params(self, lmParamsNames=None):
         self.ntime = np.int(np.floor(self.tb / self.dt))
@@ -188,7 +167,6 @@ class Simulator(object):
         else:
             self.pvary = np.array([p for p in self.allparams if p in list(self.depends_on)])
             self.nvary = np.array([len(pcmap[p]) for p in self.pvary])
-            # self.nvary = np.array([np.hstack(listvalues(self.fitparams['pcmap'][p])).size
             if lmParamsNames is None:
                 pclist = listvalues(self.fitparams['pcmap'])
                 self.lmParamsNames = np.sort(np.hstack(pclist))

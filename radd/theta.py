@@ -9,6 +9,29 @@ from scipy.stats.distributions import norm, gamma, uniform
 from lmfit import Parameters as lmParameters
 
 
+def ezdiff(rt, correct, s=1.):
+    """ estimate ezDDM parameters
+    """
+    logit = lambda p:np.log(p/(1-p))
+    pc = np.mean(correct)
+
+    # subtract or add 1/2 an error to prevent division by zero
+    if pc==1.0:
+        pc=1 - 1/(2*len(correct))
+    if pc==0.5:
+        pc=0.5 + 1/(2*len(correct))
+    MRT = np.mean(rt[correct==1])
+    VRT = np.var(rt[correct==1])
+
+    r = (logit(pc)*(((pc**2) * logit(pc)) - pc*logit(pc) + pc - 0.5))/VRT
+    v = np.sign(pc-0.5)*s*(r)**0.25
+    a = (s**2 * logit(pc))/v
+    y = (-1*v*a)/(s**2)
+    MDT = (a/(2*v))*((1-np.exp(y))/(1+np.exp(y)))
+    tr = MRT-MDT
+    return([a, v, tr])
+
+
 def filter_params(psets, yhatdf, ySeries, wSeries, nkeep=3):
     """ sample *nsamples* (default=5000, see set_fitparams) different
     parameter sets (param_sets) and get model yhat for each set (param_yhats)
@@ -25,7 +48,7 @@ def filter_params(psets, yhatdf, ySeries, wSeries, nkeep=3):
     return psets[bestIX]
 
 
-def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None, as_list=False, multi=False):
+def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None, as_list=False, multi=False, force_normal=False):
     """ random parameter values for initiating model across range of
     parameter values.
     ::Arguments::
@@ -41,7 +64,7 @@ def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None, as_list=False
         pkeys = list(pkeys)
     params = {}
     for pk in pkeys:
-        params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, mu=mu, sigma=sigma, multi=multi)
+        params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, mu=mu, sigma=sigma, multi=multi, force_normal=force_normal)
     if multi:
         # vi_perc ~ U(.05, .95) --> vi = vi_perc*vd
         params['vi'] = params['vi']*params['vd']
@@ -151,25 +174,21 @@ def pvary_levels_to_array(popt, pcmap={}):
     return popt
 
 
-def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, multi=False):
+def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, multi=False, force_normal=False):
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
     """
 
     if mu is None:
-        # mu = {'a': .1, 'tr': .015, 'v': .9, 'ssv': -.9, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
-        mu = {'a': .05, 'tr': .01, 'v': .1, 'ssv': -1.9, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
-
+        mu = {'a': .3, 'tr': .1, 'v': 5, 'ssv': -5, 'z': .1, 'xb': .01, 'sso': .15, 'vi': .35, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
     if sigma is None:
-        # sigma = {'a': .4, 'tr': .2, 'v': .45, 'ssv': .45, 'z': .05, 'xb': 1.99, 'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
-        sigma = {'a': .4, 'tr': .49, 'v': 1.9, 'ssv': 1.9, 'z': .05, 'xb': 1.99, 'sso': .01, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
-
-    # normal_params = ['tr', 'v', 'vd', 'ssv', 'z', 'sso', 'Beta']
-    # gamma_params = ['a', 'tr']
-    # uniform_params = ['vi', 'xb', 'C', 'B', 'R', 'si']
-    normal_params = ['vd', 'z', 'sso', 'Beta']
-    gamma_params = ['blah']
-    uniform_params = ['a', 'tr', 'v', 'ssv', 'xb', 'si', 'vi', 'C', 'B', 'R']
+        sigma = {'a': .6, 'tr': .5, 'v': 2.5, 'ssv': 2.5, 'z': .05, 'xb': 1.99, 'sso': .2, 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.14}
+    if force_normal:
+        normal_params = [pkey]
+    else:
+        normal_params = ['v', 'vd', 'ssv', 'z', 'Beta']
+        gamma_params = ['a', 'tr', 'sso']
+        uniform_params = ['vi', 'xb', 'C', 'B', 'R', 'si']
 
     if 'race' in kind:
         sigma['ssv'] = abs(mu['ssv'])
@@ -206,7 +225,7 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, m
     return rvinits
 
 
-def get_bounds(kind='dpm', a=(.1, .6), tr=(.02, .45), v=(.15, 1.99), z=(.01, .9), ssv=(-1.99, -.15), xb=(.1, 2.5), si=(.001, .15), sso=(.01, .5), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08)):
+def get_bounds(kind='dpm', a=(.1, 1.1), tr=(.1, .6), v=(1., 10.), z=(.01, .9), ssv=(-10., -1.), xb=(.1, 2.5), si=(.001, .15), sso=(.05, .35), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
@@ -217,7 +236,7 @@ def get_bounds(kind='dpm', a=(.1, .6), tr=(.02, .45), v=(.15, 1.99), z=(.01, .9)
     return bounds
 
 
-def get_multi_bounds(kind='dpm', a=(.01, .7), tr=(.005, .5), v=(.1, 2.), z=(.01, .9), ssv=(-2., -.1), xb=(.1, 2.5), si=(.001, .08), sso=(.01, .5), vd=(.1, 2.1), vi=(.4, .8), R=(.0001, .008), B=(.1, .4), C=(.001, .08), Beta=(0.5, 5.)):
+def get_multi_bounds(kind='dpm', a=(.01, .7), tr=(.005, .5), v=(.1, 2.), z=(.01, .9), ssv=(-2.5, -.1), xb=(.1, 2.5), si=(.001, .08), sso=(.005, .3), vd=(.1, 2.1), vi=(.4, .8), R=(.0001, .008), B=(.1, .4), C=(.001, .08), Beta=(0.5, 5.)):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
@@ -267,21 +286,23 @@ def get_stepsize_scalars(keys, nlevels=1):
     return stepsize_scalars
 
 
-def get_default_inits(kind='dpm', depends_on={}, learn=False):
+def get_default_inits(kind='dpm', depends_on={}, learn=False, ssdelay=False):
     """ if user does not provide inits dict when initializing Model instance,
     grab default dictionary of init params reasonably suited for Model kind
     """
-    inits = {'a': 0.5, 'v': 1., 'tr': 0.2}
+    inits = {'a': 0.42, 'v': 1.25, 'tr': 0.2}
     pdep = list(depends_on)
 
     if 'dpm' in kind:
-        inits['ssv'] = -1.
+        inits['ssv'] = -1.3
     elif 'race' in kind:
-        inits['ssv'] = 1
+        inits['ssv'] = 1.3
     if 'x' in kind and 'xb' not in list(inits):
         inits['xb'] = 1.5
     if 'si' in pdep:
         inits['si'] = .01
+    if ssdelay:
+        inits['sso'] = .08
     if learn:
         inits['C'] = .02
         inits['B'] = .15
@@ -334,30 +355,3 @@ def get_intervar_ranges(theta):
         theta['z_lo'] = theta['z'] - theta['sz'] / 2
         theta['z_hi'] = theta['z'] + theta['sz'] / 2
     return theta
-
-
-def filter_params_old(p_fmins, p_sets, nkeep=5, method='best'):
-    # rank inits by costfx error low-to-high
-    fmin_series = pd.Series(p_fmins)
-    rankorder = fmin_series.sort_values()
-    # eliminate extremely bad parameter sets
-    rankorder = rankorder[rankorder<=5.0]
-    if method=='random':
-        # return nkeep from randomly sampled inits
-        inits = p_sets[:nkeep]
-        inits_err = p_fmins[:nkeep]
-    elif method=='best':
-        # return nkeep from inits with lowest err
-        inits = [p_sets[i] for i in rankorder.index[:nkeep]]
-        inits_err = rankorder.values[:nkeep]
-    elif method=='lmh':
-        # split index for low, med, and high err inits
-        # if nkeep is odd, will sample more low than high
-        if nkeep<3: nkeep=3
-        ix = rankorder.index.values
-        nl, nm, nh = [arr.size for arr in np.array_split(np.arange(nkeep), 3)]
-        # extract indices roughly equal numbers of parameter sets with low, med, hi err
-        keep_ix = np.hstack([ix[:nl], np.array_split(ix,2)[0][-nm:], ix[-nh:]])
-        inits = [p_sets[i] for i in keep_ix]
-        inits_err = [fmin_series[i] for i in keep_ix]
-    return inits

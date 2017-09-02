@@ -29,7 +29,8 @@ def pandaify_results(gort, ssrt, tb=.68, bootstrap=True, bootinfo={'nsubjects':2
     for i in range(nl):
         ert = gort[i, :nss].reshape(ssrt[i].shape)
         goTrialOutcomes = np.hstack(np.where(gort[i, nss:] < tb, 1, 0))
-        ssTrialOutcomes = np.hstack(np.hstack(np.where(ert <= ssrt[i], 1, 0)))
+        # ssTrialOutcomes = np.hstack(np.hstack(np.where(ert <= ssrt[i], 1, 0)))
+        ssTrialOutcomes = np.hstack(np.hstack(np.where(ssrt[i] <= ert, 0, 1)))
         delays = np.append(np.hstack([[delay]*nssPer for delay in ssd[i]]), [1000]*nss)
         response = np.append(ssTrialOutcomes, goTrialOutcomes)
         responseTime = gort[i]

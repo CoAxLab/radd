@@ -425,19 +425,19 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
 
 
 
-def plot_param_distributions(p, nsamples=1000):
+def plot_param_distributions(p, nsamples=1000, mu=None, sigma=None, force_normal=False):
     from radd import theta
     pkeys = np.sort(list(p))
     nparams = pkeys.size
-    p_dists = theta.random_inits(pkeys=pkeys, ninits=nsamples)
+    p_dists = theta.random_inits(pkeys=pkeys, ninits=nsamples, mu=mu, sigma=sigma, force_normal=force_normal)
     clrs = colors.param_color_map('all')
     lbls = {pk: parameter_name(pk,True) for pk in pkeys}
     ncols = np.ceil(nparams/2.).astype(int)
     fig, axes = plt.subplots(2, ncols)
     axes = axes.flatten()
     for i, pk in enumerate(pkeys):
-        sns.distplot(p_dists[pk], kde=False, ax=axes[i], norm_hist=True, color=clrs[pk], label=lbls[pk], hist_kws={'alpha':.6})
-        sns.kdeplot(p_dists[pk], ax=axes[i], color=clrs[pk], shade=True, linewidth=0, alpha=.4)
+        sns.distplot(p_dists[pk], kde=False, ax=axes[i], norm_hist=True, color=clrs[pk], label=lbls[pk], hist_kws={'alpha':.8})
+        sns.kdeplot(p_dists[pk], ax=axes[i], color=clrs[pk], shade=True, linewidth=0, alpha=.5, bw='scott')
     for ax in axes:
         ax.legend(loc=1, fontsize=18)
     plt.tight_layout()

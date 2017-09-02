@@ -22,13 +22,14 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95])):
         self.kind = kind
         self.fit_on = fit_on
         self.ssd_method = ssd_method
         self.weighted = weighted
         self.quantiles = quantiles
         self.learn = learn
+        self.ssdelay = ssdelay
         self.custompath = custompath
         self.data = analyze.remove_outliers(data, 3.5)
         self.tb = analyze.estimate_timeboundary(self.data)
@@ -126,12 +127,12 @@ class RADDCore(object):
             # initialize with default values and first arrays in observed_flat, flat_wts
             self.fitparams = {'ix':0,
                             'ntrials': 20000,
-                            'si':.01,
-                            'dt':.002,
-                            'tol': 1.e-25,
+                            'si': 1.,
+                            'dt':.001,
+                            'tol': 1.e-35,
                             'method': 'nelder',
-                            'maxfev': 250,
-                            'maxiter': 250,
+                            'maxfev': 450,
+                            'maxiter': 450,
                             'nlevels': 1,
                             'tb': self.tb,
                             'kind': self.kind,
@@ -397,7 +398,7 @@ class RADDCore(object):
         """ if inits not provided by user, initialize with default values
         see tools.theta.get_default_inits
         """
-        self.inits = theta.get_default_inits(kind=self.kind, depends_on=self.depends_on, learn=self.learn)
+        self.inits = theta.get_default_inits(kind=self.kind, depends_on=self.depends_on, learn=self.learn, ssdelay=self.ssdelay)
 
 
     def __check_inits__(self, inits):

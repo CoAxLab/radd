@@ -35,9 +35,9 @@ class Model(RADDCore):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), learn=False, bwfactors=None, custompath=None):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, learn=False, bwfactors=None, custompath=None, ssdelay=False, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95])):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, ssdelay=ssdelay)
 
 
     def optimize(self, flat_popt=None, plotfits=True, saveplot=False, saveresults=True, saveobserved=False, custompath=None, progress=False):
@@ -92,9 +92,9 @@ class Model(RADDCore):
             popt_flat (dict): optimized parameters dictionary
         """
         # Global Optimization w/ Basinhopping (+TNC)
-        p = self.opt.hop_around(param_sets)
+        self.basin = self.opt.hop_around(param_sets)
         # Flat Simplex Optimization of Parameters at Global Minimum
-        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=p)
+        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=self.basin)
         if self.is_flat:
             self.write_results()
         return self.popt
@@ -112,14 +112,14 @@ class Model(RADDCore):
             popt (dict): optimized parameters dictionary
             flat_popt (dict): deepcopy of popt
         """
-        flatp = self.__check_inits__(deepcopy(flatp))
-        self.set_fitparams(force='cond', inits=flatp)
+        basin = self.__check_inits__(deepcopy(flatp))
+        self.set_fitparams(force='cond', inits=basin)
         # Pretune Conditional Parameters
         if hop:
-            flatp, fmin = self.opt.run_basinhopping(flatp)
-            self.opt.update(inits=flatp)
+            basin, fmin = self.opt.run_basinhopping(basin)
+            self.opt.update(inits=basin)
         # Final Simplex Optimization
-        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=flatp)
+        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=basin)
         # self.write_results()
 
 

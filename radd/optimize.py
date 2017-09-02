@@ -16,7 +16,109 @@ from scipy.optimize import basinhopping
 from numpy.random import uniform
 from lmfit import minimize, fit_report
 
+
+
+class BasinBounds(object):
+    """ sets conditions for step acceptance during
+    basinhopping optimization routine
+    Arguments:
+        xmin (list): lower boundaries for each parameter
+        xmax (list): upper boundaries for each parameter
+    """
+
+    def __init__(self, xmin, xmax):
+        self.xmin = np.array(xmin)
+        self.xmax = np.array(xmax)
+
+    def __call__(self, **kwargs):
+        x = kwargs["x_new"]
+        tmin = bool(np.all(x >= self.xmin))
+        tmax = bool(np.all(x <= self.xmax))
+        return tmin and tmax
+
+
+class HopStep(object):
+    """ scale stepsize of basinhopping optimization according to
+    individual parameters ranges (smaller steps for more sensitive params).
+    See theta.get_stepsize_scalars() for parameter <--> scalar mapping.
+    Arguments:
+        keys (list): list of parameter names
+        nlevels (list): list of levels per parameter
+        stepsize (list): initial stepsize
+    """
+
+    def __init__(self, keys, nlevels, stepsize=.05):
+        self.stepsize_scalars = self.get_stepsize_scalars(keys, nlevels)
+        self.stepsize = stepsize
+        self.np = self.stepsize_scalars.size
+        self.stepsizeList = []
+
+    def get_stepsize_scalars(self, keys, nlevels):
+        """ returns an array of scalars used by for controlling
+        stepsize of basinhopping algorithm for each parameter
+        """
+        scalar_dict={'a': .25,
+                    'tr': .2,
+                    'v': .35,
+                    'ssv': .35,
+                    'xb': .2,
+                    'si': .01,
+                    'z': .1,
+                    'sso': .2,
+                    'C': .05,
+                    'B': .05,
+                    'R': .01,
+                    'vi': 1.1,
+                    'vd': 1.5,
+                    'Beta': .1}
+
+        nl = [np.ones(nl) for nl in nlevels]
+        stepsize_scalars = np.hstack([scalar_dict[k]*nl[i] for i,k in enumerate(keys)])
+        stepsize_scalars = stepsize_scalars.squeeze()
+        return stepsize_scalars
+
+    def __call__(self, x):
+        s = self.stepsize
+        self.stepsizeList.append(s)
+        ss = self.stepsize_scalars
+        x = np.array([x[i] + uniform(-ss[i]*s, ss[i]*s) for i in range(self.np)])
+        return x
+
+
+def format_local_bounds(xmin, xmax):
+    """ groups (xmin, xmax) for each parameter """
+    tupler = lambda xlim: tuple([xlim[0], xlim[1]])
+    # return map((tupler), zip(xmin, xmax))
+    return [tupler(xl) for xl in zip(xmin, xmax)]
+
+
+def format_basinhopping_bounds(basin_keys, nvary, kind='xdpm'):
+    """ returns separate lists of all parameter
+    min and max values """
+    allbounds = theta.get_bounds(kind=kind)
+    xmin, xmax = [], []
+    nlevels = [np.ones(nl) for nl in nvary]
+    for i, pk in enumerate(basin_keys):
+        xmin.append([allbounds[pk][0]] * nlevels[i])
+        xmax.append([allbounds[pk][1]] * nlevels[i])
+    xmin = np.hstack(xmin).tolist()
+    xmax = np.hstack(xmax).tolist()
+    return xmin, xmax
+
+
+
 class Optimizer(object):
+    """ Primary optimization class for handling global and local optimization routines.
+
+    Arguments:
+        fitparams (Series): fitparams Series object
+        inits (dict): parameter dictionary to initialize model with
+        param_sets (list): list of init dicts to run basinhopping over
+        basinparams (dict): dictionary of global optimization params
+        progress (bool): initialize progress bars (default=True)
+        custompath (str): local path from ~ to save results
+        custompath (str): local path from ~ to save results
+    """
 
     def __init__(self, fitparams=None, inits=None, param_sets=None, basinparams=None, progress=True, custompath=None, nruns=10):
 
@@ -201,13 +303,13 @@ class Optimizer(object):
         """
         if not hasattr(self, 'basinparams'):
             self.basinparams =  {'ninits': 3,
-                                'nsamples': 1000,
+                                'nsamples': 2000,
                                 'interval': 10,
                                 'T': .025,
                                 'stepsize': .01,
                                 'niter': 400,
                                 'nsuccess': 100,
-                                'tol': 1.e-25,
+                                'tol': 1.e-40,
                                 'method': 'TNC',
                                 'init_sample_method': 'best',
                                 'progress': True,
@@ -439,93 +541,3 @@ class Optimizer(object):
                 self.lbar.clear()
             self.lbar = utils.GradientCallback(n=fp['maxfev'], fmin=10000)
             self.callback = self.lbar.reset(get_call=True)
-
-
-
-class BasinBounds(object):
-    """ sets conditions for step acceptance during
-    basinhopping optimization routine
-    Arguments:
-        xmin (list): lower boundaries for each parameter
-        xmax (list): upper boundaries for each parameter
-    """
-
-    def __init__(self, xmin, xmax):
-        self.xmin = np.array(xmin)
-        self.xmax = np.array(xmax)
-
-    def __call__(self, **kwargs):
-        x = kwargs["x_new"]
-        tmin = bool(np.all(x >= self.xmin))
-        tmax = bool(np.all(x <= self.xmax))
-        return tmin and tmax
-
-
-class HopStep(object):
-    """ scale stepsize of basinhopping optimization according to
-    individual parameters ranges (smaller steps for more sensitive params).
-    See theta.get_stepsize_scalars() for parameter <--> scalar mapping.
-    Arguments:
-        keys (list): list of parameter names
-        nlevels (list): list of levels per parameter
-        stepsize (list): initial stepsize
-    """
-
-    def __init__(self, keys, nlevels, stepsize=.05):
-        self.stepsize_scalars = self.get_stepsize_scalars(keys, nlevels)
-        self.stepsize = stepsize
-        self.np = self.stepsize_scalars.size
-        self.stepsizeList = []
-
-
-    def get_stepsize_scalars(self, keys, nlevels):
-        """ returns an array of scalars used by for controlling
-        stepsize of basinhopping algorithm for each parameter
-        """
-        scalar_dict={'a': .3,
-                    'tr': .2,
-                    'v': .25,
-                    'ssv': .2,
-                    'xb': .2,
-                    'si': .01,
-                    'z': .1,
-                    'sso': .1,
-                    'C': .05,
-                    'B': .05,
-                    'R': .01,
-                    'vi': 1.1,
-                    'vd': 1.5,
-                    'Beta': .1}
-
-        nl = [np.ones(nl) for nl in nlevels]
-        stepsize_scalars = np.hstack([scalar_dict[k]*nl[i] for i,k in enumerate(keys)])
-        stepsize_scalars = stepsize_scalars.squeeze()
-        return stepsize_scalars
-
-    def __call__(self, x):
-        s = self.stepsize
-        self.stepsizeList.append(s)
-        ss = self.stepsize_scalars
-        x = np.array([x[i] + uniform(-ss[i]*s, ss[i]*s) for i in range(self.np)])
-        return x
-
-
-def format_local_bounds(xmin, xmax):
-    """ groups (xmin, xmax) for each parameter """
-    tupler = lambda xlim: tuple([xlim[0], xlim[1]])
-    # return map((tupler), zip(xmin, xmax))
-    return [tupler(xl) for xl in zip(xmin, xmax)]
-
-
-def format_basinhopping_bounds(basin_keys, nvary, kind='xdpm'):
-    """ returns separate lists of all parameter
-    min and max values """
-    allbounds = theta.get_bounds(kind=kind)
-    xmin, xmax = [], []
-    nlevels = [np.ones(nl) for nl in nvary]
-    for i, pk in enumerate(basin_keys):
-        xmin.append([allbounds[pk][0]] * nlevels[i])
-        xmax.append([allbounds[pk][1]] * nlevels[i])
-    xmin = np.hstack(xmin).tolist()
-    xmax = np.hstack(xmax).tolist()
-    return xmin, xmax
