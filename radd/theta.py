@@ -54,7 +54,7 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, f
     return rvinits
 
 
-def get_bounds(kind='dpm', a=(.1, .7), tr=(.2, .7), v=(.1, 2.5), ssv=(-2.5, -.1), sso=(.005, .1), xb=(.1, 2.5), si=(.001, .15), z=(.01, .9), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08), tb=None):
+def get_bounds(kind='dpm', a=(.1, .8), tr=(.2, .7), v=(.1, 2.5), ssv=(-2.5, -.1), sso=(.005, .1), xb=(.1, 2.5), si=(.001, .15), z=(.01, .9), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08), tb=None):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
