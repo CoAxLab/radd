@@ -134,8 +134,6 @@ class RADDCore(object):
                             'method': 'nelder',
                             'maxfev': 450,
                             'maxiter': 450,
-                            'nlevels': 1,
-                            'tb': self.tb,
                             'kind': self.kind,
                             'clmap': self.clmap,
                             'pcmap':self.pcmap,
@@ -145,7 +143,11 @@ class RADDCore(object):
                             'fit_on': self.fit_on,
                             'model_id': self.model_id,
                             'learn': self.learn,
-                            'inits': self.inits}
+                            'inits': self.inits,
+                            'nlevels': 1,
+                            'nidx': self.nidx,
+                            'idx': self.idx,
+                            'tb': self.tb}
 
             self.fitparams = pd.Series(self.fitparams)
         else:

@@ -262,11 +262,6 @@ class Optimizer(object):
             x0 = self.sim.pdict_to_array(p)
             costfx = self.sim.cost_fx
 
-        # if self.progress:
-        #     if resetProgress:
-        #         self.make_progress_bars(inits=True, basin=True)
-        #     self.callback = self.gbar.reset(get_call=True, gbasin=resetProgress)
-
         # create args for customizing global optimizer
         self.set_global_options(learn=learn)
 
