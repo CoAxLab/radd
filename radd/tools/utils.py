@@ -87,7 +87,7 @@ class PBinJ(object):
         self.displayed = False
 
 
-class BasinCallback(object):
+class GlobalCallback(object):
     """ A callback function for reporting basinhopping status
     Arguments:
         x (array):
@@ -97,7 +97,13 @@ class BasinCallback(object):
         accept (bool):
             whether or not that minimum was accepted
     """
-    def __init__(self,  n=1, value=0, status='{:.5fz} / {:.5fz}', color='r', fmin=1000.):
+    def __init__(self,  n=1, value=0, status='{:.5fz} / {:.5fz}', color='r', fmin=1000., method='basin'):
+
+        if method=='basin':
+            self.callback = self.basinhopping_callback
+        else:
+            self.callback = self.evolution_callback
+            fmin = 1000.
         self.pbar = PBinJ(n=n, value=value, status=status, color=color)
         self.reset(history=True, gbasin=True, fmin=fmin)
         self.xhistory = []
@@ -113,7 +119,7 @@ class BasinCallback(object):
         if get_call:
             return self.callback
 
-    def callback(self, x, fmin, accept):
+    def basinhopping_callback(self, x, fmin, accept):
         if fmin <= np.min(self.history) and fmin<=self.gbasin:
             self.gbasin = fmin
             self.xhistory.append((fmin, x))
@@ -122,6 +128,17 @@ class BasinCallback(object):
             self.history.append(fmin)
             status=(MyFloat(x) for x in [self.gbasin, fmin])
             self.pbar.update(value=len(self.history), status=status)
+
+    def evolution_callback(self, xk, convergence):
+        #  convergence >= np.max(self.history) and
+        if (1-convergence)<=self.gbasin:
+            self.gbasin = 1-convergence
+            self.xhistory.append((1-convergence, xk))
+            # self.reset(history=True, bar=True, fmin=0)
+
+        self.history.append(1-convergence)
+        status=(MyFloat(x) for x in [self.gbasin, 1-convergence])
+        self.pbar.update(value=len(self.history), status=status)
 
     def clear(self):
         self.pbar.clear()
@@ -207,6 +224,7 @@ def rwr(X, get_index=False, n=None):
     else:
         return X_resample
 
+
 def resample_data(data, n=120, groups=['ssd']):
     """ generates n resampled datasets using rwr()
     for bootstrapping model fits
@@ -223,6 +241,7 @@ def resample_data(data, n=120, groups=['ssd']):
         bootlist.append(bootdf)
     # concatenate and return all resampled conditions
     return self.model.rangl_data(pd.concat(bootlist))
+
 
 def extract_popt_fitinfo(finfo=None, plist=None, pcmap=None):
     """ takes optimized dict or DF of vectorized parameters and
@@ -245,6 +264,7 @@ def extract_popt_fitinfo(finfo=None, plist=None, pcmap=None):
         popt[pkey] = np.array([finfo[pc] for pc in pcmap[pkey]])
     return popt
 
+
 def params_io(p={}, io='w', iostr='popt'):
     """ read // write parameters dictionaries
     """
@@ -254,6 +274,7 @@ def params_io(p={}, io='w', iostr='popt'):
         ps = pd.read_csv(''.join([iostr, '.csv']), header=None)
         p = dict(zip(ps[0], ps[1]))
         return p
+
 
 def fits_io(fitparams, fits=[], io='w', iostr='fits'):
     """ read // write y, wts, yhat arrays

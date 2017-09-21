@@ -85,7 +85,7 @@ class Simulator(object):
         sim_many_dpm(self.rProb, self.rProbSS, dvg, goRT, ssRT, xtb, vProb, vsProb, bound, gOnset, ssOnset, dx, self.dt)
         if analyze:
             return self.analyze(goRT, ssRT)
-        return pandaify_results(goRT, ssRT, ssd=self.ssd, bootstrap=False, clmap=self.clmap)
+        return pandaify_results(goRT, ssRT, ssd=self.ssd, bootstrap=False, clmap=self.clmap, tb=self.tb)
 
 
     def analyze(self, rts, ssrts):
@@ -96,7 +96,8 @@ class Simulator(object):
         nss = nssd * nssPer
         erts = rts[:, :nss].reshape(ssrts.shape)
         gacc = np.mean(ufunc_where(rts < self.tb, 1, 0), axis=1)
-        sacc = np.mean(ufunc_where(erts <= ssrts, 0, 1), axis=2)
+        # sacc = np.mean(ufunc_where(erts <= ssrts, 0, 1), axis=2)
+        sacc = np.mean(ufunc_where(ssrts <= erts, 1, 0), axis=2)
         rts[rts>=self.tb] = 1000.
         ssrts[ssrts>=self.tb] = 1000.
         cq = self.RTQ(zip(rts, [self.tb] * nl))
@@ -132,13 +133,25 @@ class Simulator(object):
         return parray
 
     def preproc_params(self, theta_array):
+        """
+        Estimating parameters of the diffusion model: Approaches to dealing
+        with contaminant reaction times and parameter variability
+        Ratcliff & Tuerlinckx, 2002
+        """
         a, si, sso, ssv, tr, v, xb = theta_array
         xtb = np.cosh(xb[:,None] * self.xtime)
         ssd = sso[:, None] + self.ssd
-        # dx = np.sqrt(si * self.dt)
+
+        # scale drift-rates
         dx = si * np.sqrt(self.dt)
-        vProb = 0.5 * (1 + v * dx / si)
-        vsProb = 0.5 * (1 + ssv * dx / si)
+        vProb = .5 * (1 + (v * np.sqrt(self.dt))/si)
+        vsProb = .5 * (1 + (ssv * np.sqrt(self.dt))/si)
+
+        # above equations give same as:
+        #     s2 = si**2
+        #     dx = np.sqrt(s2 * self.dt)
+        #     vProb = 0.5 * (1 + v * dx / s2)
+
         gOnset = get_onset_index(tr, self.dt)
         ssOnset = get_onset_index(ssd, self.dt)
         self.vProb = vProb

@@ -12,13 +12,13 @@ from radd import models, theta
 from radd.adapt import models_rl
 from radd.tools import messages, utils
 from copy import deepcopy
-from scipy.optimize import basinhopping
+from scipy.optimize import basinhopping, differential_evolution
 from numpy.random import uniform
 from lmfit import minimize, fit_report
 
 
 
-class BasinBounds(object):
+class GlobalBounds(object):
     """ sets conditions for step acceptance during
     basinhopping optimization routine
     Arguments:
@@ -57,14 +57,14 @@ class HopStep(object):
         """ returns an array of scalars used by for controlling
         stepsize of basinhopping algorithm for each parameter
         """
-        scalar_dict={'a': .25,
-                    'tr': .2,
-                    'v': .35,
-                    'ssv': .35,
-                    'xb': .2,
+        scalar_dict={'a': .2,
+                    'tr': .03,
+                    'v': .2,
+                    'ssv': .3,
+                    'xb': .25,
+                    'sso': .01,
                     'si': .01,
                     'z': .1,
-                    'sso': .2,
                     'C': .05,
                     'B': .05,
                     'R': .01,
@@ -92,10 +92,10 @@ def format_local_bounds(xmin, xmax):
     return [tupler(xl) for xl in zip(xmin, xmax)]
 
 
-def format_basinhopping_bounds(basin_keys, nvary, kind='xdpm'):
+def format_basinhopping_bounds(basin_keys, nvary, kind='xdpm', tb=None):
     """ returns separate lists of all parameter
     min and max values """
-    allbounds = theta.get_bounds(kind=kind)
+    allbounds = theta.get_bounds(kind=kind, tb=tb)
     xmin, xmax = [], []
     nlevels = [np.ones(nl) for nl in nvary]
     for i, pk in enumerate(basin_keys):
@@ -120,9 +120,10 @@ class Optimizer(object):
         custompath (str): local path from ~ to save results
     """
 
-    def __init__(self, fitparams=None, inits=None, param_sets=None, basinparams=None, progress=True, custompath=None, nruns=10):
+    def __init__(self, fitparams=None, basinparams={}, inits=None, param_sets=None, progress=True, custompath=None, nruns=10):
 
         self.fitparams = fitparams
+        self.basinparams = basinparams
         self.kind = fitparams.kind
         self.learn = fitparams.learn
         self.depends_on = fitparams.depends_on
@@ -130,15 +131,11 @@ class Optimizer(object):
 
         if inits is None:
             inits = theta.get_default_inits(kind=self.kind, depends_on=self.depends_on, learn=self.learn)
-        self.inits = deepcopy(inits)
 
-        self.progress = progress
+        self.inits = deepcopy(inits)
         self.callback = None
         self.constants = {}
         self.param_sets = param_sets
-
-        self.set_basinparams()
-        self.make_progress_bars(inits=True, basin=True)
         self.nruns=nruns
 
         if self.learn:
@@ -163,6 +160,11 @@ class Optimizer(object):
         self.learn = self.fitparams['learn']
         self.pcmap = self.fitparams.pcmap
         self.inits = self.fitparams.inits
+
+        self.progress = self.basinparams['progress']
+        if self.progress:
+            self.make_progress_bars(inits=True, basin=True)
+
         if 'nruns' in kw_keys:
             self.nruns = kw.nruns
         if self.learn:
@@ -186,18 +188,24 @@ class Optimizer(object):
         if param_sets is None:
             self.sample_param_sets(learn)
             param_sets = self.param_sets
-        self.make_progress_bars(inits=True, basin=True)
+        if self.progress:
+            self.make_progress_bars(inits=True, basin=True)
+
         self.xpopt, self.xfmin = [], []
         for i, p in enumerate(param_sets):
             self.update(inits=p, force='flat', learn=learn)
             if self.progress:
                 self.ibar.update(value=i, status=i+1)
-            popt, fmin = self.run_basinhopping(p=p, learn=learn, ratesOnly=ratesOnly, fitDynamics=fitDynamics, rateParams=rateParams, resetProgress=False)
+            popt, fmin = self.optimize_global(p=p, learn=learn, ratesOnly=ratesOnly, fitDynamics=fitDynamics, rateParams=rateParams, resetProgress=False)
             self.xpopt.append(popt)
             self.xfmin.append(fmin)
+
         if self.progress:
             self.gbar.clear()
             self.ibar.clear()
+            if hasattr(self, 'lbar'):
+                self.lbar.clear()
+
         popt = self.xpopt[np.argmin(self.xfmin)]
         if learn:
             self.rlpopt = deepcopy(popt)
@@ -222,10 +230,22 @@ class Optimizer(object):
         return pdict
 
 
-    def run_basinhopping(self, p, learn=False, fitDynamics=True, ratesOnly=True, rateParams=['B', 'C', 'R'], resetProgress=True, return_all=False):
+    def optimize_global(self, p, learn=False, fitDynamics=True, ratesOnly=True, rateParams=['B', 'C', 'R'], resetProgress=True, return_all=False):
+        """ Global optimization with basinhopping (or differential_evolution)
+        ::Arguments::
+            p (dict):               parameter dictionary
+            learn (bool):           fit adaptive model if True (default: False)
+            fitDynamics (bool):     fit adaptive model to timeseries of rt/accuracy
+            ratesOnly (bool):       restrict free parameters to learning rates
+            rate params (list):     learning rate parameters
+            resetProgress (bool):   reset global progress bar
+            return_all (bool):      return all results from optimzation
+        ::Returns::
+            popt (dict):            optimized parameter dictionary
+            fmin (float):           function minimum
+        """
         bp = self.basinparams
         popt = deepcopy(p)
-
         if learn:
             if fitDynamics:
                 costfx = self.simRL.cost_fx_rl
@@ -242,37 +262,49 @@ class Optimizer(object):
             x0 = self.sim.pdict_to_array(p)
             costfx = self.sim.cost_fx
 
-        if resetProgress:
-            self.make_progress_bars(inits=True, basin=True)
-        self.callback = self.gbar.reset(get_call=True, gbasin=resetProgress)
+        # if self.progress:
+        #     if resetProgress:
+        #         self.make_progress_bars(inits=True, basin=True)
+        #     self.callback = self.gbar.reset(get_call=True, gbasin=resetProgress)
 
-        # make list of init values for all pkeys included in fit
-        self.set_basin_options(learn)
-        # run basinhopping on simulator.basinhopping_minimizer func
-        out = basinhopping(costfx, x0=x0, minimizer_kwargs=self.tnc_options, T=bp['T'], stepsize=bp['stepsize'], niter_success=bp['nsuccess'], niter=bp['niter'], interval=bp['interval'], take_step=self.custom_step, accept_test=self.accept_step, callback=self.callback)
+        # create args for customizing global optimizer
+        self.set_global_options(learn=learn)
 
-        self.bh_results = out
-        self.fit_info = out.lowest_optimization_result
+        # run global optimization (basinhopping/differential_evolution)
+        if bp['method']=='basin':
+            out = basinhopping(costfx, x0=x0, minimizer_kwargs=self.polish_args, T=bp['T'], stepsize=bp['stepsize'], niter_success=bp['nsuccess'], niter=bp['niter'], interval=bp['interval'], take_step=self.custom_step, accept_test=self.accept_step, callback=self.callback)
+            self.fit_info = out.lowest_optimization_result
+        elif bp['method']=='evolution':
+            out = differential_evolution(costfx, bounds=self.polish_args['bounds'], popsize=bp['popsize'], recombination=bp['recombination'], disp=bp['disp'], polish=True, maxiter=bp['maxiter'], tol=bp['tol'], callback=self.callback, atol=self.fitparams['tol'])
+            self.fit_info = out
 
+        self.global_results = out
         if return_all:
             return self.fit_info
-
         pdict = self.popt_array_to_dict(self.fit_info.x,  learn=learn)
         popt.update(pdict)
         fmin = self.fit_info.fun
         return popt, fmin
 
 
-    def gradient_descent(self, p, learn=False):
-
+    def gradient_descent(self, p, learn=False, flat=False):
+        """ Local optimization with Nelder-Mead Simplex algorithm (gradient descent)
+        ::Arguments::
+            p (dict):       parameter dictionary
+            learn (bool):   fit adaptive model if True (default: False)
+            flat
+        ::Returns::
+            finfo (Series): summary stats of optimization
+            popt (dict):    optimized parameter dictionary
+            yhat (array):   model-predicted data vector
+        """
+        flat= False
         self.update(inits=p)
-        fp = self.fitparams
-        flat=False
+        fp = self.fitparams;
         if fp.nlevels==1:
             flat=True
 
         optkws = {'xtol': fp['tol'], 'ftol': fp['tol'], 'maxfev': fp['maxfev'], 'maxiter': fp['maxiter']}
-
         if learn:
             sim = self.simRL
             pflat = sim.pflat
@@ -282,62 +314,45 @@ class Optimizer(object):
         else:
             sim = self.sim
             sim.set_pconstant_values_matrix(p)
-            # make lmfit Parameters object
             lmParams = theta.loadParameters(inits=p, pcmap=self.pcmap, is_flat=flat, kind=self.kind)
             lmParamsNames = list(lmParams.valuesdict())
             sim.update(lmParamsNames=lmParamsNames)
-            self.lmParams = lmParams
+        self.lmParams = lmParams
 
-        self.lbar = utils.GradientCallback(n=fp['maxfev'], fmin=10000)
+        if self.progress:
+            self.lbar = utils.GradientCallback(n=fp['maxfev'], fmin=10000)
+            self.lcallback = self.lbar.callback
+        else:
+            self.lcallback = None
 
-        self.lmMin = minimize(sim.cost_fx_lmfit, lmParams, method=fp['method'], tol=fp['tol'],  options=optkws, iter_cb=self.lbar.callback)
-
+        self.lmMin = minimize(sim.cost_fx_lmfit, lmParams, method=fp['method'], tol=fp['tol'],  options=optkws, iter_cb=self.lcallback)
         if hasattr(self, 'lbar'):
             self.lbar.clear()
         self.param_report = fit_report(self.lmMin.params)
         return self.assess_fit(flat=flat, learn=learn)
 
 
-    def set_basinparams(self, **kwargs):
-        """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
-        """
-        if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'ninits': 3,
-                                'nsamples': 2000,
-                                'interval': 10,
-                                'T': .025,
-                                'stepsize': .01,
-                                'niter': 400,
-                                'nsuccess': 100,
-                                'tol': 1.e-40,
-                                'method': 'TNC',
-                                'init_sample_method': 'best',
-                                'progress': True,
-                                'disp': True}
-        else:
-            # fill with kwargs for the upcoming fit
-            for kw_arg, kw_val in kwargs.items():
-                self.basinparams[kw_arg] = kw_val
-
-
-    def set_basin_options(self, learn=False):
+    def set_global_options(self, learn=False):
         if learn:
             sim = self.simRL
         else:
             sim = self.sim
         bp = self.basinparams
-        xmin, xmax = format_basinhopping_bounds(sim.pvary, sim.nvary, self.kind)
-        tnc_bounds = format_local_bounds(xmin, xmax)
+        fp = self.fitparams
+        xmin, xmax = format_basinhopping_bounds(sim.pvary, sim.nvary, self.kind, tb=fp['tb'])
+        bounds = format_local_bounds(xmin, xmax)
 
         # define custom take_step and accept_test functions
-        self.accept_step = BasinBounds(xmin, xmax)
+        self.accept_step = GlobalBounds(xmin, xmax)
         self.custom_step = HopStep(sim.pvary, nlevels=sim.nvary, stepsize=bp['stepsize'])
-        self.tnc_options = {"method": 'TNC', 'bounds': tnc_bounds, 'tol': bp['tol'], 'options': {'xtol': bp['tol'], 'ftol': bp['tol']}}
+        self.polish_args = {"method": bp['local_method'], 'bounds': bounds, 'tol': bp['polish_tol'], 'options': {'xtol': bp['polish_tol'], 'ftol': bp['polish_tol']}}
 
         if self.progress:
             if not hasattr(self, 'gbar') or self.gbar.pbar.displayed==False:
                 self.make_progress_bars(inits=False, basin=True)
             self.callback = self.gbar.reset(get_call=True, gbasin=False, history=False)
+        else:
+            self.callback = None
 
 
     def sample_param_sets(self, learn=False, fitDynamics=True):
@@ -448,11 +463,10 @@ class Optimizer(object):
             popt = theta.scalarize_params(popt, self.pcmap)
             if fp.nlevels>1:
                 popt = theta.pvary_levels_to_array(popt, self.pcmap)
+
         finfo = pd.Series()
         # get model-predicted yhat vector
-        #self.sim.simulate_model(popt)#(self.lmMin.residual / wts) + y
         fp['yhat'] = (self.lmMin.residual / wts) + y
-        # fill finfo dict with goodness-of-fit info
         finfo['idx'] = fp.idx
         finfo['pvary'] = '_'.join(list(fp.depends_on))
         finfo['cnvrg'] = self.lmMin.success
@@ -533,11 +547,11 @@ class Optimizer(object):
             if hasattr(self, 'gbar'):
                 self.gbar.clear()
             #fmin = self.sim.cost_fx(self.param_sets[0][0])
-            self.gbar = utils.BasinCallback(n=bp['nsuccess'], fmin=10000)
-            self.callback = self.gbar.reset(get_call=True)
+            self.gbar = utils.GlobalCallback(n=bp['nsuccess'], fmin=1000, method=bp['method'])
+            self.callback = self.gbar.reset(get_call=True, )
         if lBasin:
             fp = self.fitparams
             if hasattr(self, 'lbar'):
                 self.lbar.clear()
-            self.lbar = utils.GradientCallback(n=fp['maxfev'], fmin=10000)
+            self.lbar = utils.GradientCallback(n=fp['maxfev'], fmin=1000)
             self.callback = self.lbar.reset(get_call=True)

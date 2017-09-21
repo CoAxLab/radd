@@ -13,7 +13,7 @@ from itertools import product
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=3.5):
+    def __init__(self, model, max_wt=2.):
         self.model = model
         self.data = model.data
         self.inits = model.inits
@@ -106,14 +106,18 @@ class DataHandler(object):
         """
         wtsDF = self.observedDF.copy()
         if self.weighted:
-            # calc & fill wtsDF with idx quantile and accuracy weights (ratios)
-            quant_wts, acc_wts = self.calc_empirical_weights()
-            qwts = np.vstack(quant_wts).reshape(wtsDF.shape[0], -1)
-            awts = np.vstack(acc_wts).reshape(wtsDF.shape[0], -1)
-            wtsDF.loc[:, self.q_cols] = qwts
-            wtsDF.loc[:, self.p_cols] = awts
-            wts_numeric = wtsDF.loc[:, 'acc':]
-            wtsDF.loc[:, 'acc':] = wts_numeric.apply(analyze.fill_nan_vals, axis=1)
+            try:
+                # calc & fill wtsDF with idx quantile and accuracy weights (ratios)
+                quant_wts, acc_wts = self.calc_empirical_weights()
+                qwts = np.vstack(quant_wts).reshape(wtsDF.shape[0], -1)
+                awts = np.vstack(acc_wts).reshape(wtsDF.shape[0], -1)
+                wtsDF.loc[:, self.q_cols] = qwts
+                wtsDF.loc[:, self.p_cols] = awts
+                wts_numeric = wtsDF.loc[:, 'acc':]
+                wtsDF.loc[:, 'acc':] = wts_numeric.apply(analyze.fill_nan_vals, axis=1)
+            except Exception:
+                print("Unable to calculate cost f(x) weights")
+                wtsDF.loc[:, self.p_cols+self.q_cols] = 1.
         else:
             wtsDF.loc[:, self.p_cols+self.q_cols] = 1.
         return wtsDF.copy()
@@ -268,7 +272,7 @@ class DataHandler(object):
                 sdf[bwfactors] = lvl
             ssdList.append(sdf)
 
-        self.ssdDF = pd.concat(ssdList)
+        self.ssdDF = pd.concat(ssdList, ignore_index=True)
 
 
     def make_headers(self, ssd_list=None):
@@ -280,7 +284,7 @@ class DataHandler(object):
                 stopdf = stopdf[stopdf.probe==1]
             self.set_model_ssds(stopdf)
             if self.ssd_method=='all':
-                get_df_ssds = lambda df: df.ssd.unique()
+                get_df_ssds = lambda df: np.round(df.ssd.unique(), 1).astype(int)
                 ssds = [get_df_ssds(df) for _, df in stopdf.groupby(g_cols)]
                 ssd_list = [np.sort(issd).tolist() for issd in ssds]
             else:
@@ -320,8 +324,8 @@ class DataHandler(object):
         """
         self.p_cols = ['acc']
         if ssd_list:
-            ssd_unique = np.unique(np.hstack(ssd_list))
-            self.p_cols = self.p_cols + ssd_unique.tolist()
+            ssd_unique = np.unique(np.hstack(ssd_list)).tolist()
+            self.p_cols = self.p_cols + ssd_unique
 
     def make_f_cols(self):
         """ make header names for various fit statistics in fitdf

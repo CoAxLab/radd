@@ -22,7 +22,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95])):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, quantiles=np.arange(.1, 1.,.1)):
         self.kind = kind
         self.fit_on = fit_on
         self.ssd_method = ssd_method
@@ -31,7 +31,7 @@ class RADDCore(object):
         self.learn = learn
         self.ssdelay = ssdelay
         self.custompath = custompath
-        self.data = analyze.remove_outliers(data, 3.5)
+        self.data = analyze.remove_outliers(data, 2.5)
         self.tb = analyze.estimate_timeboundary(self.data)
         self.idx = list(self.data.idx.unique())
         self.nidx = len(self.idx)
@@ -59,7 +59,6 @@ class RADDCore(object):
         # from radd.optimize import Optimizer
         # from radd.models import Simulator
         from radd import optimize
-
         if self.inits is None:
             self.__get_default_inits__()
         # pcmap (see docstrings)
@@ -74,7 +73,7 @@ class RADDCore(object):
         self.set_basinparams()
         # initialize optimizer object for controlling fit routines
         # (updated with fitparams/basinparams whenever params are set)
-        self.opt = optimize.Optimizer(fitparams=self.fitparams, inits=self.inits)
+        self.opt = optimize.Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, inits=self.inits)
         self.sim = self.opt.sim
 
 
@@ -117,7 +116,9 @@ class RADDCore(object):
         # define iterables containing fit y & wts for each fit
         self.iter_flat = zip(self.observed_flat, self.flat_wts)
         self.iter_cond = zip(self.observed, self.cond_wts)
-        self.resultsdir = self.handler.make_results_dir(custompath=self.custompath, get_path=True)
+        # self.resultsdir = os.self.handler.make_results_dir(custompath=self.custompath, get_path=True)
+        # get working directory
+        self.resultsdir = os.path.abspath('./')
 
 
     def set_fitparams(self, force=None, **kwargs):
@@ -127,9 +128,9 @@ class RADDCore(object):
             # initialize with default values and first arrays in observed_flat, flat_wts
             self.fitparams = {'ix':0,
                             'ntrials': 20000,
-                            'si': 1.,
-                            'dt':.001,
-                            'tol': 1.e-35,
+                            'si': .1,
+                            'dt':.002,
+                            'tol': 1.e-30,
                             'method': 'nelder',
                             'maxfev': 450,
                             'maxiter': 450,
@@ -154,7 +155,6 @@ class RADDCore(object):
 
         if 'quantiles' in list(kwargs):
             self.update_quantiles()
-
         if 'depends_on' in list(kwargs):
             reformat_dataframes = False
             if self.is_flat:
@@ -162,7 +162,6 @@ class RADDCore(object):
             self.set_conditions(kwargs['depends_on'])
             if reformat_dataframes:
                 self.__prepare_fit__()
-
         if force=='cond':
             self.fitparams['nlevels'] = self.nlevels
         elif force=='flat':
@@ -172,7 +171,6 @@ class RADDCore(object):
 
         if hasattr(self, 'ssdDF'):
             self.__set_ssd_info__()
-
         if hasattr(self, 'opt'):
             self.opt.update(fitparams=self.fitparams, inits=self.fitparams.inits)
             self.sim = self.opt.sim
@@ -183,18 +181,22 @@ class RADDCore(object):
         """
         if not hasattr(self, 'basinparams'):
             self.basinparams =  {'ninits': 3,
-                                'nsamples': 1000,
+                                'nsamples': 1200,
                                 'interval': 10,
                                 'T': .025,
                                 'stepsize': .1,
                                 'niter': 400,
+                                'maxiter': 400,
                                 'nsuccess': 100,
-                                'tol': 1.e-25,
-                                'method': 'TNC',
+                                'polish_tol': 1.e-20,
+                                'tol': .01,
+                                'local_method': 'L-BFGS-B',
+                                'method': 'basin',
                                 'init_sample_method': 'best',
+                                'popsize': 15,
+                                'recombination': .7,
                                 'progress': True,
-                                'disp': True}
-
+                                'disp': False}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():

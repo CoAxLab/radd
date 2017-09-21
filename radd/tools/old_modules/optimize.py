@@ -17,7 +17,7 @@ warnings.filterwarnings("ignore", module="matplotlib")
 
 
 
-class BasinBounds(object):
+class GlobalBounds(object):
     """ sets conditions for step acceptance during
     basinhopping optimization routine
     Arguments:
@@ -172,7 +172,7 @@ class Optimizer(object):
         mkwargs = {"method": bp['method'], 'bounds': tncbounds, 'tol': bp['tol'], 'options': tncopt}
 
         # define custom take_step and accept_test functions
-        accept_step = BasinBounds(xmin, xmax)
+        accept_step = GlobalBounds(xmin, xmax)
         custom_step = HopStep(basin_keys, nlevels=nl, stepsize=bp['stepsize'])
 
         # run basinhopping on simulator.basinhopping_minimizer func

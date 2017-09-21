@@ -77,3 +77,30 @@ def format_dataframes(fd):
     igtdf = pd.Series(OrderedDict((col, fd[col]) for col in igtdf_cols))
 
     return igtdf, agdf
+
+
+def calcPostErrAdjust(df, ntrials=200):
+    if type(df.ttype.values[0]) is str:
+        ssErrDF = df[(df.ttype=='stop')&(df.response==1)&(df.rt<.68)]
+    else:
+        ssErrDF = df[(df.ttype==0.)&(df.response==1)&(df.rt<.68)]
+    ssErrRT = ssErrDF.rt.mean()
+    adjustIX = ssErrDF.index.values + 1
+    adjustIX[-1] = ssErrDF.index.values[-1]
+    adjustDF = df.loc[adjustIX, :]
+    PostErrRT = adjustDF[(adjustDF.response==1)&(adjustDF.rt<.68)].rt.mean()
+    PostErrAdjust = PostErrRT - ssErrRT
+    return PostErrAdjust
+
+def calcTargetAdjust(df, ntrials=200):
+    if type(df.ttype.values[0]) is str:
+        GoDF = df[(df.ttype=='go')&(df.response==1)&(df.rt<.68)]
+    else:
+        GoDF = df[(df.ttype==1.)&(df.response==1)&(df.rt<.68)]
+    GoRT = GoDF.rt.mean()
+    adjustIX = GoDF.index.values + 1
+    adjustIX[-1] = GoDF.index.values[-1]
+    adjustDF = df.loc[adjustIX]
+    GoAdjustRT = adjustDF[(adjustDF.response==1)&(adjustDF.rt<.68)].rt.mean()
+    TargetAdjust =  GoAdjustRT - GoRT
+    return TargetAdjust

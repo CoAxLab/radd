@@ -14,6 +14,28 @@ from scipy.interpolate import interp1d
 from scipy import stats
 from scipy.optimize import leastsq, minimize, curve_fit
 
+def ezdiff(rt, correct, s=1.):
+    """ estimate ezDDM parameters
+    """
+    logit = lambda p:np.log(p/(1-p))
+    pc = np.mean(correct)
+
+    # subtract or add 1/2 an error to prevent division by zero
+    if pc==1.0:
+        pc=1 - 1/(2*len(correct))
+    if pc==0.5:
+        pc=0.5 + 1/(2*len(correct))
+    MRT = np.mean(rt[correct==1])
+    VRT = np.var(rt[correct==1])
+
+    r = (logit(pc)*(((pc**2) * logit(pc)) - pc*logit(pc) + pc - 0.5))/VRT
+    v = np.sign(pc-0.5)*s*(r)**0.25
+    a = (s**2 * logit(pc))/v
+    y = (-1*v*a)/(s**2)
+    MDT = (a/(2*v))*((1-np.exp(y))/(1+np.exp(y)))
+    tr = MRT-MDT
+    return([a, v, tr])
+
 
 def blockify_trials(data, nblocks=5, conds=None, groups=['idx']):
     datadf = data.copy()
@@ -59,7 +81,7 @@ def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on
             sacc = np.array([stopdf.mean()['acc']])
         data_vector.insert(1, sacc)
     return np.hstack(data_vector)
-    
+
 
 def calculate_qpdata(data, quantiles=np.linspace(.02,.98,10)):
     data = data[data.response==1].copy()
@@ -87,8 +109,12 @@ def idx_quant_weights(data, conds, quantiles=np.linspace(.02,.98,10), max_wt=3, 
             bwfactors = [bwfactors]
         conds = [c for c in conds if c not in bwfactors]
 
-    # get all trials with response recorded
-    nlevels = np.sum([data[c].unique().size for c in conds])
+    if len(conds)<1:
+        nlevels = 1
+    else:
+        # get all trials with response recorded
+        nlevels = np.sum([data[c].unique().size for c in conds])
+
     godf = data.query('response==1')
     # sort by ttype first so go(acc==1) occurs before stop(acc==0)
     ttype_ordered_groups = np.hstack([conds, 'ttype', 'acc']).tolist()
@@ -99,6 +125,7 @@ def idx_quant_weights(data, conds, quantiles=np.linspace(.02,.98,10), max_wt=3, 
     # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
     # for conditions with greater number of observations (i.e., more acc==1 in godf)
     idx_median = np.nanmedian(quant_err)
+    # idx_qratio = idx_median / quant_err
     idx_qratio = idx_median / quant_err
     # set extreme values to max_wt arg val
     idx_qratio[idx_qratio >= max_wt] = max_wt
@@ -194,7 +221,6 @@ def bootstrap_data(data, nsubjects=25, n=120, groups=['cond', 'ssd']):
     """ generates n resampled datasets using rwr()
     for bootstrapping model fits
     """
-    # groups=['ttype', 'ssd']
     df = data.copy()
     bootlist = []
     idxList = []
@@ -237,32 +263,6 @@ def rwr(X, get_index=False, n=None):
     else:
         return X_resample
 
-def calcPostErrAdjust(df, ntrials=200):
-    if type(df.ttype.values[0]) is str:
-        ssErrDF = df[(df.ttype=='stop')&(df.response==1)&(df.rt<.68)]
-    else:
-        ssErrDF = df[(df.ttype==0.)&(df.response==1)&(df.rt<.68)]
-    ssErrRT = ssErrDF.rt.mean()
-    adjustIX = ssErrDF.index.values + 1
-    adjustIX[-1] = ssErrDF.index.values[-1]
-    adjustDF = df.loc[adjustIX, :]
-    PostErrRT = adjustDF[(adjustDF.response==1)&(adjustDF.rt<.68)].rt.mean()
-    PostErrAdjust = PostErrRT - ssErrRT
-    return PostErrAdjust
-
-def calcTargetAdjust(df, ntrials=200):
-    if type(df.ttype.values[0]) is str:
-        GoDF = df[(df.ttype=='go')&(df.response==1)&(df.rt<.68)]
-    else:
-        GoDF = df[(df.ttype==1.)&(df.response==1)&(df.rt<.68)]
-    GoRT = GoDF.rt.mean()
-    adjustIX = GoDF.index.values + 1
-    adjustIX[-1] = GoDF.index.values[-1]
-    adjustDF = df.loc[adjustIX]
-    GoAdjustRT = adjustDF[(adjustDF.response==1)&(adjustDF.rt<.68)].rt.mean()
-    TargetAdjust =  GoAdjustRT - GoRT
-    return TargetAdjust
-
 
 def estimate_timeboundary(data):
     goDF = data[data.response==1].copy()
@@ -284,12 +284,15 @@ def get_model_ssds(stopdf, conds, ssd_method='all', scale=.001, bwfactors=None):
             bwfactors = [bwfactors]
         conds = [c for c in conds if c not in bwfactors]
 
+    groups = conds + ['idx']
     if ssd_method == 'all':
-        get_df_ssds = lambda df: df.groupby(conds).ssd.unique().values
-        cond_ssds =  [get_df_ssds(df) for _,df in stopdf.groupby('idx')]
-
+        get_df_ssds = lambda df: [np.sort(df.ssd.unique())]
+        cond_ssds =  np.array([get_df_ssds(df) for _,df in stopdf.groupby(groups)])
     elif ssd_method == 'central':
-        mean_cond_ssd_df = stopdf.pivot_table('ssd', index='idx', columns=conds)
+        if conds==[]:
+            mean_cond_ssd_df = stopdf.groupsby('idx').mean()['ssd']
+        else:
+            mean_cond_ssd_df = stopdf.pivot_table('ssd', index='idx', columns=conds)
         cond_ssds = list(mean_cond_ssd_df.values)
 
     ssds = [np.sort(np.vstack(ssds))*scale for ssds in cond_ssds]
@@ -430,81 +433,6 @@ def resize(arr, lower=0.0, upper=1.0):
     arr *= (upper - lower) / arr.max()
     arr += lower
     return arr
-
-def get_observed_vector(rt, quantiles=array([10, 30, 50, 70, 90])):
-    """ takes array of rt values and returns binned counts (trials
-    that fall between each set of quantiles in quantiles). also returns
-    the total number of observations (len(rt)) and the RT values at those
-    quantiles (rtquant)
-    """
-    inter_quantiles = array([quantiles[0] - 0] + [quantiles[i] - quantiles[i - 1] for i in range(1, len(quantiles))] + [100 - quantiles[-1]])
-    rtquant = mq(rt, prob=quantiles * .01)
-    ocounts = np.ceil((inter_quantiles) * .01 * len(rt)).astype(int)
-    n_obs = np.sum(ocounts)
-    return [ocounts, rtquant, n_obs]
-
-def get_expected_vector(simrt, obsinfo):
-    """ calculates the expected frequencies of responses for a
-    set of simulated RTs, given. obsinfo is output of
-    get_observed_vector() -->  [ocounts, rtquant, n_obs]
-    simrt = pd.Series(simrt)
-    """
-    counts, q, n_obs = obsinfo[0], obsinfo[1], obsinfo[2]
-    first = array([len(simrt[simrt.between(simrt.min(), q[0])]) / len(simrt)]) * n_obs
-    middle = array([len(simrt[simrt.between(q[i - 1], q[i])]) / len(simrt) for i in range(1, len(q))]) * n_obs
-    last = array([len(simrt[simrt.between(q[-1], simrt.max())]) / len(simrt)]) * n_obs
-    expected = np.ceil(np.hstack([first, middle, last]))
-    return expected
-
-def ssrt_calc(df, avgrt=.3):
-    dfstp = df.query('ttype=="stop"')
-    dfgo = df.query('choice=="go"')
-    pGoErr = ([idf.response.mean() for ix, idf in dfstp.groupby('idx')])
-    nlist = [int(pGoErr[i] * len(idf)) for i, (ix, idf) in enumerate(df.groupby('idx'))]
-    GoRTs = ([idf.rt.sort(inplace=False).values for ix,idf in dfgo.groupby('idx')])
-    ssrt_list = ([GoRTs[i][nlist[i]] for i in np.arange(len(nlist))]) - avgrt
-    return ssrt_list
-
-def get_obs_quant_counts(df, quantiles=([.10, .30, .50, .70, .90])):
-    if type(df) == pd.Series:
-        rt = df.copy()
-    else:
-        rt = df.rt.copy()
-    inter_quantiles = [quantiles[0] - 0] + [quantiles[i] - quantiles[i - 1] for i in range(1, len(quantiles))] + [1.00 - quantiles[-1]]
-    obs_quant = mq(rt, prob=quantiles)
-    observed = np.ceil((inter_quantiles) * len(rt) * .94).astype(int)
-    return observed, obs_quant
-
-def get_exp_counts(simdf, obs_quant, n_obs, quantiles=([.10, .30, .50, .70, .90])):
-    if type(simdf) == pd.Series:
-        simrt = simdf.copy()
-    else:
-        simrt = simdf.rt.copy()
-    exp_quant = mq(simrt, prob=quantiles)
-    oq = obs_quant
-    expected = np.ceil(np.diff([0] + [pscore(simrt, oq_rt) * .01 for oq_rt in oq] + [1]) * n_obs)
-    return expected, exp_quant
-
-def pwts_group_error_calc(handler):
-    """ get stdev across subjects (and any conds) in observedDF
-    weight perr by inverse of counts for each resp. probability measure
-    previously a bound method of dfhandler --> DataHandler class
-    """
-    groupedDF = handler.observedDF.groupby(handler.conds)
-    perr = groupedDF.agg(np.nanstd).loc[:, handler.p_cols].values
-    counts = groupedDF.count().loc[:, handler.p_cols].values
-    nsplits = handler.nlevels * handler.nconds
-    ndata = len(handler.p_cols)
-    # replace stdev of 0 with next smallest value in vector
-    perr[perr==0.] = perr[perr>0.].min()
-    p_wt_bycount = perr * (1./counts)
-    # set wts equal to ratio --> median_perr / all_perr_values
-    pwts_ratio = np.nanmedian(p_wt_bycount, axis=1)[:, None] / p_wt_bycount
-    # set extreme values to max_wt arg val
-    pwts_ratio[pwts_ratio >= handler.max_wt] = handler.max_wt
-    # shape pwts_ratio to conform to wtsDF
-    idx_pwts = np.array([pwts_ratio]*handler.nidx)
-    return idx_pwts.reshape(handler.nidx * nsplits, ndata)
 
 def get_intersection(iter1, iter2):
     """ get the intersection of two iterables ("items in-common")

@@ -26,7 +26,7 @@ cool = cdict['cool']
 slate = cdict['slate']
 
 
-def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), err=None, clrs=None, save=False, bw='scott', savestr=None, same_axis=True, lbls=None, cumulative=True, suppressLegend=False, hist=False, kde=True,  shade=True, norm_hist=True, data=None, simData=None, plot_error_rts=True, figure=None):
+def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.1), err=None, clrs=None, save=False, bw='scott', savestr=None, same_axis=True, lbls=None, cumulative=True, suppressLegend=False, hist=False, kde=True,  shade=True, norm_hist=True, data=None, simData=None, plot_error_rts=True, figure=None):
     """ main plotting function for displaying model fit predictions over data
     """
     if np.ndim(y)==1:
@@ -46,7 +46,7 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.array([.05,.1,.
         ax1, ax2, ax3 = axes
     elif same_axis:
         f, axes = plt.subplots(1, ncols, figsize=(figwidth, 4.3))
-        ax1, ax2, ax3 = axes
+        axes = axes.reshape(nlevels, ncols)
     else:
         f, axes = plt.subplots(nlevels, ncols, figsize=(figwidth, 4*nlevels))
         axes = axes.reshape(nlevels, ncols)
@@ -65,17 +65,18 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.array([.05,.1,.
         plot_acc = plot_stop_fit_single
         if ssderr is None:
             ssderr = [np.array([0])]*nlevels
+        print('1 ssd')
 
     saccErr, quantErr = [None]*2
 
     for i in range(nlevels):
-        if not same_axis:
-            if plot_error_rts:
-                ax1, ax2, ax3 = axes[i]
-            else:
-                ax1, ax2 = axes[i]
-
-        qAxes = np.array([ax2,ax3])
+        # if not same_axis:
+        if plot_error_rts:
+            ax1, ax2, ax3 = axes[i]
+            qAxes = np.array([ax2,ax3])
+        else:
+            ax1, ax2 = axes[i]
+            qAxes = np.array([ax2])
         sacc, quant = unpack_vector(y[i], nlevels=nlevels, nquant=nquant, nssd=nssd)
         saccHat, quantHat = unpack_vector(yhat[i], nlevels=nlevels, nquant=nquant, nssd=nssd)
 
@@ -98,14 +99,14 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.array([.05,.1,.
             qpcHatX, qpcHatCurve = analyze.fit_logistic(qpcHat, quantiles)
             ax2.errorbar(quant[0], quantiles, xerr=quantErr[0], marker='o', color=clrs[i], ms=6.5, linewidth=0, elinewidth=2.)
             ax2.plot(qpcHatX, qpcHatCurve, linewidth=2, color=clrs[i])
-            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=9, mew=0, alpha=.12, mfc=clrs[i], mec=clrs[i], color=clrs[i])
-            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=9, mew=1.5, alpha=.6, mfc='none', mec=clrs[i])
-
-            qpeHatX, qpeHatCurve = analyze.fit_logistic(qpeHat, quantiles)
-            ax3.errorbar(quant[1], quantiles, xerr=quantErr[1], marker='o', color=clrs[i], ms=6.5, linewidth=0, elinewidth=2.)
-            ax3.plot(qpeHatX, qpeHatCurve, linewidth=2, color=clrs[i])
-            ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=9, mew=0, alpha=.12, mfc=clrs[i], mec=clrs[i], color=clrs[i])
-            ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=9, mew=1.5, alpha=.6, mfc='none', mec=clrs[i])
+            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=10, mew=0, alpha=.1, mfc=clrs[i], mec=clrs[i], color=clrs[i])
+            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=clrs[i])
+            if plot_error_rts:
+                qpeHatX, qpeHatCurve = analyze.fit_logistic(qpeHat, quantiles)
+                ax3.errorbar(quant[1], quantiles, xerr=quantErr[1], marker='o', color=clrs[i], ms=6.5, linewidth=0, elinewidth=2.)
+                ax3.plot(qpeHatX, qpeHatCurve, linewidth=2, color=clrs[i])
+                ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=10, mew=0, alpha=.1, mfc=clrs[i], mec=clrs[i], color=clrs[i])
+                ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=clrs[i])
 
         format_rt_axes(qAxes, cdf=cumulative, yhat=yhat, quantiles=quantiles)
         if nssd==1:
@@ -170,10 +171,10 @@ def plot_stop_curve_predicted(y, x=None, label=None, alpha=1., color='k', ax=Non
         x = np.linspace(.250, .50, len(y))
     # xsim, ysim = analyze.fit_sigmoid(x, y)
     xsim, ysim = analyze.fit_logistic(x[::-1], y)
-    ax.plot(x, y, lw=0., marker='o', ms=9, mew=0, alpha=.12, mfc=color, mec=color)
-    ax.plot(x, y, lw=0., marker='o', ms=9, mew=1.5, alpha=.6, mfc='none', mec=color)
-    ax.plot(xsim[::-1], ysim, lw=2., color=color, alpha=alpha, linestyle='-')
-    ax.plot(x[0], y[0], lw=2., marker='o', ms=9, mew=1.5, alpha=.8, mfc='none', mec=color, label=label, color=color)
+    ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.5, alpha=.1, mfc=color, mec=color)
+    ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=color)
+    ax.plot(xsim[::-1], ysim, lw=2., color=color, alpha=1, linestyle='-')
+    ax.plot(x[0], y[0], lw=2., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=color, label=label, color=color)
     if get_pse:
         PSEix = (np.abs(ysim - .5)).argmin()
         return xsim[PSE]
@@ -182,7 +183,7 @@ def plot_stop_curve_predicted(y, x=None, label=None, alpha=1., color='k', ax=Non
 
 
 
-def plot_quantiles(data, axes=None, clr=None, lbl=None, bw='scott', alpha=1., cumulative=True, hist=False, kde=True, shade=True, norm_hist=True, same_axis=False, ms=6.5, mcolor=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95])):
+def plot_quantiles(data, axes=None, clr=None, lbl=None, bw='scott', alpha=1., cumulative=True, hist=False, kde=True, shade=True, norm_hist=True, same_axis=False, ms=6.5, mcolor=None, quantiles=np.arange(.1, 1.,.1)):
     goData=data[data.response==1]
     cor = goData[goData['acc']==1]
     err = goData[goData['acc']==0]
@@ -207,7 +208,7 @@ def plot_quantiles(data, axes=None, clr=None, lbl=None, bw='scott', alpha=1., cu
 
 
 
-def plot_rt_cdf(data, ax=None, clr='blue', mcolor=None, lbl=None, alpha=1., ms=6.5, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), lw=2., mew=1., bw='scott'):
+def plot_rt_cdf(data, ax=None, clr='blue', mcolor=None, lbl=None, alpha=1., ms=6.5, quantiles=np.arange(.1, 1.,.1), lw=2., mew=1., bw='scott'):
     data = data.copy()
     if 'idx' not in data.columns:
         data['idx'] = 1
@@ -239,48 +240,18 @@ def plot_stop_fit_single(y, yhat, yerr=None, x=0, xerr=None, ax=None, linestyles
         label = ['Data', 'Model']
     else:
         label = [label, None]
-
     y = y[1]; yerr=yerr[1]; yhat=yhat[1]
     yline = np.linspace(y-yerr, y+yerr, 4)
+    xline = np.ones(yline.size)*x
 
     ax.plot(x, y, marker='o', ms=6.5, color=color, label=label[0], linewidth=0)
-    ax.fill_betweenx(yline, x-xerr, x+xerr, alpha=.2, color=color)
-    ax.plot(x, yhat, marker='o', ms=9, mew=1.5, alpha=.6, mfc='none', mec=color, label=label[1], lw=0)
-    ax.plot(x, yhat, marker='o', ms=9, mew=0, alpha=.12, mfc=color, mec=color)
+    ax.fill_betweenx(yline, xline-xerr, xline+xerr, alpha=.25, color=color)
+    ax.plot(x, yhat, marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=color, label=label[1], lw=0)
+    ax.plot(x, yhat, marker='o', ms=10, mew=0, alpha=.1, mfc=color, mec=color)
 
     ax.legend(loc=0)
     plt.tight_layout()
     ax.set_ylim(0, 1)
-
-# def plot_stop_fit_single(data=[], dataHat=[], err=None, ssd=None, ax=None, linestyles=None, color=None, label=None, xtls=['Go', 'Stop'], ssdlabels=False, **kwargs):
-#     """ plotting function for displaying model-predicted
-#     stop probability (at mean SSD) on top of empirical estimates
-#     (used when data is collected using tracking procedure to est. SSRT)
-#     """
-#     if err is None:
-#         err = [np.zeros(len(dat)) for dat in data]
-#     if ax is None:
-#         f, ax = plt.subplots(1, figsize=(5.5, 6))
-#     if color is None:
-#         color = slate(len(data))
-#     if linestyles is None:
-#         linestyles = ['-', '--'] * len(data)
-#     x = np.arange(2, dtype='float')
-#     if ssd is not None:
-#         ssdstr = "SSD={:.0f}ms".format(ssd.mean(axis=0)*1e3)
-#         labels[0] = ' '.join([labels[0], ssdstr])
-#         xtls = ['Go', 'Stop']
-#
-#     ax.errorbar(x, data, yerr=err, linestyle='-', lw=1.5, elinewidth=1.5, color=color, marker='o', ms=5, label=label)
-#     xjit = x + (1*.02)
-#     ax.plot(xjit, dataHat, lw=0, marker='o', ms=10, mfc='none', mec=color, mew=1.7)
-#
-#     plt.setp(ax, xticks=x, xlim=(-0.25, 1.25), xticklabels=xtls, ylim=(-.01, 1.05), yticks=np.arange(0, 1.2, .2))
-#     ax.set_ylabel('Percent Correct');
-#     ax.legend(loc=0)
-#
-#     sns.despine()
-#     plt.tight_layout()
 
 
 
@@ -337,12 +308,12 @@ def format_rtPDF_axes(axes, cor, err):
 
 
 
-def format_rt_axes(axes, cdf=True, yhat=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95])):
+def format_rt_axes(axes, cdf=True, yhat=None, quantiles=np.arange(.1, 1.,.1)):
     if yhat is not None:
         rtqList = [unpack_vector(yh, nquant=quantiles.size)[1:] for yh in yhat]
         corquant = np.hstack(np.vstack(rtqList)[:, 0, :])
         errquant = np.hstack(np.vstack(rtqList)[:, 1, :])
-        xxticks = [np.linspace(np.nanmin(rtq)*.97, np.nanmax(rtq)*1.06, 5) for rtq in [corquant, errquant]]
+        xxticks = [np.linspace(np.nanmin(rtq)*.93, np.nanmax(rtq)*1.07, 5) for rtq in [corquant, errquant]]
         xxticks = [np.array([np.round(xt, 2) for xt in xxt]) for xxt in xxticks]
         xxtls = [np.array([int(xtl*1000) for xtl in xxt]) for xxt in xxticks]
         xxlim = [(xxt[0], xxt[-1]) for xxt in xxticks]
@@ -357,7 +328,7 @@ def format_rt_axes(axes, cdf=True, yhat=None, quantiles=np.array([.05,.1,.2,.3,.
         ydata = np.hstack([np.hstack([l.get_ydata() for l in ax.lines]) for ax in axes])
         yyticks = np.array([0, np.nanmax(ydata)*1.05])
         yyticks = np.array([int(np.round(yt)) for yt in yyticks])
-        yylim=(0, yyticks[-1]);
+        yylim=(-.02, yyticks[-1]);
         ylabel = 'Probability Mass'
     xlabels = ['Correct RT (ms)', 'Error RT (ms)']
     for i, ax in enumerate(axes):
@@ -368,10 +339,12 @@ def format_rt_axes(axes, cdf=True, yhat=None, quantiles=np.array([.05,.1,.2,.3,.
             plt.setp(ax, xlabel='')
     if not cdf:
         axes[0].set_yticklabels(yyticks)
-        axes[1].set_yticklabels([], fontsize=.05)
+        if len(axes)>1:
+            axes[1].set_yticklabels([], fontsize=.05)
     else:
         axes[0].set_yticklabels([], fontsize=.05)
-        axes[1].set_yticklabels([], fontsize=.05)
+        if len(axes)>1:
+            axes[1].set_yticklabels([], fontsize=.05)
     axes[0].set_ylabel(ylabel, fontsize=17)
     plt.tight_layout()
     sns.despine()
@@ -425,11 +398,11 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
 
 
 
-def plot_param_distributions(p, nsamples=1000, mu=None, sigma=None, force_normal=False):
+def plot_param_distributions(p=['a', 'sso', 'ssv', 'tr', 'v', 'xb'], n=2000, mu=None, sigma=None, force_normal=False):
     from radd import theta
     pkeys = np.sort(list(p))
     nparams = pkeys.size
-    p_dists = theta.random_inits(pkeys=pkeys, ninits=nsamples, mu=mu, sigma=sigma, force_normal=force_normal)
+    p_dists = theta.random_inits(pkeys=pkeys, ninits=n, mu=mu, sigma=sigma, force_normal=force_normal)
     clrs = colors.param_color_map('all')
     lbls = {pk: parameter_name(pk,True) for pk in pkeys}
     ncols = np.ceil(nparams/2.).astype(int)
@@ -485,6 +458,7 @@ def parameter_name(param, tex=False):
         'tr': ['Onset', '$tr$'],
         'xb': ['Dynamic Gain', '$\gamma$'],
         'sso': ['Brake Onset', '$so_{B}$'],
+        'v_ssv': ['Drift Ratio', '$v_{E}/v_{B}$'],
         'aG': ['Alpha+', '$\\alpha^+$'],
         'aErr': ['Alpha-', '$\\alpha^-$'],
         'A': ['Alpha', '$\\beta$'],
@@ -492,91 +466,8 @@ def parameter_name(param, tex=False):
         'R': ['Rho', '$\\rho$'],
         'flat': ['Flat', 'Flat'],
         'all': ['Flat', 'Flat']}
-    if '_' in param:
+    if '_' in param and param!='v_ssv':
         param = param.split('_')
     if isinstance(param, list):
         return ' $&$ '.join([param_name[p][ix] for p in param])
     return param_name[param][ix]
-
-
-# def plot_stop_acc(data, ax, clr='blue', lbl=None, alpha=1.):
-#     if ax is None:
-#         f, ax = plt.subplots(1, figsize=(5, 4))
-#     if 'probe' in data.columns:
-#         ssdata = data[data.probe==1]
-#     ssdata= data[data.sstrial==1].copy()
-#     saccdf = ssdata.groupby('ssd').mean().reset_index()
-#     sacc_errdf = ssdata.groupby('ssd').sem().reset_index()*1.96
-#     sacc = saccdf['acc'].values
-#     sacc_err = sacc_errdf['acc'].values
-#     ssd = np.sort(ssdata['ssd'].unique()*.001)
-#     plot_stop_data(sacc, x=ssd, err=sacc_err, color=clr, label=lbl, ax=ax, alpha=alpha, fitplot=False)
-#     ax.legend()
-
-# def plot_quantiles_fit(qdata, qhat, err=None, axes=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), bw=.009, alpha=.6, ms=7, mew=1, color='k', cumulative=True):
-#     """ plotting function for displaying model-predicted RT quantiles
-#     for correct and error trials over empirical estimates
-#     """
-#     if axes is None:
-#         f, axes = plt.subplots(1, np.ndim(q), figsize=(8, 3))
-#     plot_quantiles_data(qdata, err=err, quantiles=quantiles, color=color, axes=axes, bw=bw, ms=6, alpha=1., mew=0, cumulative=cumulative)
-#     plot_quantiles_predicted(qhat, quantiles=quantiles, color=color, axes=axes, bw=bw, ms=ms, alpha=alpha, mew=mew, cumulative=cumulative)
-#     sns.despine()
-#
-# def plot_quantiles_data(q, err=None, axes=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), bw=.009, alpha=1., ms=6.5, mew=1, color='k', cumulative=True, lw=0):
-#     """
-#     PLOT empirical RT quantiles
-#     """
-#     if axes is None:
-#         f, axes = plt.subplots(1, np.ndim(q), figsize=(8, 3))
-#     for i, ax in enumerate(axes.flatten()):
-#         if err is not None:
-#             ax.errorbar(q[i], quantiles, xerr=err[i], color=color, mec=color, linewidth=lw, marker='o', ms=ms, alpha=1., elinewidth=2, capsize=0)
-#         else:
-#             ax.plot(q[i], quantiles, mec=color, linewidth=lw, marker='o', ms=ms, mfc=color, alpha=alpha)
-#         sns.despine()
-#     return axes
-#
-# def plot_quantiles_predicted(q, axes=None, quantiles=np.array([.05,.1,.2,.3,.4,.5,.6,.7,.8,.9,.95]), bw=.009, alpha=.9, ms=7.5, mew=1, color='k', cumulative=True, lw=0):
-#     """
-#     PLOT model-estimated RT quantiles
-#     """
-#     if axes is None:
-#         f, axes = plt.subplots(1, np.ndim(q), figsize=(8, 3))
-#     for i, ax in enumerate(axes.flatten()):
-#         rtSim = analyze.kde_fit_quantiles([q[i]], bw=bw)
-#         clip = (q[i].min()*.96, q[i].max()*1.04)
-#         sns.kdeplot(rtSim, cumulative=cumulative, color=color, ax=ax, linewidth=2, linestyle='-', bw=bw, alpha=alpha, clip=clip)
-#         ax.plot(q[i], quantiles, mec=color, linewidth=lw, marker='o', ms=8, mfc='none', mew=1.35, alpha=1.)
-#         sns.despine()
-#     return axes
-
-
-# def plot_data(data, conds=None, save=False, bw=.009, savestr=None, cumulative=True, blockrts=False, nblocks=10, cutblocks=5, clrs=None, hist=False, kde=True, shade=True, norm_hist=True):
-#     """ main plotting function for displaying model fit predictions over data
-#     """
-#     f, axes = plt.subplots(1, 3, figsize=(13, 4.6))
-#     if blockrts:
-#         data = blockify_trials(data, nblocks=nblocks)
-#         col = 'block{}'.format(nblocks)
-#         data = data[data[col]>=cutblocks]
-#     if clrs is None:
-#         clrs = colors.assorted_list()
-#     i=0
-#     if conds is None:
-#         data = data.copy()
-#         conds = ['xcond']
-#         data['xcond'] = 'Average'
-#     for cond in conds:
-#         lvls = data[cond].unique()
-#         for lvl in lvls:
-#             cdf = data[data[cond]==lvl]
-#             plot_stop_acc(cdf, axes[0], clr=clrs[i], lbl=lvl.capitalize())
-#             plot_quantiles(cdf, axes[1:], clr=clrs[i], lbl=lvl.capitalize(), kde=kde, hist=hist, shade=shade, norm_hist=norm_hist, bw=bw, cumulative=cumulative)
-#             i+=1
-#     if save:
-#         if savestr is None:
-#             savestr = fitparams.model_id
-#         plt.savefig('.'.join([savestr, 'png']), dpi=600)
-#         if fitparams.fit_on=='subjects':
-#             plt.close('all')
