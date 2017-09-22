@@ -146,7 +146,6 @@ class Simulator(object):
         dx = si * np.sqrt(self.dt)
         vProb = .5 * (1 + (v * np.sqrt(self.dt))/si)
         vsProb = .5 * (1 + (ssv * np.sqrt(self.dt))/si)
-
         # above equations give same as:
         #     s2 = si**2
         #     dx = np.sqrt(s2 * self.dt)
@@ -216,6 +215,7 @@ class Simulator(object):
         theta = theta[self.allparams]
         return theta
 
+
     def set_pconstant_values_matrix(self, pdict):
         theta = self.complete_allparams_pdict(pdict)
         pmatrix_ix = self.pmatrix.copy()
@@ -225,6 +225,7 @@ class Simulator(object):
                 continue
             pmatrix_vals.loc[:, p] = pmatrix_ix.loc[:, p] + theta[p]
         self.pmatrix_vals = pmatrix_vals
+
 
     def pvary_broadcast_arrays(self, pmatrix):
         index = pmatrix.index.values

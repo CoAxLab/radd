@@ -42,11 +42,11 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.
         figwidth = 13
 
     if figure is not None:
-        f, axes = figure, figure.axes
-        ax1, ax2, ax3 = axes
+        f = figure
+        axes = np.asarray(f.axes).reshape(1, ncols)
     elif same_axis:
         f, axes = plt.subplots(1, ncols, figsize=(figwidth, 4.3))
-        axes = axes.reshape(nlevels, ncols)
+        axes = axes.reshape(1, ncols)
     else:
         f, axes = plt.subplots(nlevels, ncols, figsize=(figwidth, 4*nlevels))
         axes = axes.reshape(nlevels, ncols)
@@ -65,17 +65,18 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.
         plot_acc = plot_stop_fit_single
         if ssderr is None:
             ssderr = [np.array([0])]*nlevels
-        print('1 ssd')
 
     saccErr, quantErr = [None]*2
 
     for i in range(nlevels):
-        # if not same_axis:
+        ax_ix = i
+        if same_axis:
+            ax_ix = 0
         if plot_error_rts:
-            ax1, ax2, ax3 = axes[i]
+            ax1, ax2, ax3 = axes[ax_ix]
             qAxes = np.array([ax2,ax3])
         else:
-            ax1, ax2 = axes[i]
+            ax1, ax2 = axes[ax_ix]
             qAxes = np.array([ax2])
         sacc, quant = unpack_vector(y[i], nlevels=nlevels, nquant=nquant, nssd=nssd)
         saccHat, quantHat = unpack_vector(yhat[i], nlevels=nlevels, nquant=nquant, nssd=nssd)

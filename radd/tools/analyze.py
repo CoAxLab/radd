@@ -157,8 +157,8 @@ def idx_acc_weights(data, conds=['flat'], ssd_method='all'):
         _ = index.remove(split_by)
     df['n'] = 1
     countdf = df.pivot_table('n', index=index, columns=split_by, aggfunc=np.sum)
-    #idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
-    idx_pwts = countdf.values / countdf.median(axis=0).values
+    idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
+    # idx_pwts = countdf.values / countdf.median(axis=0).values
     if ssd_method=='all':
         go_wts = np.ones(countdf.shape[0])
         idx_pwts = np.concatenate((go_wts[:,None], idx_pwts), axis=1)

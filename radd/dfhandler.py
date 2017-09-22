@@ -13,7 +13,7 @@ from itertools import product
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=2.):
+    def __init__(self, model, max_wt=2.5):
         self.model = model
         self.data = model.data
         self.inits = model.inits
@@ -85,7 +85,7 @@ class DataHandler(object):
         odf_header = self.make_headers()
         data = self.data.copy()
         ssdmethod = self.ssd_method
-        self.grpData = data.groupby(np.hstack([self.conds, 'idx']).tolist())
+        self.grpData = data.groupby(np.hstack(['idx', self.conds]).tolist())
         datdf = self.grpData.apply(analyze.rangl_data, ssdmethod, self.quantiles).sortlevel(0)
         # self.datdf = datdf
         groupvalues = datdf.reset_index()[self.groups].values
@@ -96,9 +96,18 @@ class DataHandler(object):
         for rowi in self.observedDF.index.values:
             # fill observedDF one row at a time, using idx_rows
             self.observedDF.loc[rowi, self.idx_cols[rowi]] = datdf.values[rowi]
-        observed_err = self.observedDF.groupby(self.conds).sem()*1.96
-        self.observed_err = observed_err.loc[:, 'acc':].values.squeeze()
 
+        if self.bwfactors is not None and self.model.fit_on=='subjects':
+            bwix = self.observedDF[self.groups].columns.size
+            bwunique = [self.data[self.data.idx==idx][self.bwfactors].unique() for idx in self.idx]
+            bwcast = np.hstack([np.tile(bw, self.nlevels) for bw in bwunique])
+            self.observedDF.insert(bwix, self.bwfactors, bwcast)
+            self.wtsDF.insert(bwix, self.bwfactors, bwcast)
+            errdf = self.observedDF.groupby(self.conds+[self.bwfactors]).sem()*2.
+            self.observedErr = errdf.reset_index()[self.observedDF.columns[1:]]
+        else:
+            errdf = self.observedDF.groupby(self.conds).sem()*2
+            self.observedErr = errdf.reset_index()[self.observedDF.columns[1:]]
 
     def make_wts_df(self):
         """ calculate and store cost_function weights
@@ -116,7 +125,7 @@ class DataHandler(object):
                 wts_numeric = wtsDF.loc[:, 'acc':]
                 wtsDF.loc[:, 'acc':] = wts_numeric.apply(analyze.fill_nan_vals, axis=1)
             except Exception:
-                print("Unable to calculate cost f(x) weights")
+                print("Unable to calculate cost f(x) weights, setting all w=1.")
                 wtsDF.loc[:, self.p_cols+self.q_cols] = 1.
         else:
             wtsDF.loc[:, self.p_cols+self.q_cols] = 1.

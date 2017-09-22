@@ -38,11 +38,11 @@ class Model(RADDCore):
 
     def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, learn=False, bwfactors=None, custompath=None, ssdelay=False, quantiles=np.arange(.1, 1.,.1)):
 
-        # quantiles=np.arange(.1, 1.,.1)
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, ssdelay=ssdelay)
 
 
-    def optimize(self, plotfits=True, saveplot=False, saveresults=True, custompath=None, progress=True):
+
+    def optimize(self, plotfits=False, saveplot=False, saveresults=False, custompath=None, progress=True, get_results=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         ::Arguments::
@@ -64,25 +64,31 @@ class Model(RADDCore):
         self.custompath=custompath
 
         if self.fit_on == 'subjects':
-            self.fitdf, self.poptdf, self.yhatdf = self.optimize_idx_params()
+            finfo, popt, yhat = self.optimize_idx_params()
+            if plotfits:
+                self.plot_model_idx_fits(save=saveplot)
 
         else:
-            self.set_fitparams(ix=ix, force='flat', nlevels=1)
-            flat_popt = self.optimize_flat(self.param_sets)
+            self.set_fitparams(force='flat', nlevels=1)
+            finfo, popt, yhat = self.optimize_flat(get_results=True)
 
             if not self.is_flat:
-                self.set_fitparams(ix=ix, force='cond')
-                self.optimize_conditional(flat_popt)
+                finfo, popt, yhat = self.optimize_conditional(popt, get_results=True)
 
             if plotfits:
                 self.plot_model_fits(save=saveplot)
 
-        if progress and not self.is_nested:
-            self.opt.gbar.clear()
+        if progress:
+            if self.fit_on=='subjects':
+                self.idxbar.clear()
             self.opt.ibar.clear()
+            self.opt.gbar.clear()
+
+        if get_results:
+            return finfo, popt, yhat
 
 
-    def optimize_flat(self, param_sets=None):
+    def optimize_flat(self, param_sets=None, get_results=False):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
             None
@@ -104,10 +110,12 @@ class Model(RADDCore):
         self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=gpopt)
         if self.is_flat:
             self.write_results()
+        if get_results:
+            return self.finfo, self.popt, self.yhat
         return self.popt
 
 
-    def optimize_conditional(self, flatp, hop=False):
+    def optimize_conditional(self, flatp, hop=False, get_results=False):
         """ optimizes full model to all conditions in data
         ::Arguments::
             None
@@ -127,7 +135,8 @@ class Model(RADDCore):
             self.opt.update(inits=gpopt)
         # Final Simplex Optimization
         self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=gpopt)
-        # self.write_results()
+        if get_results:
+            return self.finfo, self.popt, self.yhat
 
 
     def nested_optimize(self, models=[], flatp=None, saveplot=True, plotfits=True, custompath=None, progress=False, saveresults=True, saveobserved=False):
@@ -192,6 +201,31 @@ class Model(RADDCore):
         self.fitdf = self.handler.fill_fitdf(finfo=finfo, fitparams=self.fitparams)
         self.poptdf = self.handler.fill_poptdf(popt=popt, fitparams=self.fitparams)
 
+    def plot_model_idx_fits(self):
+        odf = self.observedDF.copy()
+        yhatdf = self.yhatdf.copy()
+        errdf = self.observedErr.copy()
+
+        if self.bwfactors is not None:
+            import matplotlib.pyplot as plt
+            bw = self.bwfactors
+            lvls = self.data[bw].unique()
+
+            group_y = {lvl: odf[odf[bw]==lvl].groupby(self.conds).mean().loc[:, 'acc':].values for lvl in lvls}
+            group_yhat = {lvl: yhatdf[yhatdf[bw]==lvl].groupby(self.conds).mean().loc[:, 'acc':].values for lvl in lvls}
+            group_err = {lvl: errdf[errdf[bw]==lvl].groupby(self.conds).mean().loc[:, 'acc':].values for lvl in lvls}
+
+            for lvl in lvls:
+                f, axes = plt.subplots(1, 3, figsize=(14, 4.5))
+                y = group_y[lvl]; yhat = group_yhat[lvl]; err = group_err[lvl]
+                self.plot_model_fits(y=y, yhat=yhat, err=err, figure=f)
+                f.suptitle(lvl.capitalize())
+        else:
+            y = odf.groupby(self.conds).mean().loc[:, 'acc':].values
+            yhat = yhatdf.groupby(self.conds).mean().loc[:, 'acc':].values
+            err = errdf.groupby(self.conds).mean().loc[:, 'acc':].values
+            self.plot_model_fits(y=y, yhat=yhat, err=err)
+
 
     def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw='scott', savestr=None, same_axis=True, clrs=None, lbls=None, cumulative=True, simdf=None, suppressLegend=False, simData=None, condData=None, shade=True, plot_error_rts=True, figure=None):
         """ wrapper for radd.tools.vis.plot_model_fits
@@ -214,7 +248,7 @@ class Model(RADDCore):
                 savestr = savestr + str(self.fitparams['idx'])
 
         if err is None:
-            err = self.handler.observed_err
+            err = self.observedErr.loc[:, 'acc':].values.squeeze()
 
         if lbls is None and self.fitparams.nlevels>1:
             from itertools import product
@@ -253,9 +287,7 @@ class Model(RADDCore):
         return yhat
 
 
-
-
-    def optimize_idx_params(self, param_sets=None, force=None, save=True):
+    def optimize_idx_params(self, save=True):
         """ optimize parameters for individual subjects, store results
         :: Arguments ::
             param_sets (list):
@@ -271,67 +303,52 @@ class Model(RADDCore):
         """
 
         self.iohandler = ModelIO(fitparams=self.fitparams, mname=self.model_id)
+        groups = self.handler.groups
+        bwcol = None
+        if self.bwfactors is not None:
+            groups += [self.bwfactors]
+            bwcol = [df[self.bwfactors].unique()[0] for _, df in self.data.groupby('idx')]
 
-        # subject lists
-        poptAll, yhatAll, finfoAll = [], [], []
-        if self.opt.param_sets is None and param_sets is None:
-            self.opt.sample_param_sets()
+        metadata = self.observedDF[groups]
 
+        # fit result lists for each param set
+        finfoList, poptList, yhatList = [], [], []
         for ix, idx in enumerate(self.idx):
 
             if hasattr(self, 'idxbar'):
-                self.idxbar.update(value=ix, status=ix)
+                self.idxbar.update(value=ix, status=ix+1)
             # set subject data & wts
-            self.set_fitparams(ix=ix, force=force)
-            nl = self.fitparams.nlevels
-            if nl==1:
-                params = self.opt.filter_params()
-            else:
-                print("must provide list of flat popt dicts for conditional models")
-                exit(0)
+            self.set_fitparams(ix=ix, force='flat', nlevels=1)
+            # optimize constants (flat model)
+            finfo, popt, yhat = self.optimize_flat(get_results=True)
+            flatPopt = {p: popt[p] for p in list(depends_on)}
+            # optimize conditional parameters
+            if not self.is_flat:
+                self.set_fitparams(force='cond')
+                finfo, popt, yhat = self.optimize_conditional(popt, get_results=True)
+                yhat = yhat.reshape(self.nlevels, -1)
+                for p in list(self.depends_on):
+                    popt[p] = flatPopt[p]
 
-            # fit result lists for each param set
-            poptList, yhatList, finfoList, fminList = [], [], [], []
-            for i, pdict in enumerate(params):
+            # store results
+            finfoList.append(finfo)
+            poptList.append(deepcopy(popt))
+            yhatList.append(pd.DataFrame(yhat))
+            self.yhatlist = yhatList
 
-                # reset global pbar
-                if self.opt.progress:
-                    self.opt.make_progress_bars(inits=False, basin=True)
+        # concatenate all subjects together into single fitdf, poptdf, & yhatdf
+        fitdf = pd.concat(finfoList, axis=1).T
+        poptdf = pd.DataFrame.from_dict(poptList)
+        poptdf.insert(0, 'idx', self.idx)
+        yhatdf = pd.concat([metadata, pd.concat(yhatList, ignore_index=True)], axis=1)
+        yhatdf = yhatdf.rename(columns=dict(zip(yhatdf.columns, self.observedDF.columns)))
+        if self.bwfactors is not None:
+            poptdf.insert(1, self.bwfactors, bwcol)
+            fitdf.insert(1, self.bwfactors, bwcol)
 
-                # set fixed parameters
-                self.popt = deepcopy(pdict)
-                self.opt.update(inits=pdict)
-                # global optimization of conditional parameters
-                gpopt, gfmin = self.opt.optimize_global(pdict)
-                # run gradient descent on globally optimized params
-                finfo, popt, yhat = self.opt.gradient_descent(gpopt)
-
-                # store results
-                finfo['pset'] = i
-                finfoList.append(finfo)
-                poptList.append(deepcopy(popt))
-                yhatList.append(pd.DataFrame(yhat.reshape(nl, -1)))
-                fminList.append(finfo.chi)
-                #clear pbars
-                self.opt.gbar.clear()
-
-            # make results dataframes for subject ix
-            fitdf = pd.concat(finfoList, axis=1).T
-            poptdf = pd.DataFrame.from_dict(poptList)
-            poptdf['fmin'] = fminList
-            yhatdf = pd.concat(yhatList)
-
-            if force=='cond':
-                yhatdf = self.iohandler.format_yhatdf(yhatdf, param_sets)
-
-            # store subject results dataframes in lists
-            finfoAll.append(fitdf); poptAll.append(poptdf); yhatAll.append(yhatdf)
-            # concatenate all subjects together into single fitdf, poptdf, & yhatdf
-            fitdf, poptdf, yhatdf = [pd.concat(dfList) for dfList in [finfoAll, poptAll, yhatAll]]
-            self.iohandler.save_model_results(fitdf, poptdf, yhatdf, write=save)
-            fitdf, poptdf, yhatdf = self.iohandler.read_model_results()
-
-        return fitdf, poptdf, yhatdf
+        self.iohandler.save_model_results(fitdf, poptdf, yhatdf, write=save)
+        self.fitdf, self.poptdf, self.yhatdf = self.iohandler.read_model_results()
+        return self.fitdf, self.poptdf, self.yhatdf
 
 
 
@@ -369,15 +386,9 @@ class ModelIO(object):
         if fitdf is not None:
             self.fitdf = fitdf
         if poptdf is not None:
-            try:
-                self.poptdf = self.format_poptdf(poptdf)
-            except Exception:
-                self.poptdf = poptdf
+            self.poptdf = poptdf
         if yhatdf is not None:
-            try:
-                self.yhatdf = self.format_yhatdf(yhatdf)
-            except Exception:
-                self.yhatdf = yhatdf
+            self.yhatdf = yhatdf
         if write:
             for pth in self.paths:
                 if not os.path.isdir(pth):
@@ -391,16 +402,8 @@ class ModelIO(object):
         """ save model fitdf, poptdf, and yhatdf dataframes
         """
         self.fitdf = pd.read_csv(self.fitPath)
-        poptdf = pd.read_csv(self.poptPath)
-        yhatdf = pd.read_csv(self.yhatPath)
-        try:
-            self.poptdf = self.format_poptdf(poptdf)
-        except Exception:
-            self.poptdf = poptdf
-        try:
-            self.yhatdf = self.format_yhatdf(yhatdf)
-        except Exception:
-            self.yhatdf = yhatdf
+        self.poptdf = pd.read_csv(self.poptPath)
+        self.yhatdf = pd.read_csv(self.yhatPath)
         return self.fitdf, self.poptdf, self.yhatdf
 
 
@@ -410,63 +413,3 @@ class ModelIO(object):
         savepath = os.path.join(self.mdir, '_'.join([self.mname, savestr]) + '.png')
         plt.tight_layout()
         f.savefig(savepath, dpi=600)
-
-
-    def format_yhatdf(self, yhatdf):
-        yhatdf = yhatdf.copy()
-        nidx = self.nidx
-        nl = self.fitparams.nlevels
-        nparams = int(yhatdf.shape[0] / (nidx * nl))
-        for i, (k,v) in enumerate(self.fitparams.clmap.items()):
-            yhatdf.insert(i, k, list(v) * nidx * nparams)
-        idxVals = np.sort(np.hstack([self.idx]*(nparams*nl)))
-        yhatdf.insert(0, 'idx', idxVals)
-        pN = np.tile(np.sort(np.tile(np.arange(0,nparams), nl)), nidx)
-        try:
-            yhatdf.insert(1, 'pset', pN)
-        except Exception:
-            yhatdf['pset'] = pN
-        yhatdf = yhatdf.reset_index(drop=True)
-        return yhatdf
-
-
-    def format_poptdf(self, poptdf):
-        nidx = self.nidx
-        nl = self.fitparams.nlevels
-        nparams = int(poptdf.shape[0] / nidx)
-        idxVals = np.sort(np.hstack([self.idx]*nparams))
-        poptdf.insert(0, 'idx', idxVals)
-        pN = np.tile(np.sort(np.arange(1,nparams+1)), nidx)
-        poptdf.insert(1, 'pset', pN)
-        poptdf = poptdf.reset_index(drop=True)
-        return poptdf
-
-
-    # def plot_idx_fits(self, clrs=['#6C7A89'], figure=None, save=False, savestr='avgYhat'):
-    #
-    #     if not hasattr(self, 'yhatdf'):
-    #         print('Need to Save Result DataFrames\n(hint: save_model_results())')
-    #         return
-    #     m = self.model
-    #     poptdf = self.poptdf
-    #     # get avg. observed data vectors
-    #     idx_data = np.vstack(m.observed)
-    #     nl = self.fitparams.nlevels
-    #     y = idx_data.mean(0).reshape(nl,-1)
-    #     yErr = sem(idx_data, axis=0).reshape(nl,-1) * 1.96
-    #
-    #     pBest = poptdf[poptdf.fmin.isin(poptdf.groupby('idx').fmin.min().values)]
-    #     yhatBest = self.yhatdf.iloc[pBest.index.values, 3:]
-    #     yhat = yhatBest.mean().values
-    #     yhatErr = yhatBest.sem().values*1.96
-    #
-    #     # get param dict and pass to model
-    #     pnames = list(self.model.inits)
-    #     mu_popt = pBest.loc[:, pnames].mean().to_dict()
-    #     self.model.popt = deepcopy(mu_popt)
-    #
-    #     # plot avg subject fit
-    #     self.model.plot_model_fits(y=y, yhat=yhat, clrs=clrs, err=yErr, figure=figure)
-    #
-    #     if save:
-    #         self.save_fit_figure(plt.gcf(), savestr=savestr)

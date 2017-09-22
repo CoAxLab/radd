@@ -88,6 +88,7 @@ class RADDCore(object):
 
         # Group dataframe (nsubjects*nconds*nlevels x ndatapoints)
         self.observedDF = self.handler.observedDF.copy()
+        self.observedErr = self.handler.observedErr.copy()
         # list (nsubjects long) of data arrays (nconds*nlevels x ndatapoints) to fit
         self.observed = self.handler.observed
         # list of flattened data arrays (averaged across conditions)
@@ -146,7 +147,7 @@ class RADDCore(object):
                             'inits': self.inits,
                             'nlevels': 1,
                             'nidx': self.nidx,
-                            'idx': self.idx,
+                            'idx': self.idx[0],
                             'tb': self.tb}
 
             self.fitparams = pd.Series(self.fitparams)
@@ -185,8 +186,8 @@ class RADDCore(object):
             self.basinparams =  {'ninits': 3,
                                 'nsamples': 1200,
                                 'interval': 10,
-                                'T': .025,
-                                'stepsize': .1,
+                                'T': .05,
+                                'stepsize': .035,
                                 'niter': 400,
                                 'maxiter': 400,
                                 'nsuccess': 100,
@@ -321,6 +322,9 @@ class RADDCore(object):
             idx = self.idx[self.fitparams['ix']]
             # get ssd vector for fit index == ix
             ssd = self.ssdDF[self.ssdDF['idx'] == idx].groupby(self.conds).mean().values[:,1:]
+            # if self.bwfactors is not None and hasattr(self, 'sim'):
+            #     ix = self.conds.index([c for c in self.conds if c!=self.bwfactors][0])
+            #     ssd = ssd[self.sim.pvary_ix[ix]]
             self.ssd = ssd
         if self.fitparams.nlevels==1:
             # single vector (nlevels=1), don't squeeze

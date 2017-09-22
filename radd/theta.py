@@ -14,10 +14,10 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, f
     Optimizer method __hop_around__())
     """
     if mu is None:
-        mu = {'a': .25, 'tr': .3, 'v': .5, 'ssv': -.5, 'sso': .05, 'z': .1, 'xb': .01,
+        mu = {'a': .25, 'tr': .3, 'v': .5, 'ssv': -.5, 'sso': .05, 'z': .1, 'xb': .5,
             'vi': .3, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
     if sigma is None:
-        sigma = {'a': .25, 'tr': .15, 'v': .65, 'ssv': .65, 'sso': .04, 'z': .05, 'xb': 2., 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.1}
+        sigma = {'a': .2, 'tr': .15, 'v': .65, 'ssv': .5, 'sso': .035, 'z': .05, 'xb': 1., 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.1}
 
     normal_params = ['a', 'tr', 'v', 'vd', 'ssv', 'z', 'sso', 'Beta']
     uniform_params = ['vi', 'xb', 'C', 'B', 'R', 'si']
@@ -54,7 +54,7 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, f
     return rvinits
 
 
-def get_bounds(kind='dpm', a=(.1, .8), tr=(.2, .7), v=(.1, 2.5), ssv=(-2.5, -.1), sso=(.005, .1), xb=(.1, 2.5), si=(.001, .15), z=(.01, .9), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08), tb=None):
+def get_bounds(kind='dpm', a=(.1, .65), tr=(.2, .6), v=(.1, 2.), ssv=(-1.5, -.1), sso=(.005, .1), xb=(.5, 2.), si=(.001, .15), z=(.01, .9), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08), tb=None):
     """ set and return boundaries to limit search space
     of parameter optimization in <optimize_theta>
     """
