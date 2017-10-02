@@ -7,27 +7,34 @@ from copy import deepcopy
 from numpy import array
 from scipy.stats.distributions import norm, gamma, uniform
 from lmfit import Parameters as lmParameters
+from pyDOE import lhs
 
 
-def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, force_normal=False):
+def latin_hypercube(pkeys, kind='dpm', nrvs=25, tb=.65, force_normal=False):
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
     """
-    if mu is None:
-        mu = {'a': .25, 'tr': .3, 'v': .5, 'ssv': -.5, 'sso': .05, 'z': .1, 'xb': .5,
-            'vi': .3, 'vd': .5, 'C': .001, 'B':.1, 'R': .0005, 'si':.001}
-    if sigma is None:
-        sigma = {'a': .2, 'tr': .15, 'v': .65, 'ssv': .5, 'sso': .035, 'z': .05, 'xb': 1., 'vi': .4, 'vd': .5, 'C':.08, 'B':.4, 'R': .008, 'si':.1}
+    nparams = len(pkeys)
+    design = lhs(nparams, samples=nrvs, criterion='center')
+    bounds = get_bounds(kind=kind)
+    # reverse V_brake boundaries to get max negative val
+    bounds['ssv'] = (bounds['ssv'][1], bounds['ssv'][0])
+    pmax = np.array([bounds[pk][-1] for pk in pkeys])
+    design = pmax * design
+    samplesLH = {p: design[:, i] for i, p in enumerate(pkeys)}
+    return samplesLH
 
-    normal_params = ['a', 'tr', 'v', 'vd', 'ssv', 'z', 'sso', 'Beta']
-    uniform_params = ['vi', 'xb', 'C', 'B', 'R', 'si']
 
-    if 'race' in kind:
-        sigma['ssv'] = abs(mu['ssv'])
-
+def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65, force_normal=False):
+    """ sample random parameter sets to explore global minima (called by
+    Optimizer method __hop_around__())
+    """
+    loc, scale = get_theta_params(pkey, kind=kind)
     bounds = get_bounds(kind=kind)[pkey]
-    loc = mu[pkey]
-    scale = sigma[pkey]
+    lower = np.min(bounds)
+    upper = np.max(bounds)
+    normal_params = ['a', 'tr', 'v', 'vd', 'ssv', 'sso', 'xb', 'z', 'Beta']
+    uniform_params = ['vi', 'C', 'B', 'R', 'si']
 
     # init and freeze dist shape
     if pkey in normal_params:
@@ -36,38 +43,89 @@ def init_distributions(pkey, kind='dpm', mu=None, sigma=None, nrvs=25, tb=.65, f
     #     dist = gamma(1.0, loc, scale)
     elif pkey in uniform_params:
         dist = uniform(loc, scale)
-
     # generate random variates
     rvinits = dist.rvs(nrvs)
-    while rvinits.min() < bounds[0]:
+    while rvinits.min() < lower:
         # apply lower limit
         ix = rvinits.argmin()
         rvinits[ix] = dist.rvs()
-    while rvinits.max() > bounds[1]:
+    while rvinits.max() > upper:
         # apply upper limit
         ix = rvinits.argmax()
         rvinits[ix] = dist.rvs()
     if pkey =='tr':
         rvinits = np.abs(rvinits)
-    rvinits[rvinits<bounds[0]] = bounds[0]
-    rvinits[rvinits>bounds[1]] = bounds[1]
+    rvinits[rvinits<lower] = lower
+    rvinits[rvinits>upper] = upper
     return rvinits
 
 
-def get_bounds(kind='dpm', a=(.1, .65), tr=(.2, .6), v=(.1, 2.), ssv=(-1.5, -.1), sso=(.005, .1), xb=(.5, 2.), si=(.001, .15), z=(.01, .9), vd=(.1, 2.1), vi=(.1, 1.), Beta = (0.5, 5.), R=(.0001, .008), B=(.1, .4), C=(.001, .08), tb=None):
-    """ set and return boundaries to limit search space
-    of parameter optimization in <optimize_theta>
+def get_bounds(kind='dpm', tb=None):
+    """ set and return boundaries of parameter optimization space
+    ::Arguments::
+        kind (str): model type
+        tb (float): timeboundary
+    ::Returns::
+        bounds (dict): {parameter: (upper, lower)}
     """
+
+    bounds = {'a': (.25, .65),
+             'si': (.001, .15),
+             'sso': (.005, .1),
+             'ssv': (-1., -.1),
+             'tr': (0.2, 0.45),
+             'v': (.1, 1.3),
+             'xb': (.1, 1.),
+             'z': (0.01, 0.6)}
+
+    boundsRL = {'B': (.1, .4),
+                'Beta': (.5, 5.),
+                'C': (.001, .08),
+                'R': (.0001, .001),
+                'vd': (.1, 2.1),
+                'vi': (.1, 1.0)}
+
     if tb is not None:
-        tr = (tr[0], tb-0.1)
+        bounds['tr'] = (bounds['tr'][0], tb-0.1)
     if 'irace' in kind:
-        ssv = (abs(ssv[1]), abs(ssv[0]))
-    bounds = {'a': a, 'tr': tr, 'v': v, 'ssv': ssv, 'vd':vd, 'vi':vi, 'z': z,
-        'xb': xb, 'si': si, 'sso': sso, 'C': C, 'B': B, 'R': R, 'Beta': Beta}
+        mu, sigma = theta['ssv']
+        theta['ssv'] = (abs(mu), sigma)
+
+    bounds.update(boundsRL)
     return bounds
 
 
-def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None, as_list=False, force_normal=False):
+def get_theta_params(pkey, kind='dpm'):
+    """ set and return loc, scale of parameter pkey
+    ::Arguments::
+        pkey (str): parameter name to get loc and scale for sampling
+    ::Returns::
+        theta[pkey] (tuple): (loc, scale)
+    """
+    theta = {'a': (.4, .2),
+             'si': (.001, .1),
+             'sso': (.05, .035),
+             'ssv': (-.4, .4),
+             'tr': (.3, .12),
+             'v': (.6, .4),
+             'xb': (.6, .4),
+             'z': (.3, .2)}
+
+    thetaRL={'B': (.1, .4),
+             'C': (.001, .08),
+             'R': (.0005, .008),
+             'vd': (.5, .5),
+             'vi': (.3, .4)}
+
+    if 'irace' in kind:
+        mu, sigma = theta['ssv']
+        theta['ssv'] = (abs(mu), sigma)
+
+    theta.update(thetaRL)
+    return theta[pkey]
+
+
+def random_inits(pkeys, ninits=1, kind='dpm', as_list=False, force_normal=False, method='random'):
     """ random parameter values for initiating model across range of
     parameter values.
     ::Arguments::
@@ -82,8 +140,11 @@ def random_inits(pkeys, ninits=1, kind='dpm', mu=None, sigma=None, as_list=False
     if isinstance(pkeys, dict):
         pkeys = list(pkeys)
     params = {}
-    for pk in pkeys:
-        params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, mu=mu, sigma=sigma, force_normal=force_normal)
+    if method=='random':
+        for pk in pkeys:
+            params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, force_normal=force_normal)
+    elif method=='lhs':
+        params = latin_hypercube(pkeys, nrvs=ninits, kind=kind)
     if as_list:
         params = np.array([{pk: params[pk][i] for pk in pkeys} for i in range(ninits)])
     return params
@@ -147,7 +208,7 @@ def loadParameters_RL(inits, pvary, pflat, nlevels=1, kind='xdpm'):
     return lmParams
 
 
-def get_default_inits(kind='dpm', depends_on={}, learn=False, ssdelay=False):
+def get_default_inits(kind='dpm', depends_on={}, learn=False, ssdelay=False, gbase=False):
     """ if user does not provide inits dict when initializing Model instance,
     grab default dictionary of init params reasonably suited for Model kind
     """
@@ -164,6 +225,8 @@ def get_default_inits(kind='dpm', depends_on={}, learn=False, ssdelay=False):
         inits['si'] = .01
     if ssdelay:
         inits['sso'] = .08
+    if gbase:
+        inits['z'] = .1
     if learn:
         inits['C'] = .02
         inits['B'] = .15

@@ -7,4 +7,5 @@ lmfit>=0.9.1
 scikit-learn>=0.17.1
 progressbar2>=3.9.3
 numba>=0.30.1
+pyDOE
 future

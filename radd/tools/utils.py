@@ -12,41 +12,64 @@ from radd.tools.analyze import bootstrap_data
 from radd import theta
 from IPython.display import display, Latex
 from ipywidgets import IntProgress, HTML, Box
+from itertools import product
 
 
-def pandaify_results(gort, ssrt, tb=.68, bootstrap=True, bootinfo={'nsubjects':25, 'ntrials':1000, 'groups':['ssd']}, ssd=np.array([[.2, .25, .3, .35, .4]]), clmap=None):
-    nl, nssd, nssPer = ssrt.shape
-    nl, ntrials = gort.shape
-    nss = nssd * nssPer
-    dfColumns=['cond', 'ttype', 'ssd', 'response', 'acc', 'rt', 'ssrt', 'trial']
-    if clmap is not None:
-        levelNames = np.sort(np.hstack(listvalues(clmap)).tolist())
-    else:
-        levelNames = ['flat']*nl
-    # bootinfo['groups'] = bootinfo['groups'] + list(clmap)
-    dfIndex = np.arange(ntrials)
+def pandaify_results(gort, ssrt, tb=.68, clmap=None, bootstrap=False, bootinfo={'nsubjects':25, 'ntrials':1000, 'groups':['ssd']}, ssd=np.array([[.2, .25, .3, .35, .4]])):
+
+
+    nlevels = gort.shape[0]
+    if nlevels==1:
+        clmap = {'flat': ['flat']}
+    conds = list(clmap)
+    cond_levels = list(product(*[list(levels) for levels in listvalues(clmap)]))
+    dfColumns=['ttype', 'ssd', 'response', 'acc', 'rt', 'ssrt', 'trial']
+    dfColumns = conds + dfColumns
+
+    # bootinfo['groups'] = bootinfo['groups'] + conds
     dfList = []
-    for i in range(nl):
-        ert = gort[i, :nss].reshape(ssrt[i].shape)
-        goTrialOutcomes = np.hstack(np.where(gort[i, nss:] < tb, 1, 0))
-        # ssTrialOutcomes = np.hstack(np.hstack(np.where(ert <= ssrt[i], 1, 0)))
-        ssTrialOutcomes = np.hstack(np.hstack(np.where(ssrt[i] <= ert, 0, 1)))
-        delays = np.append(np.hstack([[delay]*nssPer for delay in ssd[i]]), [1000]*nss)
-        response = np.append(ssTrialOutcomes, goTrialOutcomes)
-        responseTime = gort[i]
-        ssResponseTime = np.append(np.hstack(np.hstack(ssrt[i])), [np.nan]*nss)
-        ttype = np.append(np.zeros(nss), np.ones(nss))
-        acc = np.where(ttype == response, 1, 0)
-        cond = [levelNames[i]]*ntrials
-        trial = np.arange(1, ntrials+1)
-        dfData = [cond, ttype, delays, response, acc, responseTime, ssResponseTime, trial]
-        df = pd.DataFrame(dict(zip(dfColumns, dfData)), index=dfIndex)
+    for i in range(nlevels):
+        df = create_sim_dataframe(gort[i], ssrt[i], tb=tb, ssd=ssd)
+        for ii, c in enumerate(conds):
+            df[c] = cond_levels[i][ii]
         dfList.append(df[dfColumns])
+
     resultsdf = pd.concat(dfList)
     resultsdf.reset_index(drop=True, inplace=True)
+
     if bootstrap:
         resultsdf = bootstrap_data(resultsdf, nsubjects=bootinfo['nsubjects'], n=bootinfo['ntrials'], groups=bootinfo['groups'])
+
     return resultsdf
+
+
+def create_sim_dataframe(rt, ssrt, tb=.68, ssd=np.array([.2, .25, .3, .35, .4])):
+
+    ntrials = rt.shape[0]
+    nssd, nssper = ssrt.shape
+    nss = ssrt.size
+    ssd = ssd.squeeze()
+    ttype = ['go']*ntrials
+    ttype[:nss] = ['stop']*nss
+    trials = np.arange(ntrials)
+
+    rts = rt.ravel()
+    ssrts = ssrt.reshape(nss)
+    ssrts = np.concatenate((ssrts, np.array([np.nan]*nss)))
+    ssds = np.hstack([np.hstack(np.sort(np.tile(ssd, nssper))), np.ones(ntrials-nss)])
+    ssds = (np.round(ssds, 2) * 1000).astype(int)
+    df = pd.DataFrame({'ttype':ttype, 'rt': rts, 'ssrt':ssrts, 'trial':trials, 'ssd':ssds})
+
+    df['response'] = np.nan
+    df['acc'] = np.nan
+    stopdf, godf = [df[df.ttype==ttype] for ttype in ['stop', 'go']]
+    godf.loc[godf.rt < tb, ['response', 'acc']] = 1.
+    godf.loc[godf.rt >= tb, ['response', 'acc']] = 0.
+    stopdf.loc[stopdf.rt < stopdf.ssrt, 'response'] = 1
+    stopdf.loc[stopdf.rt >= stopdf.ssrt, 'response'] = 0
+    stopdf.loc[stopdf.response==1, 'acc'] = 0
+    stopdf.loc[stopdf.response==0, 'acc'] = 1
+    return pd.concat([stopdf, godf])
 
 
 

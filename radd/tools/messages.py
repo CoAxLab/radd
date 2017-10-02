@@ -12,12 +12,12 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
     """ logs information by opening and appending to an existing log file
     (named according to parameter dependencies) or creating a new log.
     """
-    newSection = '==' * 40 + '\n'
+    newSection = '-' * 3 + '\n'
     newHeader = lambda x: x + '\n' + '-' * len(x) + '\n'
     if savepath is None:
         savepath = os.path.expanduser('~')
     # functions for writing numpy arrays to strings (ex. "y = np.array([1,2,3])"")
-    name_equals = lambda name, strvector: '{0} = array([{1}])'.format(name, strvector)
+    name_equals = lambda name, strvector: '{0} = np.array([{1}])'.format(name, strvector)
     stringify = lambda x: name_equals(x[0], ', '.join('{:f}'.format(n) for n in x[1]))
     # brief-ify fitparams reference
     fp = deepcopy(fitparams)
@@ -27,9 +27,15 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
     names_arrays = zip(array_names, arrays)
     y_str, wts_str, yhat_str = [stringify(narr) for narr in names_arrays]
     fit_on = '  |  '.join(fp['model_id'].split('_'))
+
+    # limit popt to 6 decimal points
+    popt = {k: float('{:.6f}'.format(v)) for k,v in popt.items()}
+    # remove heading from param_report
+    param_report = param_report.split(']]')[1]
+
     if fp['nlevels']==1:
         dep_id = "flat model (no conditional parameters)"
-        fname = './' + kind + '_flat.txt'
+        fname = './' + kind + '_flat.md'
     else:
         depends_on = fp['depends_on']
         dep_id = "\n"
@@ -39,7 +45,7 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
             else:
                 dep_id += "{0} depends on {1}\n".format(p, ', '.join(np.hstack(conds)))
         dparams = '_'.join(np.hstack(list(depends_on)))
-        fname = '_'.join(['./' + kind, dparams + '.txt'])
+        fname = '_'.join(['./' + kind, dparams + '.md'])
 
     fname = os.path.abspath(os.path.join(savepath, fname))
 
@@ -51,19 +57,27 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
         f.write(str(fit_on) + '\n')
         f.write(str(dep_id) + '\n\n')
         f.write(newHeader('DATA, YHAT & WEIGHTS:'))
+        f.write('```python\n')
         f.write(wts_str + '\n\n')
         f.write(yhat_str + '\n\n')
-        f.write(y_str + '\n\n')
+        f.write(y_str + '\n')
+        f.write('```\n\n')
         f.write(newHeader("FIT REPORT:"))
-        f.write(param_report)
-        f.write('\n' + '--' * 40 + '\n')
-        f.write('='.join(['popt', repr(popt)]) + '\n')
-        f.write('AIC: %.8f' % finfo['AIC'] + '\n')
-        f.write('BIC: %.8f' % finfo['BIC'] + '\n')
-        f.write('chi: %.8f' % finfo['chi'] + '\n')
-        f.write('rchi: %.8f' % finfo['rchi'] + '\n')
-        f.write('converged: %s' % finfo['cnvrg'] + '\n')
-        f.write(newSection + '\n\n\n')
+        f.write(param_report + '\n')
+        f.write('```python\n')
+        f.write(' = '.join(['popt', repr(popt)]) + '\n')
+        f.write('```\n\n')
+        f.write('ndata: {}\n'.format(finfo['ndata']))
+        f.write('df: {}\n'.format(finfo['df']))
+        f.write('nfev: {}\n'.format(finfo['nfev']))
+        f.write('niter: {}\n'.format(finfo['niter']))
+        f.write('chi: {:.8f}\n'.format(finfo['chi']))
+        f.write('rchi: {:.8f}\n'.format(finfo['rchi']))
+        f.write('logp: {:.4f}\n'.format(finfo['logp']))
+        f.write('AIC: {:.4f}\n'.format(finfo['AIC']))
+        f.write('BIC: {:.4f}\n'.format(finfo['BIC']))
+        f.write('converged: %s' % finfo['cnvrg'] + '\n\n')
+        f.write(newSection + '\n\n')
 
 
 def saygo(depends_on={}, cond_map=None, kind='xdpm', fit_on='subjects'):

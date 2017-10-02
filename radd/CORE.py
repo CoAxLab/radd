@@ -22,7 +22,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, quantiles=np.arange(.1, 1.,.1)):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1), presample=False):
         self.kind = kind
         self.fit_on = fit_on
         self.ssd_method = ssd_method
@@ -30,8 +30,9 @@ class RADDCore(object):
         self.quantiles = quantiles
         self.learn = learn
         self.ssdelay = ssdelay
+        self.gbase = gbase
         self.custompath = custompath
-        self.data = analyze.remove_outliers(data, 2.5)
+        self.data = analyze.remove_outliers(data, 3.5)
         self.tb = analyze.estimate_timeboundary(self.data)
         self.idx = list(self.data.idx.unique())
         self.nidx = len(self.idx)
@@ -43,10 +44,10 @@ class RADDCore(object):
         self.pbars = None
         self.is_nested = False
         self.set_conditions(depends_on, bwfactors)
-        self.__prepare_fit__()
+        self.__prepare_fit__(presample=presample)
 
 
-    def __prepare_fit__(self):
+    def __prepare_fit__(self, presample=False):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
         *pcmap is a dict containing parameter names as keys with values
                 corresponding to the names given to that parameter in Parameters object
@@ -56,25 +57,34 @@ class RADDCore(object):
                 each condition.
         pcmap (dict): see bound __format_pcmap__ method
         """
+
         # from radd.optimize import Optimizer
         # from radd.models import Simulator
         from radd import optimize
         if self.inits is None:
             self.__get_default_inits__()
+
         # pcmap (see docstrings)
         self.__format_pcmap__()
         # create model_id string for naming output
         self.generate_model_id()
+
         # initialize DataHandler & generate I/O dataframes
         self.__make_dataframes__()
+
         # set fit parameters with default values
         self.set_fitparams()
         # set basinhopping parameters with default values
         self.set_basinparams()
+
         # initialize optimizer object for controlling fit routines
         # (updated with fitparams/basinparams whenever params are set)
-        self.opt = optimize.Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, inits=self.inits)
+        self.opt = optimize.Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, inits=self.inits, data=self.data)
         self.sim = self.opt.sim
+
+        if presample:
+            # sample init params
+            self.sample_theta()
 
 
     def __make_dataframes__(self):
@@ -128,13 +138,13 @@ class RADDCore(object):
         if not hasattr(self, 'fitparams'):
             # initialize with default values and first arrays in observed_flat, flat_wts
             self.fitparams = {'ix':0,
-                            'ntrials': 20000,
+                            'ntrials': 15000,
                             'si': .1,
-                            'dt':.002,
-                            'tol': 1.e-30,
+                            'dt':.001,
+                            'tol': 1.e-20,
                             'method': 'nelder',
-                            'maxfev': 450,
-                            'maxiter': 450,
+                            'maxfev': 400,
+                            'maxiter': 400,
                             'kind': self.kind,
                             'clmap': self.clmap,
                             'pcmap':self.pcmap,
@@ -184,29 +194,35 @@ class RADDCore(object):
         """
         if not hasattr(self, 'basinparams'):
             self.basinparams =  {'ninits': 3,
-                                'nsamples': 1200,
+                                'nsamples': 1500,
                                 'interval': 10,
-                                'T': .05,
-                                'stepsize': .035,
-                                'niter': 400,
-                                'maxiter': 400,
-                                'nsuccess': 100,
+                                'T': .03,
+                                'stepsize': .1,
+                                'niter': 500,
+                                'maxiter': 500,
+                                'nsuccess': 150,
                                 'polish_tol': 1.e-20,
                                 'tol': .01,
-                                'local_method': 'L-BFGS-B',
                                 'method': 'basin',
-                                'init_sample_method': 'best',
+                                'local_method': 'L-BFGS-B',
+                                'sample_method': 'random',
                                 'popsize': 15,
-                                'recombination': .7,
+                                'recombination': .8,
                                 'progress': True,
+                                'strategy': 'best1bin',
                                 'disp': False}
         else:
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.basinparams[kw_arg] = kw_val
+
         if hasattr(self, 'opt'):
+            old_method = self.opt.basinparams['method']
             self.opt.update(basinparams=self.basinparams)
             self.sim = self.opt.sim
+            if old_method != self.basinparams['method']:
+                self.opt.make_progress_bars()
+
 
 
     def update_data(self, nlevels=1):
@@ -227,36 +243,30 @@ class RADDCore(object):
             self.fitparams['idx'] = 'avg'
 
 
-    def sample_param_sets(self, force=False):
-        """ sample *nsamples* (default=5000, see set_fitparams) different
-        parameter sets (param_sets) and get model yhat for each set (param_yhats)
-        """
+    def sample_theta(self):
 
-        if not hasattr(self, '_psets') or force:
-            self._psets, self._yhats = self.sample_psets()
-        nkeep = self.basinparams['ninits']
-        y = self.observed_flat[self.fitparams['ix']]
-        wts = self.flat_wts[self.fitparams['ix']]
-        keys = self._yhats.columns.tolist()
-        ySeries = pd.Series(dict(zip(keys, y)))
-        wSeries = pd.Series(dict(zip(keys, wts)))
-        self.param_sets = theta.filter_params(self._psets, self._yhats, ySeries, wSeries, nkeep)
-        self.finished_sampling = True
+        pkeys = list(self.inits)
+        nsamples = self.basinparams['nsamples']
+        method = self.basinparams['sample_method']
+        kind = self.kind
 
+        if self.ssdelay:
+            kind = '_'.join([kind, 'sso'])
+        if self.gbase:
+            kind = '_'.join([kind, 'z'])
 
-    def sample_psets(self):
-        fitparams = self.fitparams
-        pkeys = np.sort(list(self.inits))
-        # get index, columns for yhat dataframe
-        cols = self.observedDF.loc[:, 'acc':].columns
-        dfindex = np.arange(self.basinparams['nsamples'])
-        psets = theta.random_inits(pkeys, ninits=dfindex.size, kind=self.kind, as_list=True)
-
-        # dataframe with model predictions for each sampled param_set
-        yhats = np.vstack([self.sim.sim_fx(p) for p in psets])
-        yhatdf = pd.DataFrame(yhats)
-        return psets, yhatdf
-
+        datadir = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'inits')
+        theta_fname = "{}_{}".format(method, kind)
+        yhat_fname = "{}_{}_yhat".format(method, kind)
+        thetaAll = pd.read_pickle(os.path.join(datadir, theta_fname), compression='xz')
+        yhatAll = pd.read_pickle(os.path.join(datadir, yhat_fname), compression='xz')
+        self.init_params = thetaAll.to_dict('records')
+        groupedYhat = yhatAll.groupby('pset')
+        yhats_ = groupedYhat.apply(analyze.rangl_data, self.ssd_method, self.quantiles)
+        self.init_yhats = pd.DataFrame(np.vstack(yhats_.values))
+        self.opt.init_params = self.init_params
+        self.opt.init_yhats = self.init_yhats
+        self.opt.sample_theta()
 
     def set_conditions(self, depends_on=None, bwfactors=None):
         data = self.data.copy()
@@ -331,6 +341,7 @@ class RADDCore(object):
             ssd = np.mean(ssd, axis=0, keepdims=True)
         nssd = ssd.shape[-1]
         nss = int((.5 * self.fitparams.ntrials))
+        # nss = self.fitparams.ntrials
         nss_per_ssd = int(nss/nssd)
         ssd_ix = np.arange(nssd) * np.ones((ssd.shape[0], ssd.shape[-1])).astype(np.int)
         # store all ssd_info in fitparams, accessed by Simulator
@@ -406,7 +417,7 @@ class RADDCore(object):
         """ if inits not provided by user, initialize with default values
         see tools.theta.get_default_inits
         """
-        self.inits = theta.get_default_inits(kind=self.kind, depends_on=self.depends_on, learn=self.learn, ssdelay=self.ssdelay)
+        self.inits = theta.get_default_inits(kind=self.kind, depends_on=self.depends_on, learn=self.learn, ssdelay=self.ssdelay, gbase=self.gbase)
 
 
     def __check_inits__(self, inits):

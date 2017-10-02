@@ -36,9 +36,9 @@ class Model(RADDCore):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, learn=False, bwfactors=None, custompath=None, ssdelay=False, quantiles=np.arange(.1, 1.,.1)):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, learn=False, bwfactors=None, custompath=None, presample=False, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1)):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, ssdelay=ssdelay)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, presample=presample, ssdelay=ssdelay, gbase=gbase)
 
 
 
@@ -108,10 +108,13 @@ class Model(RADDCore):
         self.gpopt = deepcopy(gpopt)
         # Flat Simplex Optimization of Parameters at Global Minimum
         self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=gpopt)
+
         if self.is_flat:
             self.write_results()
         if get_results:
             return self.finfo, self.popt, self.yhat
+        if self.opt.progress:
+            self.opt.ibar.clear()
         return self.popt
 
 

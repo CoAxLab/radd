@@ -399,21 +399,21 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
 
 
 
-def plot_param_distributions(p=['a', 'sso', 'ssv', 'tr', 'v', 'xb'], n=2000, mu=None, sigma=None, force_normal=False):
+def plot_param_distributions(p=['a', 'sso', 'ssv', 'tr', 'v', 'xb', 'z'], n=2000, method='random'):
     from radd import theta
     pkeys = np.sort(list(p))
     nparams = pkeys.size
-    p_dists = theta.random_inits(pkeys=pkeys, ninits=n, mu=mu, sigma=sigma, force_normal=force_normal)
+    p_dists = theta.random_inits(pkeys=pkeys, ninits=n, method=method)
     clrs = colors.param_color_map('all')
     lbls = {pk: parameter_name(pk,True) for pk in pkeys}
     ncols = np.ceil(nparams/2.).astype(int)
-    fig, axes = plt.subplots(2, ncols)
+    fig, axes = plt.subplots(2, ncols, figsize=(10, 4.5))
     axes = axes.flatten()
     for i, pk in enumerate(pkeys):
         sns.distplot(p_dists[pk], kde=False, ax=axes[i], norm_hist=True, color=clrs[pk], label=lbls[pk], hist_kws={'alpha':.8})
         sns.kdeplot(p_dists[pk], ax=axes[i], color=clrs[pk], shade=True, linewidth=0, alpha=.5, bw='scott')
     for ax in axes:
-        ax.legend(loc=1, fontsize=18)
+        ax.legend(loc=1, fontsize=15)
     plt.tight_layout()
     sns.despine()
 
@@ -459,6 +459,7 @@ def parameter_name(param, tex=False):
         'tr': ['Onset', '$tr$'],
         'xb': ['Dynamic Gain', '$\gamma$'],
         'sso': ['Brake Onset', '$so_{B}$'],
+        'z': ['Execution Baseline', '$z_{E}$'],
         'v_ssv': ['Drift Ratio', '$v_{E}/v_{B}$'],
         'aG': ['Alpha+', '$\\alpha^+$'],
         'aErr': ['Alpha-', '$\\alpha^-$'],

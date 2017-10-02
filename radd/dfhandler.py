@@ -13,7 +13,7 @@ from itertools import product
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=2.5):
+    def __init__(self, model, max_wt=2.5, verbose=False):
         self.model = model
         self.data = model.data
         self.inits = model.inits
@@ -37,6 +37,8 @@ class DataHandler(object):
         self.bwfactors = model.bwfactors
         self.nrows = self.nidx * model.nlevels
         self.grpData = self.data.groupby(self.groups)
+        self.verbose = verbose
+
 
     def make_dataframes(self):
         """ Generates the following dataframes and arrays:
@@ -109,6 +111,7 @@ class DataHandler(object):
             errdf = self.observedDF.groupby(self.conds).sem()*2
             self.observedErr = errdf.reset_index()[self.observedDF.columns[1:]]
 
+
     def make_wts_df(self):
         """ calculate and store cost_function weights
         for all subjects/conditions in data
@@ -125,7 +128,8 @@ class DataHandler(object):
                 wts_numeric = wtsDF.loc[:, 'acc':]
                 wtsDF.loc[:, 'acc':] = wts_numeric.apply(analyze.fill_nan_vals, axis=1)
             except Exception:
-                print("Unable to calculate cost f(x) weights, setting all w=1.")
+                if self.verbose:
+                    print("Unable to calculate cost f(x) weights, setting all w=1.")
                 wtsDF.loc[:, self.p_cols+self.q_cols] = 1.
         else:
             wtsDF.loc[:, self.p_cols+self.q_cols] = 1.

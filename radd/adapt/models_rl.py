@@ -88,11 +88,11 @@ class Simulator(object):
 
     def simulate_model(self, p, analyze=True):
         self.preproc_params(p)
-        # results = np.copy(self.results)
-        jitfx.sim_dpm_learning(self.results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+        results = np.copy(self.results)
+        jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
         if analyze:
             return self.analyze(results)
-        self.resultsDF.loc[:, self.resultsHeader] = self.results
+        self.resultsDF.loc[:, self.resultsHeader] = results
         return self.resultsDF
         # resultsDF = pd.DataFrame(self.results, columns=self.resultsHeader)
         #pd.concat([resultsDF, self.data[['cond', 'sstrial', 'probe', 'trial', self.blocksCol]]], axis=1)
@@ -137,8 +137,8 @@ class Simulator(object):
 
         self.bound = params['a']
         self.xtb = np.cosh(params['xb'] * self.xtime).squeeze()
-        self.vProb = 0.5 * (1 + params['v'] * self.dx / self.si)
-        self.vsProb = 0.5 * (1 + params['ssv'] * self.dx / self.si)
+        self.vProb = 0.5 * (1 + (params['v'] * np.sqrt(self.dt))/self.si)
+        self.vsProb = 0.5 * (1 + (params['ssv'] * np.sqrt(self.dt))/self.si)
         self.gOnset = params['tr'] / self.dt
 
         if asarray:
@@ -190,7 +190,8 @@ class Simulator(object):
 
 
     def format_params(self):
-        self.dx = np.sqrt(self.si * self.dt)
+        self.dx = self.si * np.sqrt(self.dt)
+        # self.dx = np.sqrt(self.si * self.dt)
         self.ntime = int(self.tb / self.dt)
         self.xtime = np.cumsum([self.dt] * self.ntime)
         self.modelparams = [p for p in self.allparams if p in list(self.inits)]

@@ -79,13 +79,23 @@ class Simulator(object):
         return residuals
 
 
-    def simulate_model(self, params, analyze=True):
-        xtb, vProb, vsProb, bound, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
+    def simulate_model(self, params, analyze=True, get_rts=False):
+        xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
         dvg, goRT, ssRT = self.get_io_copies()
-        sim_many_dpm(self.rProb, self.rProbSS, dvg, goRT, ssRT, xtb, vProb, vsProb, bound, gOnset, ssOnset, dx, self.dt)
+        sim_many_dpm(self.rProb, self.rProbSS, dvg, goRT, ssRT, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, self.dt)
         if analyze:
             return self.analyze(goRT, ssRT)
+        elif get_rts:
+            return [goRT, ssRT]
         return pandaify_results(goRT, ssRT, ssd=self.ssd, bootstrap=False, clmap=self.clmap, tb=self.tb)
+
+
+    def simulate_traces(self, params):
+        xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
+        dvg, goRT, ssRT = self.get_io_copies()
+        dvs = self.dvs.copy()
+        sim_many_dpm_traces(self.rProb, self.rProbSS, dvg, dvs, goRT, ssRT, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, self.dt)
+        return [dvg, dvs, goRT, ssRT]
 
 
     def analyze(self, rts, ssrts):
@@ -96,12 +106,14 @@ class Simulator(object):
         nss = nssd * nssPer
         erts = rts[:, :nss].reshape(ssrts.shape)
         gacc = np.mean(ufunc_where(rts < self.tb, 1, 0), axis=1)
-        # sacc = np.mean(ufunc_where(erts <= ssrts, 0, 1), axis=2)
         sacc = np.mean(ufunc_where(ssrts <= erts, 1, 0), axis=2)
-        rts[rts>=self.tb] = 1000.
-        ssrts[ssrts>=self.tb] = 1000.
+        # rts[rts >= self.tb] = 1000.
+        # erts[erts >= self.tb] = 1000.
+        # ssrts[ssrts >= self.tb] =  1000.
         cq = self.RTQ(zip(rts, [self.tb] * nl))
         eq = self.RTQ(zip(erts, ssrts))
+        # erts[ssrts <= erts] = 1000.
+        # eq = self.RTQ(zip(erts, [self.tb] * nl))
         return hs([hs([i[ii] for i in [gacc, sacc, cq, eq]]) for ii in range(nl)])
 
 
@@ -115,6 +127,7 @@ class Simulator(object):
         if preprocess:
             return self.preproc_params(theta_array)
         return theta_array
+
 
     def pdict_to_array(self, pdict):
         plist = []
@@ -138,7 +151,7 @@ class Simulator(object):
         with contaminant reaction times and parameter variability
         Ratcliff & Tuerlinckx, 2002
         """
-        a, si, sso, ssv, tr, v, xb = theta_array
+        a, si, sso, ssv, tr, v, xb, z = theta_array
         xtb = np.cosh(xb[:,None] * self.xtime)
         ssd = sso[:, None] + self.ssd
 
@@ -146,13 +159,17 @@ class Simulator(object):
         dx = si * np.sqrt(self.dt)
         vProb = .5 * (1 + (v * np.sqrt(self.dt))/si)
         vsProb = .5 * (1 + (ssv * np.sqrt(self.dt))/si)
+
         # above equations give same as:
         #     s2 = si**2
         #     dx = np.sqrt(s2 * self.dt)
         #     vProb = 0.5 * (1 + v * dx / s2)
 
+        gbase = a * z
         gOnset = get_onset_index(tr, self.dt)
-        ssOnset = get_onset_index(ssd, self.dt)
+        # ssOnset = get_onset_index(ssd, self.dt)
+        ssOnset = np.round(ssd / self.dt, 1).astype(int)
+        gOnset = np.round(tr / self.dt, 1).astype(int)
         self.vProb = vProb
         self.vsProb = vsProb
         self.gOnset = gOnset
@@ -160,14 +177,16 @@ class Simulator(object):
         self.dx = dx
         self. xtb = xtb
         self.bound = a
+        self.gbase = gbase
         self.si = si
-        return [xtb] + [vProb, vsProb, a, gOnset, ssOnset, dx]
+
+        return [xtb] + [vProb, vsProb, a, gbase, gOnset, ssOnset, dx]
 
 
     def format_cond_params(self, lmParamsNames=None):
         self.ntime = np.int(np.floor(self.tb / self.dt))
         self.xtime = np.cumsum([self.dt] * self.ntime)
-        self.allparams = ['a', 'si', 'sso', 'ssv', 'tr', 'v', 'xb']
+        self.allparams = ['a', 'si', 'sso', 'ssv', 'tr', 'v', 'xb', 'z']
         pcmap = self.fitparams['pcmap']
         apriori = pd.Series({'z': 0., 'sso': 0., 'xb': 0., 'si': self.si})
         # number of cells in condition matrix (df index)
@@ -190,12 +209,14 @@ class Simulator(object):
         self.make_params_matrix()
         self.set_pconstant_values_matrix(self.theta)
 
+
     def make_io_vectors(self):
         self.ssd, nssd, nss, nss_per, ssd_ix = self.fitparams.ssd_info
         self.rProb = randsample((self.nlevels, self.ntrials, self.ntime))
         self.rProbSS = randsample((self.nlevels, nssd, nss_per, self.ntime))
         self.rProbSS3d = randsample((self.nlevels, nssd * nss_per, self.ntime))
         dvg = np.zeros_like(self.rProb)
+        self.dvs = np.zeros_like(self.rProbSS)
         self.goRT = np.zeros((self.nlevels, self.ntrials))
         self.ssRT = np.zeros((self.nlevels, nssd, nss_per))
         # self.ssRT2d = np.zeros((self.nlevels, nssd * nss_per))
@@ -203,8 +224,10 @@ class Simulator(object):
         ssdSteps = get_onset_index(self.ssd, self.dt)
         self.ssdTrials = np.sort(np.tile(ssdSteps, nss_per))
 
+
     def get_io_copies(self):
         return [v.copy() for v in self.vectors]
+
 
     def complete_allparams_pdict(self, pdict):
         theta = pd.Series(pdict)
@@ -247,6 +270,7 @@ class Simulator(object):
                     pmatrix.ix[pmatrix[pv_cond]==level_name, pvary]=i
         pmatrix = pmatrix.iloc[:, self.nconds:].apply(pd.to_numeric)
         return pmatrix
+    
 
     def make_params_matrix(self):
         cols = np.array(self.allparams)

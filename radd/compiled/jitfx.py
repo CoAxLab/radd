@@ -11,6 +11,18 @@ from numba import float64, int64, vectorize, boolean
 from numpy.random import random_sample as randsample
 
 
+
+def rolling_variance(old_avg, new, old, N):
+    newavg = oldavg + (new - old)/N
+    average = newavg
+    variance += (new-old)*(new-newavg+old-oldavg)/(N-1)
+    stddev = sqrt(variance)
+
+
+def get_norm(mu, sd, sample):
+    return norm(mu, sd).logpdf(sample)
+
+
 @vectorize([float64(boolean, float64, float64)])
 def ufunc_where(condition, x, y):
     if condition:
@@ -34,9 +46,10 @@ def slice_theta_array(theta_array, index_arrays, n_vals):
         ix += nlvls
     return param_array.T
 
-@jit(int64(float64[:], float64[:], float64[:], float64, float64, float64), nopython=True)
-def sim_dpm_trace_upper(rProb, trace, xtb, vProb, bound, dx):
-    evidence = 0
+
+@jit(int64(float64[:], float64[:], float64[:], float64, float64, float64, float64), nopython=True)
+def sim_dpm_trace_upper(rProb, trace, xtb, vProb, bound, gbase, dx):
+    evidence = gbase
     trace[0] = evidence
     timebound = trace.size
     for ix in range(1, timebound):
@@ -65,15 +78,59 @@ def sim_dpm_trace_lower(rProbSS, ssbase, vsProb, onset, dx, dt):
     return ix * dt
 
 
-@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64), nopython=True)
-def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, vProb, vsProb, bound, gOnset, ssOnset, dx, dt):
+@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64), nopython=True)
+def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, dt):
     ncond, ntrials, ntime = rProb.shape
     ncond, nssd, nss_per, ntime = rProbSS.shape
     for i in range(ncond):
         tr = gOnset[i]
         ssOn = ssOnset[i]
+        dvg[i,:,:tr] = gbase[i]
         for j in range(ntrials):
-            ix = sim_dpm_trace_upper(rProb[i,j,tr:], dvg[i,j,tr:], xtb[i], vProb[i], bound[i], dx[i])
+            ix = sim_dpm_trace_upper(rProb[i,j,tr:], dvg[i,j,tr:], xtb[i], vProb[i], bound[i], gbase[i], dx[i])
+            if ix<0:
+                rt_ix = ntime + 1
+                rts[i,j] = rt_ix * dt # 1000.
+            else:
+                rt_ix = tr + ix
+                rts[i,j] = rt_ix * dt
+            # Simulate Stop Process
+            if j<nss_per:
+                ssbase = dvg[i,j][ssOn]
+                for k in range(nssd):
+                    if rt_ix < ssOn[k] or ix<0:
+                        ssrts[i,k,j] = ntime * dt # 1000.
+                        continue
+                    ssrts[i,k,j] = sim_dpm_trace_lower(rProbSS[i,k,j], ssbase[k], vsProb[i], ssOn[k], dx[i], dt)
+
+
+
+#
+# @jit(float64(float64[:], float64[:], float64, float64, int64, float64, float64), nopython=True)
+def sim_dpm_trace_lower_trace(rProbSS, dvs, ssbase, vsProb, onset, dx, dt):
+    ix = onset
+    evidence = ssbase
+    timebound = rProbSS.size
+    while evidence>0 and ix<timebound:
+        if rProbSS[ix] < vsProb:
+            evidence += dx
+        else:
+            evidence -= dx
+        dvs[ix] = evidence
+        ix += 1
+    return ix * dt
+
+
+# @jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64))#, nopython=True)
+def sim_many_dpm_traces(rProb, rProbSS, dvg, dvs, rts, ssrts, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, dt):
+    ncond, ntrials, ntime = rProb.shape
+    ncond, nssd, nss_per, ntime = rProbSS.shape
+    for i in range(ncond):
+        tr = gOnset[i]
+        ssOn = ssOnset[i]
+        dvg[i,:,:tr] = gbase[i]
+        for j in range(ntrials):
+            ix = sim_dpm_trace_upper(rProb[i,j,tr:], dvg[i,j,tr:], xtb[i], vProb[i], bound[i], gbase[i], dx[i])
             if ix<0:
                 rt_ix = ntime + 1
                 rts[i,j] = 1000.
@@ -87,7 +144,8 @@ def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, vProb, vsProb, bound, gOn
                     if rt_ix < ssOn[k] or ix<0:
                         ssrts[i,k,j] = 1000.
                         continue
-                    ssrts[i,k,j] = sim_dpm_trace_lower(rProbSS[i,k,j], ssbase[k], vsProb[i], ssOn[k], dx[i], dt)
+                    ssrts[i,k,j] = sim_dpm_trace_lower_trace(rProbSS[i,k,j], dvs[i,k,j], ssbase[k], vsProb[i], ssOn[k], dx[i], dt)
+
 
 
 @jit(nb.typeof((1.0, 1.0))(float64[:], float64[:], float64, float64, int64, float64[:], float64, int64, float64, float64, float64, float64), nopython=True)
@@ -133,17 +191,6 @@ def sim_dpm_go(rProb, xtb, vProb, bound, onsetIX, dx, dt, evidence):
         if weightedEvidence >= bound:
             return 1., ix*dt
     return 0., ix*dt
-
-
-def rolling_variance(old_avg, new, old, N):
-    newavg = oldavg + (new - old)/N
-    average = newavg
-    variance += (new-old)*(new-newavg+old-oldavg)/(N-1)
-    stddev = sqrt(variance)
-
-
-def get_norm(mu, sd, sample):
-    return norm(mu, sd).logpdf(sample)
 
 
 @jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)

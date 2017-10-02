@@ -68,8 +68,8 @@ def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on
     gac = data.query(goQuery).acc.mean()
     grt = data.query('response==1 & acc==1').rt.values
     ert = data.query('response==1 & acc==0').rt.values
-    gq = mq(grt, prob=quantiles)
-    eq = mq(ert, prob=quantiles)
+    gq = mq(grt[grt<5.], prob=quantiles)
+    eq = mq(ert[ert<5.], prob=quantiles)
     data_vector = [gac, gq, eq]
     if 'ssd' in data.columns:
         stopdf = data.query(stopQuery)
@@ -92,6 +92,7 @@ def calculate_qpdata(data, quantiles=np.linspace(.02,.98,10)):
     quantMeans = np.vstack = ([idx_qc.mean(axis=0).values, idx_qe.mean(axis=0).values])
     quantErr = np.vstack([idx_qc.sem(axis=0).values, idx_qe.sem(axis=0).values])*1.96
     return quantMeans, quantErr
+
 
 def idx_quant_weights(data, conds, quantiles=np.linspace(.02,.98,10), max_wt=3, bwfactors=None):
     """ calculates weight vectors for reactive RT quantiles by
@@ -157,12 +158,13 @@ def idx_acc_weights(data, conds=['flat'], ssd_method='all'):
         _ = index.remove(split_by)
     df['n'] = 1
     countdf = df.pivot_table('n', index=index, columns=split_by, aggfunc=np.sum)
-    idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
-    # idx_pwts = countdf.values / countdf.median(axis=0).values
+    # idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
+    idx_pwts = countdf.values / countdf.median(axis=0).values
     if ssd_method=='all':
         go_wts = np.ones(countdf.shape[0])
         idx_pwts = np.concatenate((go_wts[:,None], idx_pwts), axis=1)
     return idx_pwts
+
 
 def assess_fit(y, wts, yhat, nvary=5):
     # residual = wts * (yhat - y)
@@ -181,6 +183,7 @@ def assess_fit(y, wts, yhat, nvary=5):
     finfo['AIC'] = finfo.logp + 2 * finfo.nvary
     finfo['BIC'] = finfo.logp + np.log(finfo.ndata * finfo.nvary)
     return finfo
+
 
 def pandaify_results(gort, ssrt, tb=.7, bootstrap=False, bootinfo={'nsubjects':25, 'ntrials':1000, 'groups':['ssd']}, ssd=np.array([[.2, .25, .3, .35, .4]]), clmap=None):
     nl, nssd, nssPer = ssrt.shape
@@ -286,19 +289,13 @@ def get_model_ssds(stopdf, conds, ssd_method='all', scale=.001, bwfactors=None):
 
     groups = conds + ['idx']
     if ssd_method == 'all':
-        get_df_ssds = lambda df: [np.sort(df.ssd.unique())]
-        cond_ssds =  np.array([get_df_ssds(df) for _,df in stopdf.groupby(groups)])
+        get_idx_ssd = lambda x: pd.Series(np.sort(x.ssd.unique().squeeze())) * scale
+        ssdidx = stopdf.groupby(groups).apply(get_idx_ssd)
+        ssdDF = pd.DataFrame(ssdidx).reset_index()
     elif ssd_method == 'central':
-        if conds==[]:
-            mean_cond_ssd_df = stopdf.groupsby('idx').mean()['ssd']
-        else:
-            mean_cond_ssd_df = stopdf.pivot_table('ssd', index='idx', columns=conds)
-        cond_ssds = list(mean_cond_ssd_df.values)
-
-    ssds = [np.sort(np.vstack(ssds))*scale for ssds in cond_ssds]
-    groups = conds + ['idx']
-    groupInfo = stopdf.groupby(groups).mean().reset_index()[groups[::-1]]
-    ssdDF = pd.concat([groupInfo, pd.DataFrame(np.vstack(ssds).squeeze())], axis=1)
+        get_idx_ssd = lambda x: x.ssd.mean() * scale
+        ssdidx = stopdf.groupby(groups).apply(get_idx_ssd)
+        ssdDF = ssdidx.reset_index()
 
     return ssdDF
 
