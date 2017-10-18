@@ -130,6 +130,8 @@ class GlobalCallback(object):
         self.pbar = PBinJ(n=n, value=value, status=status, color=color)
         self.reset(history=True, gbasin=True, fmin=fmin)
         self.xhistory = []
+        # status=(MyFloat(x) for x in [fmin, fmin])
+        # self.pbar.update(value=0., status=status)
 
     def reset(self, history=True, bar=False, gbasin=False, get_call=False, fmin=1000.):
         fmin = MyFloat(fmin)
@@ -182,6 +184,8 @@ class GradientCallback(object):
         self.reset(history=True, lbasin=True, fmin=fmin)
         self.xhistory = []
         self.nsame = 0
+        # status=(MyFloat(x) for x in [self.lbasin, fmin])
+        # self.pbar.update(value=0., status=status)
 
     def reset(self, history=True, bar=False, lbasin=False, get_call=False, fmin=1000.):
         fmin = MyFloat(fmin)

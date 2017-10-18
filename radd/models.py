@@ -270,7 +270,7 @@ class Simulator(object):
                     pmatrix.ix[pmatrix[pv_cond]==level_name, pvary]=i
         pmatrix = pmatrix.iloc[:, self.nconds:].apply(pd.to_numeric)
         return pmatrix
-    
+
 
     def make_params_matrix(self):
         cols = np.array(self.allparams)

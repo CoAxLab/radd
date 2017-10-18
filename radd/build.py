@@ -10,6 +10,9 @@ from radd.CORE import RADDCore
 from radd import vis
 from radd.tools import utils, analyze, messages
 from radd.tools.analyze import pandaify_results, rangl_data
+import multiprocessing as mp
+import matplotlib.pyplot as plt
+
 
 
 class Model(RADDCore):
@@ -40,6 +43,11 @@ class Model(RADDCore):
 
         super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, presample=presample, ssdelay=ssdelay, gbase=gbase)
 
+        groups = self.handler.groups
+        bwcol = None
+        if self.bwfactors is not None:
+            groups += [self.bwfactors]
+            self.bwcol = [df[self.bwfactors].unique()[0] for _, df in self.data.groupby('idx')]
 
 
     def optimize(self, plotfits=False, saveplot=False, saveresults=False, custompath=None, progress=True, get_results=False):
@@ -64,7 +72,8 @@ class Model(RADDCore):
         self.custompath=custompath
 
         if self.fit_on == 'subjects':
-            finfo, popt, yhat = self.optimize_idx_params()
+            finfo, popt, yhat  = self.optimize_idx_params(self.idx)
+
             if plotfits:
                 self.plot_model_idx_fits(save=saveplot)
 
@@ -88,6 +97,53 @@ class Model(RADDCore):
             return finfo, popt, yhat
 
 
+    def fit_multi_idx(self, nproc=1, progress=True):
+        nruns = int(len(self.idx) / nproc)
+        fits, popts, yhats = [], [], []
+        self.toggle_pbars(progress=progress)
+        self.idxbar.update(value=0, status=0)
+        self.opt.make_progress_bars(inits=False, basin=True)
+
+        # self.iohandler = ModelIO(fitparams=self.fitparams, mname=self.model_id)
+        self.yhatdf = self.observedDF[self.observedDF.idx.isin(self.idx)].copy()
+        datcols = self.yhatdf.loc[:, 'acc':].columns.tolist()
+
+        def fit_idx_i(pos, idx, output):
+            self.set_fitparams(ix=self.idx.index(idx), force='flat', nlevels=1)
+            finfo, popt, yhat = self.optimize_flat(get_results=True)
+            if not self.is_flat:
+                finfo, popt, yhat = self.optimize_conditional(popt, get_results=True)
+            output.put((pos, {'finfo': finfo, 'popt': popt, 'yhat': yhat}))
+
+        for i in range(nruns):
+            # initiate process workers
+            output = mp.Queue()
+            ix0 = i * nproc
+            ix1 = ix0 + nproc
+            idxlist = self.idx[ix0:ix1]
+            processes = [mp.Process(target=fit_idx_i, args=(pos, idx, output)) for pos, idx in enumerate(idxlist)]
+            for p in processes: p.start()
+            for p in processes: p.join()
+
+            results = [output.get() for p in processes]; results.sort()
+            results = np.hstack([r[1] for r in results]).tolist()
+            fits.append(pd.concat([res['finfo'] for res in results], axis=1).T)
+            popts.append(pd.DataFrame([res['popt'] for res in results]))
+            yhat = np.array([res['yhat'] for res in results])
+            self.yhatdf.loc[ix0:ix1, datcols] = yhat.reshape(nproc, -1)
+            self.idxbar.update(value=ix1, status=ix1)
+
+        self.fitdf = pd.concat(fits)
+        self.poptdf = pd.concat(popts)
+        self.poptdf.insert(0, 'idx', self.idx)
+        if self.bwfactors is not None:
+            self.poptdf.insert(1, self.bwfactors, self.bwcol)
+            self.fitdf.insert(1, self.bwfactors, self.bwcol)
+        self.idxbar.clear()
+        return self.fitdf, self.poptdf, self.yhatdf
+
+
+
     def optimize_flat(self, param_sets=None, get_results=False):
         """ optimizes flat model to data collapsing across all conditions
         ::Arguments::
@@ -104,13 +160,13 @@ class Model(RADDCore):
             gpopt = self.opt.hop_around(param_sets)
         else:
             # Global Optimization w/ Diff. Evolution (+TNC)
-            gpopt, gfmin = self.opt.optimize_global(self.inits)
+            gpopt, gfmin = self.opt.optimize_global(self.inits, resetProgress=True)
         self.gpopt = deepcopy(gpopt)
         # Flat Simplex Optimization of Parameters at Global Minimum
+        self.set_fitparams(inits=gpopt)
         self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=gpopt)
-
-        if self.is_flat:
-            self.write_results()
+        # if self.is_flat:
+        #     self.write_results()
         if get_results:
             return self.finfo, self.popt, self.yhat
         if self.opt.progress:
@@ -199,35 +255,29 @@ class Model(RADDCore):
 
         finfo, popt, yhat = self.set_results(finfo, popt, yhat)
         self.log_fit_info(finfo, popt, yhat)
-
         self.yhatdf = self.handler.fill_yhatdf(yhat=yhat, fitparams=self.fitparams)
         self.fitdf = self.handler.fill_fitdf(finfo=finfo, fitparams=self.fitparams)
         self.poptdf = self.handler.fill_poptdf(popt=popt, fitparams=self.fitparams)
 
-    def plot_model_idx_fits(self):
-        odf = self.observedDF.copy()
-        yhatdf = self.yhatdf.copy()
-        errdf = self.observedErr.copy()
 
-        if self.bwfactors is not None:
-            import matplotlib.pyplot as plt
-            bw = self.bwfactors
-            lvls = self.data[bw].unique()
+    def plot_idx_model_fits(self, idxlist=None, clrs=['k'], lbls=None, samefig=None):
 
-            group_y = {lvl: odf[odf[bw]==lvl].groupby(self.conds).mean().loc[:, 'acc':].values for lvl in lvls}
-            group_yhat = {lvl: yhatdf[yhatdf[bw]==lvl].groupby(self.conds).mean().loc[:, 'acc':].values for lvl in lvls}
-            group_err = {lvl: errdf[errdf[bw]==lvl].groupby(self.conds).mean().loc[:, 'acc':].values for lvl in lvls}
-
-            for lvl in lvls:
-                f, axes = plt.subplots(1, 3, figsize=(14, 4.5))
-                y = group_y[lvl]; yhat = group_yhat[lvl]; err = group_err[lvl]
-                self.plot_model_fits(y=y, yhat=yhat, err=err, figure=f)
-                f.suptitle(lvl.capitalize())
-        else:
-            y = odf.groupby(self.conds).mean().loc[:, 'acc':].values
-            yhat = yhatdf.groupby(self.conds).mean().loc[:, 'acc':].values
-            err = errdf.groupby(self.conds).mean().loc[:, 'acc':].values
-            self.plot_model_fits(y=y, yhat=yhat, err=err)
+        if idxlist is None:
+            idxlist = self.idx
+        nidx = len(idxlist)
+        if nidx > len(clrs):
+            clrs = clrs * nidx
+        if lbls is None:
+            lbls = [None] * nidx
+        if samefig is True:
+            samefig, _ = plt.subplots(1, 3, figsize=(13, 4.3))
+        for i, idx in enumerate(idxlist):
+            self.set_fitparams(ix=self.idx.index(idx))
+            y = self.fitparams.y.flatten()
+            yhat = self.yhatdf.loc[self.yhatdf.idx==idx, 'acc':].values
+            if len(yhat)==0:
+                yhat = y
+            self.plot_model_fits(y=y, yhat=yhat, clrs=[clrs[i]], figure=samefig, lbls=[lbls[i]])
 
 
     def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw='scott', savestr=None, same_axis=True, clrs=None, lbls=None, cumulative=True, simdf=None, suppressLegend=False, simData=None, condData=None, shade=True, plot_error_rts=True, figure=None):
@@ -290,7 +340,7 @@ class Model(RADDCore):
         return yhat
 
 
-    def optimize_idx_params(self, save=True):
+    def optimize_idx_params(self, idxlist=None, pos=0, output=None):
         """ optimize parameters for individual subjects, store results
         :: Arguments ::
             param_sets (list):
@@ -306,25 +356,21 @@ class Model(RADDCore):
         """
 
         self.iohandler = ModelIO(fitparams=self.fitparams, mname=self.model_id)
-        groups = self.handler.groups
-        bwcol = None
-        if self.bwfactors is not None:
-            groups += [self.bwfactors]
-            bwcol = [df[self.bwfactors].unique()[0] for _, df in self.data.groupby('idx')]
-
-        metadata = self.observedDF[groups]
-
+        yhatdf = self.observedDF[self.observedDF.idx.isin(self.idx)].copy()
+        datcols = yhatdf.loc[:, 'acc':].columns.tolist()
         # fit result lists for each param set
         finfoList, poptList, yhatList = [], [], []
-        for ix, idx in enumerate(self.idx):
+        for idx in self.idx:
 
+            ix = self.idx.index(idx)
             if hasattr(self, 'idxbar'):
                 self.idxbar.update(value=ix, status=ix+1)
+
             # set subject data & wts
             self.set_fitparams(ix=ix, force='flat', nlevels=1)
             # optimize constants (flat model)
             finfo, popt, yhat = self.optimize_flat(get_results=True)
-            flatPopt = {p: popt[p] for p in list(depends_on)}
+            flatPopt = {p: popt[p] for p in list(self.sim.inits)}
             # optimize conditional parameters
             if not self.is_flat:
                 self.set_fitparams(force='cond')
@@ -336,23 +382,19 @@ class Model(RADDCore):
             # store results
             finfoList.append(finfo)
             poptList.append(deepcopy(popt))
-            yhatList.append(pd.DataFrame(yhat))
-            self.yhatlist = yhatList
+            yhatdf.loc[yhatdf.idx==idx, datcols] = yhat
 
         # concatenate all subjects together into single fitdf, poptdf, & yhatdf
         fitdf = pd.concat(finfoList, axis=1).T
         poptdf = pd.DataFrame.from_dict(poptList)
         poptdf.insert(0, 'idx', self.idx)
-        yhatdf = pd.concat([metadata, pd.concat(yhatList, ignore_index=True)], axis=1)
-        yhatdf = yhatdf.rename(columns=dict(zip(yhatdf.columns, self.observedDF.columns)))
         if self.bwfactors is not None:
-            poptdf.insert(1, self.bwfactors, bwcol)
-            fitdf.insert(1, self.bwfactors, bwcol)
+            poptdf.insert(1, self.bwfactors, self.bwcol)
+            fitdf.insert(1, self.bwfactors, self.bwcol)
 
-        self.iohandler.save_model_results(fitdf, poptdf, yhatdf, write=save)
+        self.iohandler.save_model_results(fitdf, poptdf, yhatdf, write=True)
         self.fitdf, self.poptdf, self.yhatdf = self.iohandler.read_model_results()
         return self.fitdf, self.poptdf, self.yhatdf
-
 
 
 

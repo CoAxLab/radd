@@ -5,7 +5,7 @@
 
 from __future__ import division
 from future.utils import listvalues
-import os
+import os, sys
 import numpy as np
 import pandas as pd
 from radd import models, theta
@@ -15,7 +15,7 @@ from copy import deepcopy
 from scipy.optimize import basinhopping, differential_evolution
 from numpy.random import uniform
 from lmfit import minimize, fit_report
-
+from IPython.display import clear_output
 
 
 class GlobalBounds(object):
@@ -273,7 +273,9 @@ class Optimizer(object):
 
         if self.progress:
             if resetProgress:
+                print("")
                 self.make_progress_bars(inits=True, basin=True)
+                clear_output()
             self.callback = self.gbar.reset(get_call=True, gbasin=resetProgress)
 
         # create args for customizing global optimizer
@@ -477,7 +479,7 @@ class Optimizer(object):
                 resContainer['nit'] = self.global_results.nit
 
         residualList = []
-        for i in range(20):
+        for i in range(5):
             sim.update(inits=popt)
             yhat = sim.simulate_model(popt)
             residualList.append(wts * (yhat - y))
@@ -582,8 +584,7 @@ class Optimizer(object):
             if bp['method']=='basin':
                 niter = bp['nsuccess']
             else:
-                niter = bp['maxiter'] #(bp['maxiter'] + 1) * bp['popsize'] * len(list(self.inits))
-            # print(niter)
+                niter = bp['maxiter']
             self.gbar = utils.GlobalCallback(n=niter, fmin=1000, method=bp['method'])
             self.callback = self.gbar.reset(get_call=True)
         if lBasin:

@@ -69,13 +69,13 @@ def get_bounds(kind='dpm', tb=None):
         bounds (dict): {parameter: (upper, lower)}
     """
 
-    bounds = {'a': (.25, .65),
+    bounds = {'a': (.1, .65),
              'si': (.001, .15),
              'sso': (.005, .1),
              'ssv': (-1., -.1),
-             'tr': (0.2, 0.45),
-             'v': (.1, 1.3),
-             'xb': (.1, 1.),
+             'tr': (0.15, 0.4),
+             'v': (.5, 1.25),
+             'xb': (.6, 1.4),
              'z': (0.01, 0.6)}
 
     boundsRL = {'B': (.1, .4),
@@ -102,13 +102,13 @@ def get_theta_params(pkey, kind='dpm'):
     ::Returns::
         theta[pkey] (tuple): (loc, scale)
     """
-    theta = {'a': (.4, .2),
+    theta = {'a': (.35, .15),
              'si': (.001, .1),
              'sso': (.05, .035),
-             'ssv': (-.4, .4),
-             'tr': (.3, .12),
-             'v': (.6, .4),
-             'xb': (.6, .4),
+             'ssv': (-.5, .3),
+             'tr': (.25, .075),
+             'v': (.8, .3),
+             'xb': (1., .35),
              'z': (.3, .2)}
 
     thetaRL={'B': (.1, .4),
