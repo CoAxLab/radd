@@ -111,6 +111,21 @@ class DataHandler(object):
             errdf = self.observedDF.groupby(self.conds).sem()*2
             self.observedErr = errdf.reset_index()[self.observedDF.columns[1:]]
 
+    def make_freq_df(self):
+        data = self.data.copy()
+        self.grpData = data.groupby(self.groups)
+        freqdf = self.grpData.apply(analyze.rangl_freq, self.quantiles)
+        countdf =  self.grpData.apply(analyze.rangl_counts)
+
+        metadf = freqdf.reset_index()[self.groups]
+        bins = np.arange(self.quantiles.size+1)
+        freqcols = sum([['{}{}'.format(rtype, i) for i in bins+1] for rtype in ['o', 'e']], [])
+        freqvals = pd.DataFrame(np.vstack(freqdf.values), columns=freqcols)
+        countvals = pd.DataFrame(np.vstack(countdf.values), columns=['Ncor', 'Nerr'])
+        count_freq_vals = pd.concat([countvals, freqvals], axis=1)
+        freqDF = pd.concat([metadf, count_freq_vals], axis=1)
+        return freqDF
+
 
     def make_wts_df(self):
         """ calculate and store cost_function weights

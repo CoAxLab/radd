@@ -83,6 +83,70 @@ def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on
     return np.hstack(data_vector)
 
 
+def rangl_freq(df, quantiles=np.arange(.1, 1.,.2)):
+
+    prob = np.asarray([0.] + quantiles.tolist() + [1.])
+    nbins = quantiles.size+1
+
+    godf = df[df.ttype=='go']
+    ssdf = df[df.ttype=='stop']
+    cdf = godf[godf.response==1]
+    edf = ssdf[ssdf.response==1]
+
+    qcor = mq(cdf.rt.values, prob)
+    qerr = mq(edf.rt.values, prob)
+
+    Ncor = cdf.shape[0]
+    Nerr = edf.shape[0]
+    prop_go = np.asarray([cdf[(cdf.rt >= qcor[i])&(cdf.rt < qcor[i+1])].shape[0] / Ncor for i in range(nbins)])
+    prop_ss = np.asarray([edf[(edf.rt >= qerr[i])&(edf.rt < qerr[i+1])].shape[0] / Nerr for i in range(nbins)])
+
+    O_cor = Ncor * prop_go
+    O_err = Nerr * prop_ss
+    return np.concatenate([O_cor, O_err])
+
+
+def rangl_counts(df):
+    Ncor = df[(df.ttype=='go')&(df.response==1)].shape[0]
+    Nerr = df[(df.ttype=='stop')&(df.response==1)].shape[0]
+    return np.hstack([Ncor, Nerr])
+
+
+def calc_chi_square(rt, ssrt, fitparams):
+    O_freq = fitparams['obs_freq']
+    Nobs = fitparams['nobs']
+    Ncor, Nerr = Nobs
+    quantiles = fitparams['quantiles']
+    ntrials = fitparams['ntrials']
+    tb = fitparams['tb']
+    y = fitparams['y']
+    # rt, ssrt = m.sim.simulate_model(m.inits, analyze=False, get_rts=True)
+
+    nbins = quantiles.size+1
+    ssrt = ssrt.reshape(nl, -1)
+    ert = rt[:, :int(ntrials/2)]
+
+    Ncor_hat = np.asarray([rt_i[rt_i<tb].shape[0] for rt_i in rt])
+    Nerr_hat= np.asarray([ert_i[ert_i<ssrt_i].shape[0] for ert_i, ssrt_i in zip(ert, ssrt)])
+
+    qcor, qerr = np.split(y[-quantiles.size*2:], 2)
+    qcor = np.hstack([[0.], qcor, [tb]])
+    qerr = np.hstack([[0.], qerr, [tb]])
+
+    prop_go = [[rti[(rti >= qcor[i])&(rti < qcor[i+1])].shape[0] / Ni for i in range(nbins)] for Ni, rti in zip(Ncor_hat, rt)]
+    prop_ss = [[erti[(erti >= qerr[i])&(erti < qerr[i+1])].shape[0] / Ni for i in range(nbins)] for Ni, erti in zip(Nerr_hat, ert)]
+
+    # Ncor, Nerr are actual counts of O_cor, O_err
+    M_cor = [Ni * np.asarray(prop_go_i) for Ni, prop_ss_i in zip(Nerr, prop_go)]
+    M_err = [Ni * np.asarray(prop_ss_i) for Ni, prop_ss_i in zip(Nerr, prop_ss)]
+    M_freq = [np.concatenate([Mcor_i, Merr_i]) for Mcor_i, Merr_i in zip(M_cor, M_err)]
+
+    chi2 = np.sum([np.sum((M_i - O_i)**2 / O_i) for M_i, O_i in zip(M_freq, O_freq)])
+
+    return chi2
+
+
+
 def calculate_qpdata(data, quantiles=np.linspace(.02,.98,10)):
     data = data[data.response==1].copy()
     cor = data[data['acc']==1]

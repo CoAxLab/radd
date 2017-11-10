@@ -72,19 +72,20 @@ def build_decision_axis(onset, bound, ssd=np.array([300, 400]), tb=650):
 
 def gen_re_traces(model):
     params = deepcopy(model.inits)
-    dvg, dvs = model.simulate(params, analyze=False)
-    params = model.simulator.vectorize_params(params)
-    bound = params['a'][0]
-    tr = params['tr'][0]
-    nTime = np.ceil((model.simulator.tb - tr) / model.simulator.dt).astype(int)
-    ssOn = np.ceil((model.simulator.tb - ssd) / model.simulator.dt).astype(int)
-    ssOn = ssOn.squeeze()
-    gtraces = [dvg[0, i] for i in [1, -1]]
-    straces = [dvs[0, i, 0] for i in [1, -1]]
-    gtraces = [gt[gt <= bound] for gt in gtraces]
-    ssi, xinit_ss, integrated, dvgs, dvss = [], [], [], [], []
+    dvg, dvs, rt, ssrt = model.sim.simulate_traces(params)
+    bound = params['a']
+    tr = params['tr']
+    goOn = model.sim.gOnset[0]
+    ssOn = model.sim.ssOnset.squeeze()
+    ssOn = [ssOn[2], ssOn[-1]]
+    xinit_ss = [ssOn_i-goOn for ssOn_i in ssOn]
+    rtSteps = [int(rt[0, i]*1000)+1 for i in [0, 1]]
+    ssrtSteps = [int(ssrt[0, 2, 0]*1000)+1, int(ssrt[0, -1, 0]*1000)+1]
+    gtraces = [dvg[0, 0, goOn:rtSteps[0]], dvg[0, 1, goOn:rtSteps[-1]]]
+    straces = [dvs[0, 2, 0, ssOn[0]:ssrtSteps[0]], dvs[0, -1, 0, ssOn[1]:ssrtSteps[1]]]
+    # gtraces = [gt[gt <= bound] for gt in gtraces]
+    ssi, integrated, dvgs, dvss = [], [], [], []
     for i, (g, s) in enumerate(zip(gtraces, straces)):
-        xinit_ss.append(ssOn[i])
         ssi.append(g[:xinit_ss[i]])
         ss = s[:ssOn[i]]
         s = np.append(g[:xinit_ss[i]], ss[ss >= 0])
@@ -92,7 +93,7 @@ def gen_re_traces(model):
         dvgs.append(g[:ixmin])
         dvss.append(s[:ixmin])
     nframes = [len(gt) for gt in dvgs]
-    x = params['tr'][0] * 1000 + [np.arange(nf) for nf in nframes]
+    x = [np.arange(goOn, goOn + nf) for nf in nframes]
     return [x, dvgs, dvss, xinit_ss, ssi, np.max(nframes)]
 
 
@@ -110,3 +111,39 @@ def re_animate_multiax(i, x, gtraces, glines, straces, slines, params, xi, yi):
             return sl, gl
         #f.savefig('animation_frames/movie/img' + str(i) +'.png', dpi=300)
     return sl, gl
+
+
+
+def gen_ddm_traces(model, ntrials=10):
+    params = deepcopy(model.inits)
+    dvg, dvs, rt, ssrt = model.sim.simulate_traces(params)
+    bound = params['a']
+    tr = params['tr']
+    goOn = model.sim.gOnset[0]
+    trials = range(ntrials)
+    rtSteps = [int(rt[0, t]*1000)+1 for t in trials]
+    gtraces = [dvg[0, t, goOn:rtSteps[t]] for t in trials]
+    nframes = [len(gt) for gt in gtraces]
+    x = [np.arange(goOn, goOn + nf) for nf in nframes]
+
+    return [x, gtraces, np.max(nframes)]
+
+
+def animate_ddm_func(i, x, gtrace, glines, line_i):
+    gcolor = '#4168B7'
+    # for n in range(len(x)):
+    # ex, gt, gl = [xx[n] for xx in [x, gtraces, glines]]
+    try:
+        line_index = line_i[i]
+        gl = glines[line_index]
+        xx = x[line_index]
+        # gt = gtraces[line_index]
+        if x==200:
+            gl.set_data(x[i:i + 1], gtraces[i:i + 1])
+        else:
+            gl.set_data(x[:i + 1], gtraces[:i + 1])
+        gl.set_color(gcolor)
+    except Exception:
+        return gl
+        #f.savefig('animation_frames/movie/img' + str(i) +'.png', dpi=300)
+    return gl

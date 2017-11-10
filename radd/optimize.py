@@ -273,7 +273,7 @@ class Optimizer(object):
 
         if self.progress:
             if resetProgress:
-                print("")
+                # print("")
                 self.make_progress_bars(inits=True, basin=True)
                 clear_output()
             self.callback = self.gbar.reset(get_call=True, gbasin=resetProgress)
@@ -467,28 +467,34 @@ class Optimizer(object):
         popt = dict(self.lmMin.params.valuesdict())
         fmin = self.lmMin.chisqr
         nvary = len(self.lmMin.var_names)
-        resContainer = self.lmMin
-
-        # check if global optimization better
-        if hasattr(self, "global_popt"):
-            if fmin > self.global_fmin:
-                popt = deepcopy(self.global_popt)
-                fmin = self.global_fmin
-                resContainer = self.global_results.lowest_optimization_result
-                resContainer['nfev'] = self.global_results.nfev
-                resContainer['nit'] = self.global_results.nit
-
-        residualList = []
-        for i in range(5):
-            sim.update(inits=popt)
-            yhat = sim.simulate_model(popt)
-            residualList.append(wts * (yhat - y))
-
-        residual = np.mean(residualList, axis=0)
-        yhat = (residual / wts) + y
-        success = resContainer.success
-        nfev = resContainer.nfev
-        niter = resContainer.nit
+        residuals = self.lmMin.residual
+        yhat = (residuals / wts) + y
+        success = self.lmMin.success
+        nfev = self.lmMin.nfev
+        niter = self.lmMin.nit
+        # resContainer = self.lmMin
+        #
+        # # check if global optimization better
+        # if hasattr(self, "global_popt"):
+        #     checkGlobal = list(self.global_popt) == list(popt)
+        #     if fmin > self.global_fmin and checkGlobal:
+        #         popt = deepcopy(self.global_popt)
+        #         fmin = self.global_fmin
+        #         resContainer = self.global_results.lowest_optimization_result
+        #         resContainer['nfev'] = self.global_results.nfev
+        #         resContainer['nit'] = self.global_results.nit
+        #
+        # residualList = []
+        # for i in range(5):
+        #     # sim.update(inits=popt)
+        #     yhat = sim.simulate_model(popt)
+        #     residualList.append(wts * (yhat - y))
+        #
+        # residual = np.mean(residualList, axis=0)
+        # yhat = (residual / wts) + y
+        # success = resContainer.success
+        # nfev = resContainer.nfev
+        # niter = resContainer.nit
 
         # TODO: extract, calculate, and store std.errors of popt
         # presults is scipy.minimize object (see hop_around() for global_results)

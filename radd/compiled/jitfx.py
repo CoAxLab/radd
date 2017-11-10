@@ -47,6 +47,44 @@ def slice_theta_array(theta_array, index_arrays, n_vals):
     return param_array.T
 
 
+
+@jit(nb.typeof((1, 1))(float64[:], float64[:], float64, float64, float64, float64), nopython=True)
+def sim_ddm_trace(rProb, trace, vProb, bound, gbase, dx):
+    evidence = gbase
+    trace[0] = evidence
+    timebound = trace.size
+    for ix in range(1, timebound):
+        if rProb[ix] < vProb:
+            evidence += dx
+        else:
+            evidence -= dx
+        trace[ix] = evidence
+        if evidence >= bound:
+            return ix, 1
+        elif evidence <= 0:
+            return ix, 0
+    return -1, -1
+
+
+
+@jit((float64[:,:,:], float64[:,:,:], float64[:,:], float64[:,:], float64[:], float64[:], float64[:], int64[:], float64[:], float64), nopython=True)
+def sim_many_ddm_traces(rProb, dvg, rts, choices, vProb, bound, gbase, gOnset, dx, dt):
+    ncond, ntrials, ntime = rProb.shape
+    for i in range(ncond):
+        tr = gOnset[i]
+        dvg[i,:,:tr] = gbase[i]
+        for j in range(ntrials):
+            ix, choice = sim_ddm_trace(rProb[i,j,tr:], dvg[i,j,tr:], vProb[i], bound[i], gbase[i], dx[i])
+            if ix<0:
+                rt_ix = ntime + 1
+                rts[i,j] = 1000.
+            else:
+                rt_ix = tr + ix
+                rts[i,j] = rt_ix * dt
+            choices[i, j] = choice
+
+
+
 @jit(int64(float64[:], float64[:], float64[:], float64, float64, float64, float64), nopython=True)
 def sim_dpm_trace_upper(rProb, trace, xtb, vProb, bound, gbase, dx):
     evidence = gbase
@@ -106,7 +144,7 @@ def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, vProb, vsProb, bound, gba
 
 
 #
-# @jit(float64(float64[:], float64[:], float64, float64, int64, float64, float64), nopython=True)
+@jit(float64(float64[:], float64[:], float64, float64, int64, float64, float64), nopython=True)
 def sim_dpm_trace_lower_trace(rProbSS, dvs, ssbase, vsProb, onset, dx, dt):
     ix = onset
     evidence = ssbase
@@ -121,7 +159,7 @@ def sim_dpm_trace_lower_trace(rProbSS, dvs, ssbase, vsProb, onset, dx, dt):
     return ix * dt
 
 
-# @jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64))#, nopython=True)
+@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64), nopython=True)
 def sim_many_dpm_traces(rProb, rProbSS, dvg, dvs, rts, ssrts, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, dt):
     ncond, ntrials, ntime = rProb.shape
     ncond, nssd, nss_per, ntime = rProbSS.shape

@@ -97,7 +97,7 @@ class PBinJ(object):
             display(self.bar)
             self.displayed=True
         if status is not None:
-            if hasattr(status, '__iter__'):
+            if hasattr(status, '__iter__') and not isinstance(status, str):
                 status = self.status.format(*status)
             else:
                 status = self.status.format(status)

@@ -198,7 +198,7 @@ class Model(RADDCore):
             return self.finfo, self.popt, self.yhat
 
 
-    def nested_optimize(self, models=[], flatp=None, saveplot=True, plotfits=True, custompath=None, progress=False, saveresults=True, saveobserved=False):
+    def nested_optimize(self, models=[], flatp=None, saveplot=True, plotfits=True, custompath=None, progress=True, saveresults=True, saveobserved=False):
         """ optimize a series of models using same init parameters where the i'th model
             has depends_on = {<models[i]> : <cond>}.
             NOTE: only for models with fit_on='average'
@@ -215,32 +215,39 @@ class Model(RADDCore):
             progress (bool):
                 track progress across model fits, ninits, and basinhopping
         """
+
+        fits, popts, yhats = [], [], []
         self.is_nested = True
         self.custompath = custompath
-        if flatp is None:
-            models = [{'all': 'flat'}] + models
-            self.param_sets = self.opt.sample_param_sets()
-
         pnames = self.toggle_pbars(progress=progress, models=models)
+
+        if flatp is None:
+            self.set_fitparams(force='flat')
+            flatp = self.optimize_flat()
+            # models = [{'all': 'flat'}] + models
+            # self.param_sets = self.opt.sample_param_sets()
         # loop over depends_on dictionaries and optimize cond models
         for i, depends_on in enumerate(models):
-            self.set_fitparams(depends_on=depends_on)
             if progress:
                 self.mbar.update(value=i, status=pnames[i])
-            if flatp is None:
-                self.param_sets = self.opt.sample_param_sets()
-                flatp = self.optimize_flat(self.param_sets)
-                continue
-            self.optimize_conditional(flatp)
-            if plotfits:
-                self.plot_model_fits(save=saveplot)
-            if saveresults:
-                self.handler.save_results(saveobserved=saveobserved)
+            # if flatp is None:
+            #     # self.param_sets = self.opt.sample_param_sets()
+            #     self.set_fitparams(force='flat')
+            #     flatp = self.optimize_flat()
+            #     continue
+            self.set_fitparams(depends_on=depends_on)
+            finfo, popt, yhat = self.optimize_conditional(flatp, get_results=True)
+            fits.append(finfo); popts.append(popt); yhats.append(yhat)
+            # if plotfits:
+            #     self.plot_model_fits(save=saveplot)
+            # if saveresults:
+            #     self.handler.save_results(saveobserved=saveobserved)
+
         if progress:
             self.mbar.clear()
             self.opt.gbar.clear()
             self.opt.ibar.clear()
-
+        return fits, popts, yhats
 
     def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit

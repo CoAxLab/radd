@@ -10,7 +10,7 @@ import numpy as np
 from numpy.random import random_sample as randsample
 from scipy.stats.mstats import mquantiles
 from itertools import product
-from radd import build, theta
+from radd import theta
 from radd.tools.utils import pandaify_results
 from numpy import hstack as hs
 from radd.compiled.jitfx import *
@@ -78,6 +78,15 @@ class Simulator(object):
             return np.sum(residuals**2)
         return residuals
 
+    def chi_square(self, theta_array):
+        rt, ssrt = self.simulate_model(theta_array, analyze=False, get_rts=True)
+        ntotal = rt[0].shape[0]
+        nbins = self.quantiles.size+1
+        eProp= [[rt[(rt >= rtq[i])&(rt < rtq[i+1])].shape[0] / ntotal for i in range(nbins)] for ii in range(self.nconds)]
+        pResp = np.mean(np.where(rt < m.sim.tb, 1, 0), axis=1)
+        E_i = N * pResp * np.asarray(eProp)
+        chi2 = np.sum((O_i - E_i)**2 / E_i)
+
 
     def simulate_model(self, params, analyze=True, get_rts=False):
         xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
@@ -90,12 +99,21 @@ class Simulator(object):
         return pandaify_results(goRT, ssRT, ssd=self.ssd, bootstrap=False, clmap=self.clmap, tb=self.tb)
 
 
-    def simulate_traces(self, params):
+    def _simulate_traces(self, params):
         xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
         dvg, goRT, ssRT = self.get_io_copies()
         dvs = self.dvs.copy()
         sim_many_dpm_traces(self.rProb, self.rProbSS, dvg, dvs, goRT, ssRT, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, self.dt)
         return [dvg, dvs, goRT, ssRT]
+
+
+    def _simulate_ddm_traces(self, params):
+        xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
+        gbase = .5*bound
+        dvg, rts, _ = self.get_io_copies()
+        choices = np.zeros(rts.shape)
+        sim_many_ddm_traces(self.rProb, dvg, rts, choices, vProb, bound, gbase, gOnset, dx, self.dt)
+        return [dvg, rts, choices]
 
 
     def analyze(self, rts, ssrts):
@@ -164,10 +182,8 @@ class Simulator(object):
         #     s2 = si**2
         #     dx = np.sqrt(s2 * self.dt)
         #     vProb = 0.5 * (1 + v * dx / s2)
-
         gbase = a * z
         gOnset = get_onset_index(tr, self.dt)
-        # ssOnset = get_onset_index(ssd, self.dt)
         ssOnset = np.round(ssd / self.dt, 1).astype(int)
         gOnset = np.round(tr / self.dt, 1).astype(int)
         self.vProb = vProb

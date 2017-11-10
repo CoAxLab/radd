@@ -43,11 +43,10 @@ class RADDCore(object):
         self.track_basins = False
         self.pbars = None
         self.is_nested = False
-        self.set_conditions(depends_on, bwfactors)
-        self.__prepare_fit__(presample=presample)
+        self.__prepare_fit__(depends_on, presample=presample)
 
 
-    def __prepare_fit__(self, presample=False):
+    def __prepare_fit__(self, depends_on, presample=False):
         """ model setup and initiates dataframes. Automatically run when Model object is initialized
         *pcmap is a dict containing parameter names as keys with values
                 corresponding to the names given to that parameter in Parameters object
@@ -61,6 +60,9 @@ class RADDCore(object):
         # from radd.optimize import Optimizer
         # from radd.models import Simulator
         from radd import optimize
+
+        self.set_conditions(depends_on, self.bwfactors)
+
         if self.inits is None:
             self.__get_default_inits__()
 
@@ -103,6 +105,9 @@ class RADDCore(object):
         self.observed = self.handler.observed
         # list of flattened data arrays (averaged across conditions)
         self.observed_flat = self.handler.observed_flat
+
+        # observed frequency bins dataframe
+        self.freqDF = self.handler.make_freq_df()
 
         # dataframe with same dim as observeddf for storing model predictions
         self.yhatdf = self.handler.yhatdf
@@ -161,6 +166,7 @@ class RADDCore(object):
                             'tb': self.tb}
 
             self.fitparams = pd.Series(self.fitparams)
+
         else:
             # fill with kwargs (i.e. y, wts, ix, etc)
             for kw_arg, kw_val in kwargs.items():
@@ -169,12 +175,16 @@ class RADDCore(object):
         if 'quantiles' in list(kwargs):
             self.update_quantiles()
         if 'depends_on' in list(kwargs):
-            reformat_dataframes = False
-            if self.is_flat:
-                reformat_dataframes = True
-            self.set_conditions(kwargs['depends_on'])
-            if reformat_dataframes:
-                self.__prepare_fit__()
+            # reformat_dataframes = False
+            # conds = listvalues(kwargs['depends_on'])
+            # if self.is_flat or conds != listvalues(self.depends_on):
+            #     reformat_dataframes = True
+            # self.set_conditions(kwargs['depends_on'])
+            # if reformat_dataframes:
+            self.__prepare_fit__(kwargs['depends_on'])
+            self.generate_model_id()
+            self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap, model_id=self.model_id)
+            self.fitparams['nlevels'] = self.nlevels
         if force=='cond':
             self.fitparams['nlevels'] = self.nlevels
         elif force=='flat':
@@ -197,7 +207,7 @@ class RADDCore(object):
                                 'nsamples': 1500,
                                 'interval': 10,
                                 'T': .03,
-                                'stepsize': .05,
+                                'stepsize': .015,
                                 'niter': 500,
                                 'maxiter': 500,
                                 'nsuccess': 150,
@@ -287,10 +297,10 @@ class RADDCore(object):
         self.groups = np.hstack([['idx'], self.conds]).tolist()
 
         self.__format_pcmap__()
-        if hasattr(self, 'ssdDF'):
+        if hasattr(self, 'ssdDF') and not self.is_nested:
             self.__set_ssd_info__()
 
-        if hasattr(self, 'fitparams'):
+        if hasattr(self, 'fitparams') and not self.is_nested:
             self.generate_model_id()
             self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap, model_id=self.model_id)
 
@@ -401,7 +411,7 @@ class RADDCore(object):
             self.idxbar = utils.PBinJ(n=self.nidx, color='y', status=status)
         if models is not None:
             pvary = [list(depends_on) for depends_on in models]
-            pnames = [vis.parameter_name(p, True) for p in pvary]
+            pnames = [vis.parameter_name(p, False) for p in pvary]
             self.mbar = utils.PBinJ(n=len(pnames), color='b', status='{} Model')
             return pnames
 

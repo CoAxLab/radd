@@ -471,5 +471,5 @@ def parameter_name(param, tex=False):
     if '_' in param and param!='v_ssv':
         param = param.split('_')
     if isinstance(param, list):
-        return ' $&$ '.join([param_name[p][ix] for p in param])
+        return ' & '.join([param_name[p][ix] for p in param])
     return param_name[param][ix]
