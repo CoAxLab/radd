@@ -5,7 +5,7 @@ modules = glob.glob(os.path.dirname(__file__)+"/*.py")
 __all__ = [ os.path.basename(f)[:-3] for f in modules]
 
 _package_dir = os.path.dirname(os.path.realpath(__file__))
-__version__ = '0.3.6'
+__version__ = '0.4.0'
 
 def load_example_data():
     import pandas as pd
