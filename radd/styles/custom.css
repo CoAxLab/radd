@@ -1,25 +1,11 @@
 <style>
-	@font-face {
-	 font-family: 'Proxima Nova Bold';
-	 src: url('fonts/Proxima Nova Alt Bold-webfont.eot');
-	 src: url('fonts/Proxima Nova Alt Bold-webfont.eot?#iefix') format('embedded-opentype'), url('fonts/Proxima Nova Alt Bold-webfont.woff2') format('woff2'), url('fonts/Proxima Nova Alt Bold-webfont.woff') format('woff'), url('fonts/Proxima Nova Alt Bold-webfont.ttf') format('truetype'), url('fonts/Proxima Nova Alt Bold-webfont.svg#proxima_nova_altbold') format('svg');
-	 font-weight: 600;
-	 font-style: normal;
-	}
-	@font-face {
-	 font-family: 'Proxima Nova';
-	 src: url('fonts/Proxima Nova Alt Regular-webfont.eot');
-	 src: url('fonts/Proxima Nova Alt Regular-webfont.eot?#iefix') format('embedded-opentype'), url('fonts/Proxima Nova Alt Regular-webfont.woff') format('woff'), url('fonts/Proxima Nova Alt Regular-webfont.ttf') format('truetype'), url('fonts/Proxima Nova Alt Regular-webfont.svg#proxima_nova_altregular') format('svg');
-	 font-weight: 400;
-	 font-style: normal;
-	}
 	div#notebook {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 line-height: 180%;
 	 color: #303030;
 	 -webkit-font-smoothing: antialiased !important;
-	 padding-top: 36px !important;
+	 padding-top: 8px !important;
 	}
 	.notebook_app {
 	 background-color: #ffffff;
@@ -29,8 +15,8 @@
 	}
 	body,
 	div.body {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 color: #070707;
 	 background-color: #ffffff;
 	 -webkit-font-smoothing: subpixel-antialiased !important;
@@ -47,7 +33,7 @@
 	 overflow-y: hidden;
 	}
 	a {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 color: #070707;
 	 -webkit-font-smoothing: subpixel-antialiased !important;
 	}
@@ -195,8 +181,8 @@
 	 font-size: 18px;
 	}
 	div#notebook_toolbar div.dynamic-instructions {
-	 font-family: 'Proxima Nova';
-	 font-size: 17px;
+	 font-family: sans-serif;
+	 font-size: 10.5pt;
 	 color: #828892;
 	}
 	span#login_widget > .button,
@@ -255,14 +241,14 @@
 	 z-index: 100;
 	}
 	.list_container {
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	 color: #070707;
 	 border: none;
 	 text-shadow: none !important;
 	}
 	.list_container > div {
 	 border-bottom: 1px solid rgba(61,59,73,.10);
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	}
 	.list_header > div,
 	.list_item > div {
@@ -275,7 +261,7 @@
 	 margin-left: -1px;
 	 vertical-align: middle;
 	 line-height: 22px;
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	}
 	.item_icon {
 	 color: #007dc5;
@@ -294,7 +280,7 @@
 	 margin-left: -1px;
 	 vertical-align: middle;
 	 line-height: 1.5em;
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	 display: inline-table;
 	 position: static;
 	}
@@ -321,7 +307,7 @@
 	}
 	button#tree-selector-btn {
 	 height: 34px;
-	 font-size: 11.0pt;
+	 font-size: 10.5pt;
 	 border: none;
 	 left: 0px;
 	 border-radius: 0px !important;
@@ -367,7 +353,7 @@
 	 background-color: #fbfbfb;
 	}
 	.breadcrumb > li {
-	 font-size: 11.0pt;
+	 font-size: 10.5pt;
 	 color: #070707;
 	 border: none;
 	 text-shadow: none !important;
@@ -386,15 +372,15 @@
 	 margin-top: -2px;
 	}
 	ul#tabs a {
-	 font-family: 'Proxima Nova';
-	 font-size: 13.5pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt !important;
 	 font-weight: normal;
 	 font-style: normal;
 	 text-shadow: none !important;
 	}
 	.nav-tabs {
-	 font-family: 'Proxima Nova';
-	 font-size: 13.5pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt !important;
 	 font-weight: normal;
 	 font-style: normal;
 	 background-color: transparent;
@@ -454,32 +440,32 @@
 	 -webkit-font-smoothing: subpixel-antialiased !important;
 	}
 	#notebook-container {
-	 padding: 8px 2px;
+	 padding: 14px 2px;
 	 background-color: #ffffff;
 	 min-height: 0px;
 	 box-shadow: none;
-	 width: 94%;
+	 width: 83%;
 	 margin-right: auto;
 	 margin-left: auto;
 	}
 	div#ipython-main-app.container {
-	 width: 94%;
+	 width: 83%;
 	 margin-right: auto;
 	 margin-left: auto;
 	 margin-right: auto;
 	 margin-left: auto;
 	}
 	.container {
-	 width: 94%;
+	 width: 83%;
 	 margin-right: auto;
 	 margin-left: auto;
 	}
 	div#menubar-container {
 	 width: 100%;
-	 width: 94%;
+	 width: 83%;
 	}
 	div#header-container {
-	 width: 94%;
+	 width: 83%;
 	}
 	.notebook_app #header {
 	 border: none !important;
@@ -495,8 +481,8 @@
 	}
 	#header,
 	.edit_app #header {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 box-shadow: none;
 	}
 	body > #header .header-bar {
@@ -562,14 +548,14 @@
 	 color: #d31242;
 	}
 	.navbar-default {
-	 font-family: 'Proxima Nova';
-	 font-size: 13.5pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 line-height: 1.5em;
 	 padding-bottom: 0px;
 	}
 	.navbar-default .navbar-nav > li > a {
-	 font-family: 'Proxima Nova';
-	 font-size: 13.5pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 color: #070707;
 	 display: block;
 	 line-height: 1.5em;
@@ -578,11 +564,11 @@
 	}
 	.navbar-default .navbar-nav > li > a:hover,
 	.navbar-default .navbar-nav > li > a:focus {
-	 color: #070707;
+	 color: #070707 !important;
 	 background-color: #dedede !important;
 	 border-color: #dedede !important;
 	 line-height: 1.5em;
-	 transition: 100ms ease;
+	 transition: 60ms ease;
 	}
 	.navbar-default .navbar-nav > .open > a,
 	.navbar-default .navbar-nav > .open > a:hover,
@@ -591,7 +577,7 @@
 	 background-color: #dedede !important;
 	 border-color: #dedede !important;
 	 line-height: 1.5em;
-	 transition: 100ms ease;
+	 transition: 60ms ease;
 	}
 	.navbar-nav > li > .dropdown-menu {
 	 margin-top: -1px;
@@ -608,10 +594,11 @@
 	 margin-bottom: 4px;
 	}
 	div#notification_notebook.notification_widget.btn.btn-xs.navbar-btn {
+	 color: #828892 !important;
 	 background: transparent;
 	 background-color: transparent;
 	 border: none;
-	 font-size: 9pt;
+	 font-size: 8pt;
 	 z-index: 0;
 	}
 	div.notification_widget.info,
@@ -628,18 +615,19 @@
 	div#notification_notebook.notification_widget.btn.btn-xs.navbar-btn,
 	div#notification_notebook.notification_widget.btn.btn-xs.navbar-btn:hover,
 	div#notification_notebook.notification_widget.btn.btn-xs.navbar-btn:focus {
-	 color: #ffffff;
+	 color: #828892 !important;
 	 background-color: #e8e8e8 !important;
 	 background: #e8e8e8;
 	 border-color: #e8e8e8 !important;
 	 padding-bottom: 0px !important;
 	 margin-bottom: 0px !important;
-	 font-size: 9pt !important;
+	 font-size: 8pt !important;
 	 z-index: 0;
+	 cursor: pointer !important;
 	}
 	.notification_widget {
 	 z-index: -500;
-	 font-size: 9pt !important;
+	 font-size: 8pt !important;
 	 background: transparent;
 	 background-color: transparent;
 	 border: none;
@@ -661,7 +649,7 @@
 	}
 	.item_buttons .kernel-name {
 	 padding-top: 4px;
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	 color: #d31242;
 	}
 	.running_notebook_icon:before {
@@ -679,13 +667,15 @@
 	.item_buttons .running-indicator {
 	 padding-top: 3px;
 	 color: #488f0c;
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 text-rendering: auto;
 	 -webkit-font-smoothing: antialiased;
 	}
 	#notification_trusted {
+	 color: #828892 !important;
 	 display: none !important;
+	 cursor: pointer !important;
 	}
 	#modal_indicator {
 	 float: right !important;
@@ -704,9 +694,7 @@
 	 background: transparent;
 	 background-color: transparent;
 	 border: none;
-	 margin-top: 0px !important;
 	 margin-left: -4px;
-	 padding-top: 7px;
 	 padding-right: 10px;
 	 padding-left: 0px;
 	}
@@ -717,20 +705,21 @@
 	 background-color: transparent;
 	 color: #d31242;
 	 margin-left: 0px;
-	 margin-top: 7px;
-	 padding-top: 12px;
 	 padding-bottom: 12px;
 	 padding-right: 10px;
 	 padding-left: 10px;
 	 vertical-align: bottom !important;
 	}
 	#kernel_indicator .kernel_indicator_name {
-	 display: inline-block;
+	 display: none !important;
 	 padding-left: 0px;
 	 padding-right: 5px;
 	 color: #d31242;
-	 font-size: 19px;
+	 font-size: 11.5pt !important;
 	 vertical-align: inherit;
+	 line-height: 1.5em;
+	 padding-top: 2px;
+	 padding-bottom: 8px;
 	}
 	.kernel_idle_icon:before {
 	 display: inline-block;
@@ -806,6 +795,8 @@
 	div.notification_area {
 	 float: right !important;
 	 position: static;
+	 cursor: pointer;
+	 padding-top: 3px;
 	}
 	.notification_widget,
 	div.notification_widget {
@@ -834,11 +825,17 @@
 	 -moz-osx-font-smoothing: grayscale;
 	}
 	i#notebook-trusted-indicator.fa.fa-question.notebook-trusted {
-	 display: none;
+	 color: #828892 !important;
+	 display: none !important;
+	 font-size: 11.5pt !important;
+	 vertical-align: inherit;
+	 line-height: 1.5em;
+	 padding-top: 2px;
+	 padding-bottom: 8px;
 	}
 	.dropdown-menu {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 box-shadow: none;
 	 padding: 0px;
 	 text-align: left;
@@ -849,8 +846,8 @@
 	 line-height: 1.2;
 	}
 	.dropdown-menu:hover {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 box-shadow: none;
 	 padding: 0px;
 	 text-align: left;
@@ -862,8 +859,8 @@
 	 line-height: 1.2;
 	}
 	.dropdown-menu > li > a {
-	 font-family: 'Proxima Nova';
-	 font-size: 11.0pt;
+	 font-family: sans-serif;
+	 font-size: 10.5pt;
 	 display: block;
 	 padding: 10px 20px 9px 10px;
 	 color: #070707;
@@ -876,7 +873,7 @@
 	 background-color: #d4d4d4;
 	 background: #d4d4d4;
 	 border-color: #d4d4d4;
-	 transition: 200ms ease;
+	 transition: 155ms ease;
 	}
 	.dropdown-menu .divider {
 	 height: 1px;
@@ -890,13 +887,13 @@
 	 margin-top: 0px !important;
 	 margin-left: 0px;
 	 padding-top: 0px;
-	 transition: 200ms ease;
+	 transition: 155ms ease;
 	}
 	.dropdown-menu > .disabled > a,
 	.dropdown-menu > .disabled > a:hover,
 	.dropdown-menu > .disabled > a:focus {
-	 font-family: 'Proxima Nova';
-	 font-size: 11.0pt;
+	 font-family: sans-serif;
+	 font-size: 10.5pt;
 	 font-weight: normal;
 	 color: #828892;
 	 padding: none;
@@ -925,9 +922,22 @@
 	.navbar-default .navbar-nav > li.active > a:before {
 	 visibility: hidden;
 	}
+	ul#new-menu.dropdown-menu,
+	ul#selector-menu.dropdown-menu,
+	ul#selector-menu.dropdown-menu > li > a,
+	ul#new-menu.dropdown-menu > li > a {
+	 background: #dedede;
+	 background-color: #dedede;
+	}
+	ul#selector-menu.dropdown-menu > li > a:hover,
+	ul#new-menu.dropdown-menu > li > a:hover,
+	ul#selector-menu.dropdown-menu > li > a:focus,
+	ul#new-menu.dropdown-menu > li > a:focus {
+	 background-color: #d4d4d4 !important;
+	}
 	.btn,
 	.btn-default {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 color: #070707;
 	 background: #e9e9e9;
 	 background-color: #e9e9e9;
@@ -1007,12 +1017,12 @@
 	 background: #f2ced7 !important;
 	 background-color: #f2ced7 !important;
 	 border-color: #f2ced7 !important;
-	 transition: 200ms ease !important;
+	 transition: 155ms ease !important;
 	}
 	.item_buttons > .btn,
 	.item_buttons > .btn-group,
 	.item_buttons > .input-group {
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	 background: transparent;
 	 background-color: transparent;
 	 border: 0px solid #e4e4e4;
@@ -1134,16 +1144,17 @@
 	 z-index: 2;
 	}
 	.dropdown-header {
-	 font-family: 'Proxima Nova' !important;
-	 font-size: 12pt !important;
+	 font-family: sans-serif !important;
+	 font-size: 11.5pt !important;
 	 color: #d31242 !important;
 	 border-bottom: none !important;
 	 padding: 0px !important;
 	 margin: 6px 6px 0px !important;
 	}
 	span#last-modified.btn.btn-xs.btn-default.sort-action,
-	span#sort-name.btn.btn-xs.btn-default.sort-action {
-	 font-family: 'Proxima Nova';
+	span#sort-name.btn.btn-xs.btn-default.sort-action,
+	span#file-size.btn.btn-xs.btn-default.sort-action {
+	 font-family: sans-serif;
 	 font-size: 16px;
 	 background-color: transparent;
 	 background: transparent;
@@ -1194,11 +1205,11 @@
 	 background: #e6e6e6;
 	 background-color: #e6e6e6;
 	 border-color: #e6e6e6;
-	 transition: 200ms ease;
+	 transition: 155ms ease;
 	}
 	.input-group-addon {
 	 padding: 2px 5px;
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	 font-weight: normal;
 	 height: auto;
 	 color: #070707;
@@ -1243,7 +1254,7 @@
 	 background-color: #e4e4e4;
 	 border: none;
 	 font-size: inherit;
-	 transition: 200ms ease;
+	 transition: 155ms ease;
 	}
 	div.modal .btn-group > .btn:first-child {
 	 background: #e4e4e4;
@@ -1257,7 +1268,7 @@
 	 background: #dfdfdf;
 	 background-color: #dfdfdf;
 	 border: 1px solid #dfdfdf;
-	 transition: 200ms ease;
+	 transition: 155ms ease;
 	}
 	div.modal > button,
 	div.modal-footer > button {
@@ -1270,11 +1281,11 @@
 	 background: #dfdfdf;
 	 background-color: #dfdfdf;
 	 border-color: #dfdfdf;
-	 transition: 200ms ease;
+	 transition: 155ms ease;
 	}
 	.modal-content {
-	 font-family: 'Proxima Nova';
-	 font-size: 11.0pt;
+	 font-family: sans-serif;
+	 font-size: 10.5pt;
 	 position: relative;
 	 background: #e4e4e4;
 	 background-color: #e4e4e4;
@@ -1284,8 +1295,8 @@
 	 outline: none;
 	}
 	.modal-header {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 color: #070707;
 	 background: #e4e4e4;
 	 background-color: #e4e4e4;
@@ -1294,7 +1305,7 @@
 	 min-height: 16.4286px;
 	}
 	.modal-content h4 {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: 16pt;
 	 color: #070707;
 	 padding: 5px;
@@ -1328,8 +1339,8 @@
 	div.panel-default,
 	.panel,
 	.panel-default {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 background-color: #f4f4f4;
 	 color: #070707;
 	 margin-bottom: 14px;
@@ -1356,7 +1367,7 @@
 	}
 	div.form-control,
 	.form-control {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: inherit;
 	 color: #070707;
 	 background-color: #ffffff;
@@ -1385,7 +1396,7 @@
 	}
 	select.form-control.select-xs {
 	 height: 33px;
-	 font-size: 12pt;
+	 font-size: 11.5pt;
 	}
 	.toolbar select,
 	.toolbar label {
@@ -1483,6 +1494,15 @@
 	 text-rendering: auto;
 	 -webkit-font-smoothing: antialiased;
 	}
+	.jupyter-dashboard-menu-item.selected::before {
+	 font-family: FontAwesome;
+	 content: '\f00c';
+	 position: absolute;
+	 font-size: xx-small;
+	 color: #d31242;
+	 top: 13px !important;
+	 left: 0px !important;
+	}
 	div.input_area {
 	 background-color: #f1f1f1;
 	 background: #f1f1f1;
@@ -1495,21 +1515,22 @@
 	 background: #f1f1f1;
 	 background-color: #f1f1f1;
 	 border: medium solid #ffffff;
+	 border-radius: 3px;
 	 top: 0;
-	 border-radius: 5px;
-	 margin-bottom: 5px;
 	}
 	div.cell.selected {
 	 background: #f1f1f1;
 	 background-color: #f1f1f1;
 	 border: medium solid #ffffff;
 	 padding: 0px;
+	 border-radius: 5px;
 	}
 	.edit_mode div.cell.selected {
 	 padding: 0px;
 	 background: #f1f1f1;
 	 background-color: #f1f1f1;
 	 border: medium solid #ffffff;
+	 border-radius: 5px;
 	}
 	div.cell.edit_mode {
 	 padding: 0px;
@@ -1526,57 +1547,100 @@
 	 margin-top: 0px;
 	}
 	div.cell.selected:before {
-	 background: #c60030;
-	 border: 2px solid #c60030;
-	 border-top-left-radius: 2px;
-	 border-bottom-left-radius: 4px;
+	 background: #f1f1f1;
+	 border: none;
+	 border-radius: 2px;
 	 position: absolute;
 	 display: block;
 	 top: 0px;
 	 left: 0px;
-	 width: 5px;
+	 width: 0px;
 	 height: 100%;
 	}
-	.cell .input:hover .input_prompt,
-	div.cell .input:hover .input_prompt {
-	 background: #eeeeee;
-	 background-color: #eeeeee;
-	 color: transparent;
-	}
-	div.cell.text_cell:active .prompt,
-	div.cell.text_cell:hover .prompt,
-	.cell.text_cell:hover .prompt.cell.text_cell .prompt {
-	 background: #ffffff;
-	 background-color: #ffffff;
-	}
-	div.cell.selected.jupyter-soft-selected:before,
 	.edit_mode div.cell.selected:before {
-	 background: #ffbbc3;
-	 border: 2px solid #ffbbc3;
-	 border-top-left-radius: 2px;
-	 border-bottom-left-radius: 2px;
+	 background: #ffffff;
+	 border: none;
+	 border-radius: 2px;
 	 position: absolute;
 	 display: block;
 	 top: 0px;
 	 left: 0px;
-	 width: 5px;
+	 width: 0px;
 	 height: 100%;
+	}
+	div.cell.code_cell .input {
+	 border-left: 4px solid #f1f1f1 !important;
+	 border-radius: 2px;
+	}
+	div.cell.code_cell.selected .input {
+	 border-left: 4px solid #c60030 !important;
+	 border-radius: 2px;
+	}
+	.edit_mode div.cell.code_cell.selected .input {
+	 border-left: 4px solid #ffbbc3 !important;
+	 border-radius: 2px;
+	}
+	div.cell.selected:before,
+	.edit_mode div.cell.selected:before,
+	div.cell.selected:before,
+	div.cell.selected.jupyter-soft-selected:before {
+	 background: #f1f1f1 !important;
+	 border: none;
+	 border-radius: 2px;
+	 position: absolute;
+	 display: block;
+	 top: 0px;
+	 left: 0px;
+	 width: 0px;
+	 height: 100%;
+	}
+	div.cell.text_cell.selected::before,
+	.edit_mode div.cell.text_cell.selected:before,
+	div.cell.text_cell.selected:before,
+	div.cell.text_cell.selected.jupyter-soft-selected:before {
+	 background: #ffffff !important;
+	 background-color: #ffffff !important;
+	 border-color: #e0e0e0 !important;
+	}
+	.edit_mode div.cell.selected:before {
+	 height: 100%;
+	 border-left: 4px solid #ffbbc3 !important;
+	 border-radius: 2px;
 	}
 	div.cell.jupyter-soft-selected,
 	div.cell.selected.jupyter-soft-selected {
-	 border-left-color: #ffbbc3;
-	 border-left-width: 0px;
-	 padding-left: 7px;
-	 border-right-color: #ffbbc3;
-	 border-right-width: 0px;
-	 background: #ffbbc3;
-	 border-radius: 6px;
+	 border-left-color: #ffbbc3 !important;
+	 border-left-width: 0px !important;
+	 padding-left: 7px !important;
+	 border-right-color: #ffbbc3 !important;
+	 border-right-width: 0px !important;
+	 background: #ffbbc3 !important;
+	 border-radius: 6px !important;
+	}
+	div.cell.selected.jupyter-soft-selected .input {
+	 border-left: 4px solid #f1f1f1 !important;
+	}
+	div.cell.selected.jupyter-soft-selected:before,
+	.edit_mode div.cell.selected:before .input {
+	 background: #ffbbc3 !important;
+	 border: 2px solid #ffbbc3 !important;
+	 border-radius: 6px !important;
+	 position: absolute !important;
+	 display: block !important;
+	 top: 0px !important;
+	 left: 0px !important;
+	 width: 6px !important;
+	 height: 100% !important;
 	}
 	div.cell.selected.jupyter-soft-selected {
 	 border-left-color: #c60030;
 	 border-color: #ffffff;
 	 padding-left: 7px;
 	 border-radius: 6px;
+	}
+	div.cell.code_cell.selected .input {
+	 border-left: none;
+	 border-radius: 2px;
 	}
 	div.cell.selected.jupyter-soft-selected .prompt,
 	div.cell.text_cell.selected.jupyter-soft-selected .prompt {
@@ -1588,8 +1652,8 @@
 	 border-left: none !important;
 	}
 	div.cell.text_cell.selected.jupyter-soft-selected:before {
-	 background: #efefef !important;
-	 border: 2px solid #efefef !important;
+	 background: #e8e8e8 !important;
+	 border: 2px solid #e8e8e8 !important;
 	 border-radius: 6px !important;
 	 position: absolute !important;
 	 display: block !important;
@@ -1600,61 +1664,96 @@
 	}
 	div.cell.text_cell.jupyter-soft-selected,
 	div.cell.text_cell.selected.jupyter-soft-selected {
-	 border-left-color: #efefef !important;
+	 border-left-color: #e8e8e8 !important;
 	 border-left-width: 0px !important;
 	 padding-left: 7px !important;
-	 border-right-color: #efefef !important;
+	 border-right-color: #e8e8e8 !important;
 	 border-right-width: 0px !important;
-	 background: #efefef !important;
+	 background: #e8e8e8 !important;
 	 border-radius: 6px !important;
+	}
+	div.cell.jupyter-soft-selected .input,
+	div.cell.selected.jupyter-soft-selected .input {
+	 border-left-color: #ffbbc3 !important;
 	}
 	div.prompt,
 	.prompt {
-	 font-family: None, monospace;
-	 font-size: 9.5pt !important;
-	 font-weight: bold !important;
-	 color: transparent !important;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
+	 font-weight: normal;
+	 color: transparent;
 	 line-height: 170%;
 	 padding: 0px;
 	 padding-top: 4px;
 	 padding-left: 0px;
 	 padding-right: 1px;
 	 text-align: right !important;
-	 min-width: 7ex !important;
-	 width: 7ex !important;
-	 border-radius: 0px !important;
+	 min-width: 8ex !important;
+	 width: 8ex !important;
 	}
 	div.prompt.input_prompt {
-	 font-size: 9.5pt !important;
-	 font-weight: bold !important;
+	 font-size: 9pt !important;
 	 background-color: #f1f1f1;
 	 border-top: 0px;
 	 border-top-right-radius: 0px;
 	 border-bottom-left-radius: 0px;
 	 border-bottom-right-radius: 0px;
-	 border-radius: 0px !important;
 	 padding-right: 3px;
-	 padding-top: 12px;
-	 min-width: 7ex;
-	 width: 7ex !important;
+	 min-width: 8ex;
+	 width: 8ex !important;
 	}
 	div.cell.code_cell .input_prompt {
 	 border-right: 2px solid rgba(191,11,55,.30);
 	}
 	div.cell.selected .prompt {
 	 top: 0;
-	 border-left: 5px solid #c60030;
-	 border-radius: 0px;
 	}
 	.edit_mode div.cell.selected .prompt {
 	 top: 0;
-	 border-left: 5px solid #ffbbc3;
-	 border-radius: 0px;
 	}
 	.edit_mode div.cell.selected .prompt {
 	 top: 0;
-	 border-left: 5px solid #ffbbc3;
-	 border-radius: 0px;
+	}
+	.run_this_cell {
+	 visibility: hidden;
+	 color: transparent;
+	 padding-top: 0px;
+	 padding-bottom: 0px;
+	 padding-left: 3px;
+	 padding-right: 12px;
+	 width: 1.5ex;
+	 width: 0ex;
+	 background: transparent;
+	 background-color: transparent;
+	}
+	div.code_cell:hover div.input .run_this_cell {
+	 visibility: visible;
+	}
+	div.cell.code_cell.rendered.selected .run_this_cell:hover {
+	 background-color: #e7e7e7;
+	 background: #e7e7e7;
+	 color: #c60030 !important;
+	}
+	div.cell.code_cell.rendered.unselected .run_this_cell:hover {
+	 background-color: #e7e7e7;
+	 background: #e7e7e7;
+	 color: #c60030 !important;
+	}
+	i.fa-step-forward.fa {
+	 display: inline-block;
+	 font: normal normal normal 9px "FontAwesome";
+	}
+	.fa-step-forward:before {
+	 content: "\f04b";
+	}
+	div.cell.selected.jupyter-soft-selected .run_this_cell,
+	div.cell.selected.jupyter-soft-selected .run_this_cell:hover,
+	div.cell.unselected.jupyter-soft-selected .run_this_cell:hover,
+	div.cell.code_cell.rendered.selected.jupyter-soft-selected .run_this_cell:hover,
+	div.cell.code_cell.rendered.unselected.jupyter-soft-selected .run_this_cell:hover {
+	 background-color: #ffbbc3 !important;
+	 background: #ffbbc3 !important;
+	 color: #ffbbc3 !important;
 	}
 	div.output_wrapper {
 	 background-color: #ffffff;
@@ -1667,8 +1766,8 @@
 	}
 	div.output_subarea.output_text.output_stream.output_stdout,
 	div.output_subarea.output_text {
-	 font-family: None, monospace;
-	 font-size: 10pt !important;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
 	 line-height: 150% !important;
 	 background-color: #ffffff;
 	 color: #303030;
@@ -1676,27 +1775,26 @@
 	 border-top-left-radius: 0px;
 	}
 	div.output_area pre {
-	 font-family: None, monospace;
-	 font-size: 10pt !important;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
 	 line-height: 151% !important;
 	 color: #303030;
 	 border-top-right-radius: 0px;
 	 border-top-left-radius: 0px;
 	}
 	div.output_area {
-	 padding-top: 8px;
 	 display: -webkit-box;
 	}
 	div.output_html {
-	 font-family: None, monospace;
-	 font-size: 10pt;
+	 font-family: monospace, monospace;
+	 font-size: 9pt;
 	 color: #353535;
 	 background-color: #ffffff;
 	 background: #ffffff;
 	}
 	div.output_subarea {
 	 overflow-x: auto;
-	 padding: 0.3em;
+	 padding: 0.8em !important;
 	 -webkit-box-flex: 1;
 	 -moz-box-flex: 1;
 	 box-flex: 1;
@@ -1713,8 +1811,8 @@
 	 border-color: #d2d2d2;
 	}
 	div.prompt.output_prompt {
-	 font-family: None, monospace;
-	 font-size: 9.5pt !important;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
 	 font-weight: bold !important;
 	 background-color: #ffffff;
 	 color: transparent;
@@ -1722,36 +1820,36 @@
 	 border-top-right-radius: 0px;
 	 border-top-left-radius: 0px;
 	 border-bottom-right-radius: 0px;
-	 min-width: 7ex !important;
-	 width: 7ex !important;
-	 border-right: 2px solid transparent;
+	 min-width: 11ex !important;
+	 width: 11ex !important;
+	 border-right: 2px solid #ffffff;
 	}
 	div.out_prompt_overlay.prompt {
-	 font-family: None, monospace;
-	 font-size: 9.5pt !important;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
 	 font-weight: bold !important;
 	 background-color: #ffffff;
 	 border-bottom-left-radius: 2px;
 	 border-top-right-radius: 0px;
 	 border-top-left-radius: 0px;
 	 border-bottom-right-radius: 0px;
-	 min-width: 7ex !important;
-	 width: 7ex !important;
-	 border-right: 2px solid transparent;
+	 min-width: 11ex !important;
+	 width: 11ex !important;
+	 border-right: 2px solid #ffffff;
 	 color: transparent;
 	}
 	div.out_prompt_overlay.prompt:hover {
-	 background-color: #ffffff;
-	 box-shadow: #e8e8e8 2px 1px 1px 2px inset;
+	 background-color: #f5f5f5;
+	 box-shadow: none !important;
 	 border: none;
 	 border-bottom-left-radius: 2px;
 	 -webkit-border-: 2px;
 	 -moz-border-radius: 2px;
 	 border-top-right-radius: 0px;
 	 border-top-left-radius: 0px;
-	 min-width: 7ex !important;
-	 width: 7ex !important;
-	 border-right: 2px solid transparent;
+	 min-width: 11ex !important;
+	 width: 11ex !important;
+	 border-right: 2px solid #f5f5f5 !important;
 	}
 	div.cell.code_cell .output_prompt {
 	 border-right: 2px solid transparent;
@@ -1759,19 +1857,20 @@
 	}
 	div.cell.selected .output_prompt,
 	div.cell.selected .out_prompt_overlay.prompt {
-	 border-left: none;
+	 border-left: 4px solid #e8e8e8;
 	 border-radius: 0px !important;
 	}
 	.edit_mode div.cell.selected .output_prompt,
 	.edit_mode div.cell.selected .out_prompt_overlay.prompt {
-	 border-left: none;
+	 border-left: 4px solid #e8e8e8;
+	 border-right: 2px solid #ffffff;
 	 border-radius: 0px !important;
 	}
 	div.text_cell,
 	div.text_cell_render pre,
 	div.text_cell_render {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 line-height: 130% !important;
 	 color: #353535;
 	 background: #ffffff;
@@ -1801,108 +1900,138 @@
 	 line-height: 170% !important;
 	}
 	div.cell.text_cell.rendered.selected {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 line-height: 180% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	div.cell.text_cell.unrendered.selected {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 line-height: 180% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	div.cell.text_cell.selected {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 line-height: 180% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	.edit_mode div.cell.text_cell.selected {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 line-height: 180% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
+	.edit_mode div.cell.text_cell.selected:before {
+	 height: 100%;
+	 border-left: 4px solid #e8e8e8 !important;
+	 border-radius: 5px !important;
+	}
+	div.cell.text_cell.selected .input {
+	 border-left: 4px solid #e0e0e0 !important;
+	 border-radius: 2px;
+	}
+	.edit_mode div.cell.text_cell.selected .input {
+	 border-left: 4px solid tc-border-edit !important;
+	 border-radius: 2px;
+	}
 	div.text_cell.unrendered,
 	div.text_cell.unrendered.selected,
 	div.edit_mode div.text_cell.unrendered {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 line-height: 180% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	div.cell.text_cell.selected:before {
-	 background: #efefef;
-	 border: 2px solid #efefef;
+	 background: #e0e0e0 !important;
+	 border: 2px solid #e0e0e0;
 	 border-top-left-radius: 2px;
 	 border-bottom-left-radius: 2px;
 	 position: absolute;
 	 display: block;
 	 top: 0px;
 	 left: 0px;
-	 width: 5px;
+	 width: 4px;
 	 height: 100%;
 	}
 	.edit_mode div.cell.text_cell.selected:before {
-	 background: #efefef;
-	 border: 2px solid #efefef;
+	 background: #e8e8e8 !important;
+	 border: 2px solid #e8e8e8 !important;
 	 border-top-left-radius: 2px;
 	 border-bottom-left-radius: 2px;
 	 position: absolute;
 	 display: block;
 	 top: 0px;
 	 left: 0px;
-	 width: 5px;
+	 width: 4px;
 	 height: 100%;
 	}
 	div.cell.text_cell .prompt {
-	 border-right: 0;
+	 background-color: #ffffff !important;
+	 min-width: 8ex !important;
+	 width: 8ex !important;
+	 border-left: 4px solid #ffffff;
+	 border-top-left-radius: 3px !important;
+	 border-bottom-left-radius: 3px !important;
+	 border-top-right-radius: 0px;
+	 border-bottom-right-radius: 0px;
 	}
 	div.cell.text_cell.rendered .prompt {
-	 font-family: None, monospace;
-	 font-size: 9pt;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
 	 font-weight: normal;
 	 color: transparent !important;
 	 text-align: right !important;
-	 min-width: 7ex !important;
-	 width: 7ex !important;
+	 min-width: 11ex !important;
+	 width: 11ex !important;
 	 background-color: #ffffff;
-	 border-right: 2px dotted #efefef;
-	 border-left: 5px solid #ffffff;
+	 border-left: 4px solid #ffffff;
+	 border-top-left-radius: 3px !important;
+	 border-bottom-left-radius: 3px !important;
+	 border-top-right-radius: 0px;
+	 border-bottom-right-radius: 0px;
 	}
 	div.cell.text_cell.unrendered .prompt {
-	 font-family: None, monospace;
-	 font-size: 9pt;
+	 font-family: monospace, monospace;
+	 font-size: 9pt !important;
 	 font-weight: normal;
 	 color: transparent !important;
 	 text-align: right !important;
-	 min-width: 7ex !important;
-	 width: 7ex !important;
-	 border-right: 2px dotted #efefef;
-	 border-left: 5px solid #ffffff;
-	}
-	div.cell.text_cell.rendered .prompt {
-	 border-right: 2px dotted #efefef;
+	 min-width: 11ex !important;
+	 width: 11ex !important;
+	 border-left: 4px solid #ffffff;
+	 border-top-left-radius: 3px !important;
+	 border-bottom-left-radius: 3px !important;
+	 border-top-right-radius: 0px;
+	 border-bottom-right-radius: 0px;
 	}
 	div.cell.text_cell.rendered.selected .prompt {
 	 top: 0;
-	 border-left: 5px solid #efefef;
-	 border-right: 2px dotted #efefef;
+	 border-left: 4px solid #e8e8e8;
+	 border-top-left-radius: 3px !important;
+	 border-bottom-left-radius: 3px !important;
+	 border-top-right-radius: 0px;
+	 border-bottom-right-radius: 0px;
 	}
-	div.text_cell.unrendered.selected .prompt {
+	div.text_cell.unrendered.selected .prompt,
+	div.text_cell.rendered.selected .prompt {
 	 top: 0;
 	 background: #ffffff;
-	 border-left: 5px solid #efefef;
-	 border-right: 2px dotted #efefef;
+	 border-left: 4px solid #e8e8e8;
+	 border-top-left-radius: 3px !important;
+	 border-bottom-left-radius: 3px !important;
+	 border-top-right-radius: 0px;
+	 border-bottom-right-radius: 0px;
 	}
 	div.rendered_html code {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 padding-top: 3px;
 	 padding-left: 2px;
@@ -1918,7 +2047,7 @@
 	}
 	.well code,
 	code {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt !important;
 	 line-height: 180% !important;
 	 color: #353535;
@@ -1939,7 +2068,7 @@
 	 display: block;
 	 padding: 8.5px;
 	 margin: 0 0 9px;
-	 font-size: 11.0pt;
+	 font-size: 10.5pt;
 	 line-height: 1.42857143;
 	 color: #303030;
 	 background-color: #e5e5e5;
@@ -1958,7 +2087,7 @@
 	 margin-bottom: .5em;
 	}
 	div.rendered_html pre {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt !important;
 	 line-height: 180% !important;
 	 color: #353535;
@@ -1974,7 +2103,7 @@
 	}
 	div.text_cell_render pre,
 	div.text_cell_render code {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt !important;
 	 line-height: 180% !important;
 	 color: #353535;
@@ -2001,7 +2130,7 @@
 	div.rendered_html h4,
 	div.text_cell_render h5,
 	div.rendered_html h5 {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 margin: 0.4em .2em .3em .2em !important;
 	}
 	.rendered_html h1:first-child,
@@ -2017,38 +2146,38 @@
 	.text_cell_render h1 {
 	 color: #b9002d;
 	 font-size: 200%;
-	 text-align: center;
+	 text-align: left;
 	 font-style: normal;
-	 font-weight: lighter;
+	 font-weight: normal;
 	}
 	.rendered_html h2,
 	.text_cell_render h2 {
 	 text-align: left;
 	 font-size: 170%;
-	 color: #3f3d46;
+	 color: #b9002d;
 	 font-style: normal;
-	 font-weight: lighter;
+	 font-weight: normal;
 	}
 	.rendered_html h3,
 	.text_cell_render h3 {
 	 font-size: 140%;
-	 color: #3f3d46;
+	 color: #b9002d;
 	 font-style: normal;
-	 font-weight: lighter;
+	 font-weight: normal;
 	}
 	.rendered_html h4,
 	.text_cell_render h4 {
 	 font-size: 110%;
-	 color: #3f3d46;
+	 color: #b9002d;
 	 font-style: normal;
-	 font-weight: lighter;
+	 font-weight: normal;
 	}
 	.rendered_html h5,
 	.text_cell_render h5 {
 	 font-size: 100%;
-	 color: #000000;
+	 color: #b9002d;
 	 font-style: normal;
-	 font-weight: lighter;
+	 font-weight: normal;
 	}
 	hr {
 	 margin-top: 8px;
@@ -2086,11 +2215,11 @@
 	 border: none;
 	}
 	.rendered_html td {
-	 font-family: 'Proxima Nova' !important;
-	 font-size: 11pt;
+	 font-family: sans-serif !important;
+	 font-size: 9.5pt;
 	}
 	.rendered_html table {
-	 font-family: 'Proxima Nova' !important;
+	 font-family: sans-serif !important;
 	 margin-left: 8px;
 	 margin-right: auto;
 	 border: none;
@@ -2100,8 +2229,8 @@
 	 table-layout: fixed;
 	}
 	.rendered_html thead {
-	 font-family: 'Proxima Nova' !important;
-	 font-size: 12.0pt !important;
+	 font-family: sans-serif !important;
+	 font-size: 10.5pt !important;
 	 background: #d31242;
 	 color: #ffffff;
 	 border-bottom: 1px solid #d31242;
@@ -2128,8 +2257,8 @@
 	 color: #303030;
 	}
 	div.widget-area a {
-	 font-family: 'Proxima Nova';
-	 font-size: 11.0pt;
+	 font-family: sans-serif;
+	 font-size: 10.5pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 color: #070707;
@@ -2137,8 +2266,8 @@
 	}
 	div.widget-area a:hover,
 	div.widget-area a:focus {
-	 font-family: 'Proxima Nova';
-	 font-size: 11.0pt;
+	 font-family: sans-serif;
+	 font-size: 10.5pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 color: #000000;
@@ -2172,6 +2301,7 @@
 	 min-width: 100px !important;
 	 vertical-align: text-top !important;
 	 color: #303030 !important;
+	 font-size: 14px !important;
 	}
 	.widget-hprogress .progress {
 	 flex-grow: 1;
@@ -2208,7 +2338,7 @@
 	 margin-left: 12px;
 	}
 	.rendered_html :link {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: 100%;
 	 color: #d31242;
 	 text-decoration: underline;
@@ -2220,7 +2350,7 @@
 	}
 	.rendered_html :visited:hover,
 	.rendered_html :link:hover {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: 100%;
 	 color: #bb012f;
 	}
@@ -2229,11 +2359,11 @@
 	 text-decoration: none;
 	 padding: 0px 20px;
 	 visibility: none;
-	 color: rgba(0,0,0,.32);
+	 color: rgba(191,11,55,.8);
 	}
 	div.cell.text_cell a.anchor-link:link:hover {
 	 font-size: inherit;
-	 color: rgba(191,11,55,.8);
+	 color: #007dc5;
 	}
 	.navbar-text {
 	 margin-top: 4px;
@@ -2263,9 +2393,12 @@
 	 margin-left: auto;
 	}
 	div.nbext-selector > nav > .nav > li > a {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: 10.5pt;
 	 padding: 2px 5px;
+	}
+	div.nbext-selector > nav > .nav > li > a:hover {
+	 background: transparent;
 	}
 	div.nbext-selector > nav > .nav > li:hover {
 	 background-color: rgba(61,59,73,.10) !important;
@@ -2286,7 +2419,7 @@
 	 -webkit-font-smoothing: subpixel-antialiased !important;
 	}
 	div.nbext-readme > .nbext-readme-contents > .rendered_html {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: 11.5pt;
 	 line-height: 145%;
 	 padding: 1em 1em;
@@ -2414,13 +2547,13 @@
 	 box-shadow: inset 0 1px 1px rgba(0,0,0,0.025);
 	}
 	.kse-input-group-pretty > kbd {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 color: #070707;
 	 font-weight: normal;
 	 background: transparent;
 	}
 	.kse-input-group-pretty > kbd {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 color: #070707;
 	 font-weight: normal;
 	 background: transparent;
@@ -2516,7 +2649,7 @@
 	 padding-right: 0px !important;
 	}
 	input.raw_input {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt !important;
 	 color: #303030;
 	 background-color: #e5e5e5;
@@ -2528,6 +2661,41 @@
 	 margin: 0em 0.25em;
 	 -webkit-box-shadow: none;
 	 box-shadow: none;
+	}
+	#toc-wrapper {
+	 z-index: 90;
+	 position: fixed !important;
+	 display: flex;
+	 flex-direction: column;
+	 overflow: hidden;
+	 padding: 10px;
+	 border-style: solid;
+	 border-width: thin;
+	 border-right-width: medium !important;
+	 background-color: #ffffff !important;
+	}
+	#toc-header,
+	.modal-header {
+	 padding-top: 36px !important;
+	}
+	#toc-wrapper.ui-draggable.ui-resizable.sidebar-wrapper {
+	 border-color: rgba(61,59,73,.10) !important;
+	}
+	#toc a,
+	#navigate_menu a,
+	.toc {
+	 color: #070707 !important;
+	}
+	#toc li > span:hover {
+	 background-color: #d4d4d4 !important;
+	}
+	#toc a:hover,
+	#navigate_menu a:hover,
+	.toc {
+	 color: #000000 !important;
+	}
+	#toc-wrapper .toc-item-num {
+	 color: #d31242 !important;
 	}
 	audio,
 	video {
@@ -2551,7 +2719,7 @@
 	 z-index: 1;
 	}
 	.typeahead-field input {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 color: #303030;
 	 border: none;
 	 font-size: 28pt;
@@ -2569,7 +2737,7 @@
 	 background-color: #f4f4f4;
 	}
 	.typeahead-container button {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-size: 28pt;
 	 background-color: #e4e4e4;
 	 border: none;
@@ -2604,8 +2772,8 @@
 	}
 	.typeahead-dropdown,
 	.typeahead-list {
-	 font-family: 'Proxima Nova';
-	 font-size: 12pt;
+	 font-family: sans-serif;
+	 font-size: 11.5pt;
 	 color: #070707;
 	 background-color: #ffffff;
 	 border: none;
@@ -2740,7 +2908,7 @@
 	 background: #ffffff;
 	}
 	.terminal-app .terminal {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 line-height: 180%;
 	 color: #303030;
@@ -2856,7 +3024,7 @@
 	}
 	div.CodeMirror,
 	div.CodeMirror pre {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 line-height: 180%;
 	 color: #303030;
@@ -2918,7 +3086,7 @@
 	 color: #d3305e;
 	}
 	.ipython_tooltip {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 line-height: 180%;
 	 border: 2px solid #e1e1e1;
@@ -2932,7 +3100,7 @@
 	 z-index: 1000;
 	}
 	.ipython_tooltip .tooltiptext pre {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 line-height: 180%;
 	 background: #f5f5f5;
@@ -2954,7 +3122,7 @@
 	 max-width: 800px;
 	}
 	.cm-s-ipython.CodeMirror {
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 background: #f1f1f1;
 	 color: #303030;
@@ -3018,6 +3186,8 @@
 	}
 	.cm-s-ipython span.cm-meta {
 	 color: #007dc5;
+	 font-weight: bold;
+	 font-style: italic;
 	}
 	.cm-s-ipython span.cm-operator {
 	 color: #007dc5;
@@ -3036,7 +3206,8 @@
 	}
 	.cm-s-ipython span.cm-def {
 	 color: #3275d5;
-	 font-weight: normal;
+	 font-weight: bold;
+	 font-style: italic;
 	}
 	.cm-s-ipython span.cm-error {
 	 background: rgba(191,11,55,.10);
@@ -3058,7 +3229,7 @@
 	}
 	div.CodeMirror span.CodeMirror-matchingbracket {
 	 color: #000000;
-	 background-color: rgba(112,140,0,.30);
+	 background-color: rgba(90,160,18,.40);
 	}
 	div.CodeMirror span.CodeMirror-nonmatchingbracket {
 	 color: #000000;
@@ -3087,17 +3258,17 @@
 	 color: #007dc5;
 	}
 	div.cell.text_cell .cm-s-default .cm-header {
-	 font-family: 'Proxima Nova';
+	 font-family: sans-serif;
 	 font-weight: normal;
-	 color: #b9002d;
+	 color: #b9002d !important;
 	 margin-top: 0.3em !important;
 	 margin-bottom: 0.3em !important;
 	}
 	div.cell.text_cell .cm-s-default span.cm-variable-2 {
-	 color: #353535;
+	 color: #353535 !important;
 	}
 	div.cell.text_cell .cm-s-default span.cm-variable-3 {
-	 color: #7d4bb3;
+	 color: #7d4bb3 !important;
 	}
 	.cm-s-default span.cm-comment {
 	 color: #909090;
@@ -3137,6 +3308,22 @@
 	.cm-s-default .cm-selected {
 	 background: #e0e1e3;
 	}
+	.MathJax_Display,
+	.MathJax {
+	 border: 0 !important;
+	 font-size: 100% !important;
+	 text-align: center !important;
+	 margin: 0em !important;
+	 line-height: 2.25 !important;
+	}
+	.MathJax:focus,
+	body :focus .MathJax {
+	 display: inline-block !important;
+	}
+	.MathJax:focus,
+	body :focus .MathJax {
+	 display: inline-block !important;
+	}
 	.completions {
 	 position: absolute;
 	 z-index: 110;
@@ -3154,29 +3341,16 @@
 	 margin: 0px;
 	 margin-left: 2px;
 	 overflow: auto;
-	 font-family: None, monospace;
+	 font-family: monospace, monospace;
 	 font-size: 11pt;
 	 color: #303030;
 	 width: auto;
 	}
-	#header-container {
+	div#maintoolbar {
 	 display: none !important;
 	}
-	
-	/**********************************
-	 MathJax Settings and Style Script
-	**********************************/
-	.MathJax_Display,
-	.MathJax nobr>span.math>span {
-	    border: 0 !important;
-	    font-size: 110% !important;
-	    text-align: center !important;
-	    margin: 0em !important;
-	}
-	/* Prevents MathJax from jittering */
-	/* cell position when cell is selected */
-	.MathJax:focus, body :focus .MathJax {
-	    display: inline-block !important;
+	#header-container {
+	 display: none !important;
 	}
 	
 </style>
@@ -3186,12 +3360,12 @@
             /*preferredFont: "TeX",*/
             /*availableFonts: ["TeX", "STIX"],*/
             styles: {
-                scale: 110,
+                scale: 100,
                 ".MathJax_Display": {
-                    "font-size": "110%",
+                    "font-size": "100%",
                 }
             }
         }
     });
 </script>
-
+    

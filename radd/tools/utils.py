@@ -156,9 +156,10 @@ class GlobalCallback(object):
 
     def evolution_callback(self, xk, convergence):
         #  convergence >= np.max(self.history) and
-        if (1-convergence)<=self.gbasin:
+        if (1-convergence)<self.gbasin:
             self.gbasin = 1-convergence
             self.xhistory.append((1-convergence, xk))
+            # print(self.xhistory[-1])
             # self.reset(history=True, bar=True, fmin=0)
 
         self.history.append(1-convergence)

@@ -12,7 +12,7 @@ from radd.compiled import jitfx
 import itertools
 
 class Simulator(object):
-    def __init__(self, inits, data=None, fitparams=None, constants=[], ssdMethod='central', nblocks=25, nruns=10):
+    def __init__(self, inits, data=None, fitparams=None, constants=[], ssdMethod='all', nblocks=25, nruns=10):
         self.analyzeProbes = False
         self.ssdMethod = ssdMethod
         self.kind = fitparams.kind
@@ -21,6 +21,7 @@ class Simulator(object):
         self.nruns = nruns
         self.allparams = ['B', 'C', 'R', 'a', 'ssv', 'tr', 'v', 'xb']
         self.update(fitparams=self.fitparams, inits=inits, data=data, constants=constants, nblocks=nblocks)
+
 
     def update(self, **kwargs):
         kw_keys = list(kwargs)
@@ -78,6 +79,7 @@ class Simulator(object):
         saccErr = self.sacc_weights * (saccBlocks - self.saccBlocks)
         return np.hstack([rtErr, saccErr])
 
+
     # def simulate_model_nruns(self, p, analyze=True):
         #     self.preproc_params(p)
         #     res = jitfx.sim_dpm_learning_nruns(self.nresults, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials, self.nruns)
@@ -86,17 +88,27 @@ class Simulator(object):
         #     self.nresultsDF.loc[:, self.resultsHeader] = res
         #     return self.nresultsDF
 
+    # def simulate_model(self, p, analyze=True):
+    #     self.preproc_params(p)
+    #     results = np.copy(self.results)
+    #     jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+    #     if analyze:
+    #         return self.analyze(results)
+    #     self.resultsDF.loc[:, self.resultsHeader] = results
+    #     return self.resultsDF
+        # resultsDF = pd.DataFrame(self.results, columns=self.resultsHeader)
+        #pd.concat([resultsDF, self.data[['cond', 'sstrial', 'probe', 'trial', self.blocksCol]]], axis=1)
+        # return self.resultsDF
+
     def simulate_model(self, p, analyze=True):
         self.preproc_params(p)
         results = np.copy(self.results)
-        jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+        jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.drift, self.ssdrift, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
         if analyze:
             return self.analyze(results)
         self.resultsDF.loc[:, self.resultsHeader] = results
         return self.resultsDF
-        # resultsDF = pd.DataFrame(self.results, columns=self.resultsHeader)
-        #pd.concat([resultsDF, self.data[['cond', 'sstrial', 'probe', 'trial', self.blocksCol]]], axis=1)
-        # return self.resultsDF
+
 
     def analyze(self, res):
         idxIX, ttypeIX, ssdIX, respIX, accIX, rtIX, scoreIX = self.dataColsIX
@@ -121,6 +133,7 @@ class Simulator(object):
         # concatenate into single cost vector
         return np.hstack([gAcc, sAcc, cq, eq])
 
+
     def preproc_params(self, p, asarray=False):
 
         params = deepcopy(self.fixedParams)
@@ -136,14 +149,21 @@ class Simulator(object):
             pass
 
         self.bound = params['a']
-        self.xtb = np.cosh(params['xb'] * self.xtime).squeeze()
+        if 'xb' in self.modelparams:
+            self.xtb = np.cosh(params['xb'] * self.xtime).squeeze()
+        else:
+            self.xtb = np.ones(self.xtime.size)
         self.vProb = 0.5 * (1 + (params['v'] * np.sqrt(self.dt))/self.si)
         self.vsProb = 0.5 * (1 + (params['ssv'] * np.sqrt(self.dt))/self.si)
+        self.drift = params['v']
+        self.ssdrift = params['ssv']
         self.gOnset = params['tr'] / self.dt
+        self.gonsetTime = params['tr']
 
         if asarray:
             pSeries = pd.Series(params)[self.pvary]
             return pSeries.values
+
 
     def make_io_vectors(self):
         self.ntrials = self.data.groupby('idx').count()['trial'].max()
@@ -151,7 +171,9 @@ class Simulator(object):
         self.rProb = randsample((self.ntrials, self.ntime))
         self.rProbSS = randsample((self.ntrials, self.ntime))
 
+
     def make_results_matrix(self):
+
         dataCols = ['idx', 'ttype', 'ssd', 'response', 'acc', 'rt']
         index = self.data.index.values
         resCols = np.array(dataCols + ['score', 'drift', 'bound'])
@@ -171,6 +193,27 @@ class Simulator(object):
         self.nresultsDF = pd.concat([self.resultsDF]*self.nruns)
         self.nresultsDF.reset_index(inplace=True, drop=True)
         self.nresults = np.vstack([self.results]*self.nruns)
+        #
+        # dataCols = ['idx', 'ttype', 'ssd', 'response', 'acc', 'rt']
+        # index = self.data.index.values
+        # resCols = np.array(dataCols + ['alpha', 'drift', 'bound', 'idxResp', 'idxRT'])
+        # resData = np.zeros((index.size, resCols.size))
+        # resultsDF = pd.DataFrame(resData, columns=resCols, index=index)
+        # nidx = self.data.idx.unique().size
+        #
+        # resultsDF.loc[:, ['idx', 'ttype', 'ssd', 'idxResp', 'idxRT']] = self.data.loc[:, ['idx', 'ttype', 'ssd', 'response', 'rt']].values
+        #
+        # self.resultsHeader = resultsDF.columns.tolist()
+        # self.results = resultsDF.values
+        # self.resultsDF = pd.concat([resultsDF, self.data[['cond', 'sstrial', 'probe', 'trial', self.blocksCol]]], axis=1)
+        #
+        # self.dataColsIX = [self.resultsHeader.index(col) for col in dataCols + ['alpha']]
+        # self.rtMatrix = np.zeros((nidx, self.nblocks))
+        # self.saccMatrix = np.zeros((nidx, self.nblocks))
+        # self.nresultsDF = pd.concat([self.resultsDF]*self.nruns)
+        # self.nresultsDF.reset_index(inplace=True, drop=True)
+        # self.nresults = np.vstack([self.results]*self.nruns)
+
 
     def get_trials_data(self, data):
         if 'probe' in data.columns:
@@ -195,8 +238,8 @@ class Simulator(object):
         self.ntime = int(self.tb / self.dt)
         self.xtime = np.cumsum([self.dt] * self.ntime)
         self.modelparams = [p for p in self.allparams if p in list(self.inits)]
-        self.pflat = [p for p in self.allparams if p in self.constants]
-        self.pvary  = [p for p in self.allparams if p not in self.pflat]
+        self.pflat = [p for p in self.modelparams if p in self.constants]
+        self.pvary  = [p for p in self.modelparams if p not in self.pflat]
         self.fixedParams = self.theta[self.pflat].to_dict()
         if 'xb' not in self.modelparams:
             self.fixedParams['xb'] = 0.
@@ -252,6 +295,6 @@ class Simulator(object):
     def analyze_trials(self, resultsDF):
         saccBlocks = resultsDF[resultsDF.ttype==0].groupby(self.blocksCol).mean().acc.values
         rtBlocks = resultsDF[resultsDF.response==1].groupby(self.blocksCol).mean().rt.values
-        rtErr = np.sum((self.rt_weights * (rtBlocks*15 - self.rtBlocks*15))**2)
+        rtErr = np.sum((self.rt_weights * (rtBlocks*10 - self.rtBlocks*10))**2)
         saccErr = np.sum((self.sacc_weights * (saccBlocks - self.saccBlocks))**2)
         return rtErr + saccErr

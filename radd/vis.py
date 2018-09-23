@@ -13,6 +13,7 @@ from IPython.display import display, Latex
 from scipy.stats.mstats import mquantiles
 from itertools import product
 
+warnings.filterwarnings("ignore")
 warnings.simplefilter('ignore', np.RankWarning)
 warnings.filterwarnings("ignore", module="matplotlib")
 
@@ -29,6 +30,7 @@ slate = cdict['slate']
 def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.1), err=None, clrs=None, save=False, bw='scott', savestr=None, same_axis=True, lbls=None, cumulative=True, suppressLegend=False, hist=False, kde=True,  shade=True, norm_hist=True, data=None, simData=None, plot_error_rts=True, figure=None):
     """ main plotting function for displaying model fit predictions over data
     """
+    sns.set(style='white', font_scale=1.3)
     if np.ndim(y)==1:
         y = y.reshape(1, -1)
     nlevels = y.shape[0]
@@ -118,7 +120,7 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.
             ax1.set_xticklabels(xtl)
     if save:
         plt.savefig('.'.join([savestr, 'png']), dpi=600)
-    plt.legend()
+    # plt.legend()
 
 
 
@@ -139,7 +141,7 @@ def plot_stop_fit(y, yhat, x=None, err=None, color=None, label=None, ax=None, al
     plot_stop_data(y, x=x, err=err, color=color, label=label[0], ax=ax, lw=0)
     plot_stop_curve_predicted(yhat, x=x, color=color, label=label[1], ax=ax, alpha=alpha)
     format_stop_axes(ax, x)
-    plt.legend()
+    # plt.legend()
     sns.despine()
 
 
@@ -157,7 +159,8 @@ def plot_stop_data(y, x=None, err=None, label=None, lw=2, alpha=1, color='k', ax
     else:
         ax.plot(x, y, lw=lw, color=color, marker='o', ms=6.5, alpha=alpha, label=label)
     sns.despine()
-    plt.legend()
+    if label is not None:
+        ax.legend()
     return ax
 
 
@@ -250,7 +253,7 @@ def plot_stop_fit_single(y, yhat, yerr=None, x=0, xerr=None, ax=None, linestyles
     ax.plot(x, yhat, marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=color, label=label[1], lw=0)
     ax.plot(x, yhat, marker='o', ms=10, mew=0, alpha=.1, mfc=color, mec=color)
 
-    ax.legend(loc=0)
+    # ax.legend(loc=0)
     plt.tight_layout()
     ax.set_ylim(0, 1)
 
@@ -272,14 +275,14 @@ def unpack_vector(vector, nlevels=1, nquant=9, nssd=5):
 
 def format_stop_axes(ax, xticks, xlim=None):
     if xlim is None:
-        xlim=(xticks[0]*.80, xticks[-1]*1.05)
+        xlim=(xticks[0]*.935, xticks[-1]*1.05)
     xtls = [np.int(np.round(xx,3)*1000) for xx in xticks]
     yticks = np.array([0., .2, .4, .6, .8,  1.])
     plt.setp(ax, xticks=xticks, xlim=xlim, yticks=yticks, ylim=(-.01, 1.05))
-    ax.set_ylabel('Stop Accuracy', fontsize=17)
+    ax.set_ylabel('Stop Accuracy')
     ax.set_xticklabels(xtls)
     ax.set_yticklabels(yticks)
-    ax.legend(loc=0)
+    # ax.legend(loc=0)
     if ax.is_last_row():
         ax.set_xlabel('SSD (ms)')
     plt.tight_layout()
@@ -314,7 +317,7 @@ def format_rt_axes(axes, cdf=True, yhat=None, quantiles=np.arange(.1, 1.,.1)):
         rtqList = [unpack_vector(yh, nquant=quantiles.size)[1:] for yh in yhat]
         corquant = np.hstack(np.vstack(rtqList)[:, 0, :])
         errquant = np.hstack(np.vstack(rtqList)[:, 1, :])
-        xxticks = [np.linspace(np.nanmin(rtq)*.93, np.nanmax(rtq)*1.07, 5) for rtq in [corquant, errquant]]
+        xxticks = [np.linspace(np.nanmin(rtq)*.93, np.nanmax(rtq)*1.06, 5) for rtq in [corquant, errquant]]
         xxticks = [np.array([np.round(xt, 2) for xt in xxt]) for xxt in xxticks]
         xxtls = [np.array([int(xtl*1000) for xtl in xxt]) for xxt in xxticks]
         xxlim = [(xxt[0], xxt[-1]) for xxt in xxticks]
@@ -378,6 +381,7 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
     if yerr is None:
         yerr = [np.zeros(2) for i in range(nmodels)]
     f, ax = plt.subplots(1, figsize=(10,7))
+    # ax.invert_yaxis()
     x = np.arange(1, nmodels*2, 2)
     clrs = [colors.param_color_map(p) for p in pvary]
     lbls = {p: parameter_name(p,True) for p in pvary}
@@ -393,9 +397,9 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
     yylim = (vals.max()*.97, vals.min()*1.07)
     plt.setp(ax, xticks=x, ylim=yylim, xlim=(0, x[-1]+1), ylabel='IC')
     ax.set_xticklabels(['AIC|BIC']*nmodels, fontsize=14)
-    ax.invert_yaxis()
-    sns.despine()
+    sns.despine(bottom=True, top=False)
     ax.legend(loc=0, fontsize=14)
+    ax.invert_yaxis()
 
 
 
@@ -460,7 +464,7 @@ def parameter_name(param, tex=False):
         'xb': ['Dynamic Gain', '$\gamma$'],
         'sso': ['Brake Onset', '$so_{B}$'],
         'z': ['Execution Baseline', '$z_{E}$'],
-        'v_ssv': ['Drift Ratio', '$v_{E}/v_{B}$'],
+        #'v_ssv': ['Drift Ratio', '$v_{E},v_{B}$'],
         'aG': ['Alpha+', '$\\alpha^+$'],
         'aErr': ['Alpha-', '$\\alpha^-$'],
         'A': ['Alpha', '$\\beta$'],
@@ -468,8 +472,8 @@ def parameter_name(param, tex=False):
         'R': ['Rho', '$\\rho$'],
         'flat': ['Flat', 'Flat'],
         'all': ['Flat', 'Flat']}
-    if '_' in param and param!='v_ssv':
+    if '_' in param:# and param!='v_ssv':
         param = param.split('_')
     if isinstance(param, list):
-        return ' & '.join([param_name[p][ix] for p in param])
+        return ','.join([param_name[p][ix] for p in param])
     return param_name[param][ix]

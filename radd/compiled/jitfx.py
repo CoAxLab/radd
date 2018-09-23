@@ -11,6 +11,19 @@ from numba import float64, int64, vectorize, boolean
 from numpy.random import random_sample as randsample
 
 
+def sample_posterior_belief(data, m0=300, k0=1, s2=1, v0=1, nsamples=800):
+
+    ntrials = data.shape[0]
+    muPosterior = np.zeros((ntrials, nsamples))
+    varPosterior = np.zeros((ntrials, nsamples))
+
+    for i in range(1, ntrials+1):
+        mu_t, var_t = draw_mus_and_sigmas(data[:i], m0, k0, s2, v0, nsamples)
+        muPosterior[i-1, :] = mu_t
+        varPosterior[i-1, :] = var_t
+
+    return muPosterior, varPosterior
+
 
 def rolling_variance(old_avg, new, old, N):
     newavg = oldavg + (new - old)/N
@@ -34,6 +47,7 @@ def ufunc_where(condition, x, y):
 def get_onset_index(onset, dt):
     onsets = int(onset / dt)
     return onsets
+
 
 @jit(nopython=True)
 def slice_theta_array(theta_array, index_arrays, n_vals):
@@ -64,7 +78,6 @@ def sim_ddm_trace(rProb, trace, vProb, bound, gbase, dx):
         elif evidence <= 0:
             return ix, 0
     return -1, -1
-
 
 
 @jit((float64[:,:,:], float64[:,:,:], float64[:,:], float64[:,:], float64[:], float64[:], float64[:], int64[:], float64[:], float64), nopython=True)
@@ -116,10 +129,12 @@ def sim_dpm_trace_lower(rProbSS, ssbase, vsProb, onset, dx, dt):
     return ix * dt
 
 
-@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64), nopython=True)
-def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, dt):
+@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64[:], float64), nopython=True)
+def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx, si, dt):
     ncond, ntrials, ntime = rProb.shape
     ncond, nssd, nss_per, ntime = rProbSS.shape
+    vProb = 0.5 * (1 + (drift * np.sqrt(dt))/si)
+    vsProb = 0.5 * (1 + (ssdrift * np.sqrt(dt))/si)
     for i in range(ncond):
         tr = gOnset[i]
         ssOn = ssOnset[i]
@@ -143,7 +158,6 @@ def sim_many_dpm(rProb, rProbSS, dvg, rts, ssrts, xtb, vProb, vsProb, bound, gba
 
 
 
-#
 @jit(float64(float64[:], float64[:], float64, float64, int64, float64, float64), nopython=True)
 def sim_dpm_trace_lower_trace(rProbSS, dvs, ssbase, vsProb, onset, dx, dt):
     ix = onset
@@ -159,10 +173,12 @@ def sim_dpm_trace_lower_trace(rProbSS, dvs, ssbase, vsProb, onset, dx, dt):
     return ix * dt
 
 
-@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64), nopython=True)
-def sim_many_dpm_traces(rProb, rProbSS, dvg, dvs, rts, ssrts, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, dt):
+@jit((float64[:,:,:], float64[:,:,:,:], float64[:,:,:], float64[:,:,:,:], float64[:,:], float64[:,:,:], float64[:,:], float64[:], float64[:], float64[:], float64[:], int64[:], int64[:,:], float64[:], float64[:], float64), nopython=True)
+def sim_many_dpm_traces(rProb, rProbSS, dvg, dvs, rts, ssrts, xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx, si, dt):
     ncond, ntrials, ntime = rProb.shape
     ncond, nssd, nss_per, ntime = rProbSS.shape
+    vProb = 0.5 * (1 + (drift * np.sqrt(dt))/si)
+    vsProb = 0.5 * (1 + (ssdrift * np.sqrt(dt))/si)
     for i in range(ncond):
         tr = gOnset[i]
         ssOn = ssOnset[i]
@@ -183,6 +199,7 @@ def sim_many_dpm_traces(rProb, rProbSS, dvg, dvs, rts, ssrts, xtb, vProb, vsProb
                         ssrts[i,k,j] = 1000.
                         continue
                     ssrts[i,k,j] = sim_dpm_trace_lower_trace(rProbSS[i,k,j], dvs[i,k,j], ssbase[k], vsProb[i], ssOn[k], dx[i], dt)
+
 
 
 
@@ -231,57 +248,144 @@ def sim_dpm_go(rProb, xtb, vProb, bound, onsetIX, dx, dt, evidence):
     return 0., ix*dt
 
 
-@jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
-def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, B, C, R, dx, dt, tb, maxTrials):
 
-    # rProb = randsample((maxTrials, 680))
-    # rProbSS = randsample((maxTrials, 680))
+@jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
+def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bound, onset, B, C, R, dx, dt, tb, maxTrials):
+
     onsetIX = np.int(onset)
     TargetRT = .52
     goStartTrial = 0.
     ssbound = 0.
-    # nblocks = rtMatrix.shape[1]
-    # resultsTemp = results
-    # if makeTemp:
-    # resultsTemp = np.zeros_like(results)
-    # resultsTemp[:, np.array([0, 1, 2])] = results[:, np.array([0, 1, 2])]
+    si = .1
+    tb = tb + .02
+
+    vsProb = 0.5 * (1 + (ssdrift * np.sqrt(dt))/si)
 
     for idx in idxArray:
         idxResults = results[results[:, 0]==idx]
         ntrials = idxResults.shape[0]
-        vTrial = vProb
+        vTrial = drift
         aTrial = bound
         errT = 10000
+
         for t in range(ntrials):
             ttype, ssOnset = idxResults[t, 1:3]
             sensitivity = np.exp2(-t*R) #(t/10.)**-R
             B_t = B * sensitivity
             C_t = C * sensitivity
+
+            vProbTrial = 0.5 * (1 + (vTrial * np.sqrt(dt))/si)
+
             if ttype==0.:
                 ssdIX = np.int(ssOnset)
-                response, rt = sim_dpm_go_stop(rProb[t], xtb, vTrial, aTrial, onsetIX, rProbSS[t], vsProb, ssdIX, dx, dt, goStartTrial, ssbound)
+                response, rt = sim_dpm_go_stop(rProb[t], xtb, vProbTrial, aTrial, onsetIX, rProbSS[t], vsProb, ssdIX, dx, dt, goStartTrial, ssbound)
+
                 if response:
                     correct = 0.; score = -1.; errT = 0.
-                    vTrial = vTrial * np.exp((rt-tb) * B_t)
+                    #vTrial = vTrial * np.exp((rt-tb) * B_t)
+                    #vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
+                    vTrial = vTrial + B_t * ((aTrial/tb) - (aTrial/rt))
                 else:
                     correct = 1.; score = 0.; errT += 1.
                 aTrial = bound + C_t * np.exp(-errT)
+
             else:
                 errT += 1
-                response, rt = sim_dpm_go(rProb[t], xtb, vTrial, aTrial, onsetIX, dx, dt, goStartTrial)
+                response, rt = sim_dpm_go(rProb[t], xtb, vProbTrial, aTrial, onsetIX, dx, dt, goStartTrial)
                 if response:
                     correct = 1.
                     score = np.exp(-abs(TargetRT-rt)*10)
-                    vTrial = vTrial * np.exp((rt-TargetRT) * B)
+                    #vTrial = vTrial * np.exp((rt-TargetRT) * B)
+                    vTrial = vTrial + B * ((aTrial/TargetRT) - (aTrial/rt))
                 else:
                     correct = 0.
                     score = -1.
-            if vTrial > 1.0:
-                vTrial = 1.
-            elif vTrial < .05:
-                vTrial = .05
+
+            if vTrial > 2.0:
+                vTrial = 1.8
+            elif vTrial < .25:
+                vTrial = .28
+
             idxResults[t] = np.array([idx, ttype, ssOnset, response, correct, rt, sensitivity, vTrial, aTrial])
+
         results[results[:, 0]==idx] = idxResults
+
+
+#
+# @jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
+# def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, B, C, R, dx, dt, tb, maxTrials):
+#
+#     # rProb = randsample((maxTrials, 680))
+#     # rProbSS = randsample((maxTrials, 680))
+#     onsetIX = np.int(onset)
+#     TargetRT = .52
+#     goStartTrial = 0.
+#     ssbound = 0.
+#     # nblocks = rtMatrix.shape[1]
+#     # resultsTemp = results
+#     # if makeTemp:
+#     # resultsTemp = np.zeros_like(results)
+#     # resultsTemp[:, np.array([0, 1, 2])] = results[:, np.array([0, 1, 2])]
+#
+#     # Taim = lambda tr, a, v: tr + (a / v)
+#     # zBrake = lambda v, muSSD, tr: v * (muSSD - tr)
+#     # SSRT = lambda z, muSSD, ssv: muSSD + (z / abs(ssv))
+#
+#     for idx in idxArray:
+#         idxResults = results[results[:, 0]==idx]
+#         ntrials = idxResults.shape[0]
+#         vTrial = vProb
+#         aTrial = bound
+#         errT = 10000
+#
+#         sigTrial = idxResults[:, 2].std()
+#         tau = sigTrial
+#         alphaTrial = sigTrial / (sigTrial + tau)
+#
+#         for t in range(ntrials):
+#             ttype, ssOnset = idxResults[t, 1:3]
+#             sensitivity = np.exp2(-t*R) #(t/10.)**-R
+#             B_t = B * sensitivity
+#             C_t = C * sensitivity
+#             if ttype==0.:
+#                 ssdIX = np.int(ssOnset)
+#                 response, rt = sim_dpm_go_stop(rProb[t], xtb, vTrial, aTrial, onsetIX, rProbSS[t], vsProb, ssdIX, dx, dt, goStartTrial, ssbound)
+#
+#                 if response:
+#                     correct = 0.; score = -1.; errT = 0.
+#                     #vTrial = vTrial * np.exp((rt-tb) * B_t)
+#                     vTrial = vTrial + C_t * ((aTrial/tb) - (aTrial/rt))
+#                 else:
+#                     correct = 1.; score = 0.; errT += 1.
+#
+#                 aTrial = bound + C_t * np.exp(-errT)
+#                 sigTrial = sigTrial - (alphaTrial * sigTrial)
+#                 alphaTrial = sigTrial / (sigTrial + tau)
+#
+#                 # aTrial =
+#             else:
+#                 errT += 1
+#                 response, rt = sim_dpm_go(rProb[t], xtb, vTrial, aTrial, onsetIX, dx, dt, goStartTrial)
+#                 if response:
+#                     correct = 1.
+#                     score = np.exp(-abs(TargetRT-rt)*10)
+#                     # vTrial = vTrial * np.exp((rt-TargetRT) * B)
+#
+#                     #############################
+#                     ### NEW DRIFT UPDATE RULE ###
+#                     #############################
+#                     vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
+#                     #vTrial = vTrial + alphaTrial * ((aTrial/rt) - (aTrial/TargetRT))
+#                 else:
+#                     correct = 0.
+#                     score = -1.
+#             if vTrial > 1.0:
+#                 vTrial = 1.
+#             elif vTrial < .05:
+#                 vTrial = .05
+#             idxResults[t] = np.array([idx, ttype, ssOnset, response, correct, rt, alphaTrial, vTrial, aTrial, sigTrial, score])
+#         results[results[:, 0]==idx] = idxResults
+
     # return results
         # rtVals = idxResults[idxResults[:,3]==1.][:, 5]
         # saccVals = idxResults[idxResults[:,1]==0.][:, 4]
@@ -414,7 +518,7 @@ def sim_multi_params(rProb, dvg, rts, xtb, vProb, bound, gOnset, dx, dt):
 # TargetRT = TargetRT + ((R * t**-.1) * TargetRT)
 # TargetRT = TargetRT + .001
 # TargetRT = TargetRT + .001 * decay[t]
-# TargetRT = .52 + xBase * np.exp(-errT)#(lrDecay * C) * TargetRT
+# TargetRT = .52 + xBase * np.exp(-errT) #(lrDecay * C) * TargetRT
 # TargetRT = .52 + C * np.exp(-errT)
 
 # TargetRT = TargetRT - ((R * t**-.1) * TargetRT)

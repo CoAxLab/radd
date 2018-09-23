@@ -14,8 +14,12 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
     """
     newSection = '-' * 3 + '\n'
     newHeader = lambda x: x + '\n' + '-' * len(x) + '\n'
+
     if savepath is None:
         savepath = os.path.expanduser('~')
+        if 'Dropbox' in os.listdir(savepath):
+            savepath = os.path.join(savepath, 'Dropbox')
+
     # functions for writing numpy arrays to strings (ex. "y = np.array([1,2,3])"")
     name_equals = lambda name, strvector: '{0} = np.array([{1}])'.format(name, strvector)
     stringify = lambda x: name_equals(x[0], ', '.join('{:f}'.format(n) for n in x[1]))
@@ -29,7 +33,13 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
     fit_on = '  |  '.join(fp['model_id'].split('_'))
 
     # limit popt to 6 decimal points
-    popt = {k: float('{:.6f}'.format(v)) for k,v in popt.items()}
+    for k,v in popt.items():
+        if isinstance(v, np.ndarray):
+            v = np.array([float('{:.6f}'.format(vi)) for vi in v])
+        else:
+            v = float('{:.6f}'.format(v))
+        popt[k] = v
+    #popt = {k: float('{:.6f}'.format(v)) for k,v in popt.items()}
     # remove heading from param_report
     param_report = param_report.split(']]')[1]
 
@@ -51,22 +61,21 @@ def logger(param_report, savepath=None, finfo={}, popt={}, fitparams={}, kind='x
 
     with open(fname, 'a') as f:
         f.write('\n\n')
-        f.write(newSection)
         f.write(newHeader('MODEL INFO:'))
         f.write(' '.join(['TIMESTAMP:', strftime('%m/%d/%y %I:%M%p'), '\n']))
         f.write(str(fit_on) + '\n')
         f.write(str(dep_id) + '\n\n')
         f.write(newHeader('DATA, YHAT & WEIGHTS:'))
-        f.write('```python\n')
+        f.write('\n')
         f.write(wts_str + '\n\n')
         f.write(yhat_str + '\n\n')
         f.write(y_str + '\n')
-        f.write('```\n\n')
+        f.write('\n\n')
         f.write(newHeader("FIT REPORT:"))
         f.write(param_report + '\n')
-        f.write('```python\n')
+        f.write('\n')
         f.write(' = '.join(['popt', repr(popt)]) + '\n')
-        f.write('```\n\n')
+        f.write('\n\n')
         f.write('ndata: {}\n'.format(finfo['ndata']))
         f.write('df: {}\n'.format(finfo['df']))
         f.write('nfev: {}\n'.format(finfo['nfev']))

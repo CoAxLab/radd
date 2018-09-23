@@ -10,6 +10,31 @@ from lmfit import Parameters as lmParameters
 from pyDOE import lhs
 
 
+def random_inits(pkeys, ninits=1, kind='dpm', as_list=False, force_normal=False, method='random'):
+    """ random parameter values for initiating model across range of
+    parameter values.
+    ::Arguments::
+        pkeys (list/dict):
+            list of parameter names to sample, makes list of dict keys
+            if pkeys is dictionary type
+    ::Returns::
+        params (dict):
+            dictionary with pkeys as keys with values as 1d arrays ninits long
+            of randomly sampled parameter values
+    """
+    if isinstance(pkeys, dict):
+        pkeys = list(pkeys)
+    params = {}
+    if method=='random':
+        for pk in pkeys:
+            params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, force_normal=force_normal)
+    elif method=='lhs':
+        params = latin_hypercube(pkeys, nrvs=ninits, kind=kind)
+    if as_list:
+        params = np.array([{pk: params[pk][i] for pk in pkeys} for i in range(ninits)])
+    return params
+
+
 def latin_hypercube(pkeys, kind='dpm', nrvs=25, tb=.65, force_normal=False):
     """ sample random parameter sets to explore global minima (called by
     Optimizer method __hop_around__())
@@ -23,6 +48,7 @@ def latin_hypercube(pkeys, kind='dpm', nrvs=25, tb=.65, force_normal=False):
     design = pmax * design
     samplesLH = {p: design[:, i] for i, p in enumerate(pkeys)}
     return samplesLH
+
 
 
 def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65, force_normal=False):
@@ -69,19 +95,19 @@ def get_bounds(kind='dpm', tb=None):
         bounds (dict): {parameter: (upper, lower)}
     """
 
-    bounds = {'a': (.1, .65),
+    bounds = {'a': (.3, .6),
              'si': (.001, .15),
              'sso': (.005, .1),
-             'ssv': (-1.15, -.25),
-             'tr': (0.15, 0.4),
-             'v': (.5, 1.15),
+             'ssv': (-1.2, -.4),
+             'tr': (0.1, 0.45),
+             'v': (.6, 1.2),
              'xb': (.6, 1.4),
              'z': (0.01, 0.6)}
 
     boundsRL = {'B': (.1, .4),
                 'Beta': (.5, 5.),
-                'C': (.001, .08),
-                'R': (.0001, .001),
+                'C': (.01, .1),
+                'R': (.0001, .005),
                 'vd': (.1, 2.1),
                 'vi': (.1, 1.0)}
 
@@ -125,30 +151,6 @@ def get_theta_params(pkey, kind='dpm'):
     return theta[pkey]
 
 
-def random_inits(pkeys, ninits=1, kind='dpm', as_list=False, force_normal=False, method='random'):
-    """ random parameter values for initiating model across range of
-    parameter values.
-    ::Arguments::
-        pkeys (list/dict):
-            list of parameter names to sample, makes list of dict keys
-            if pkeys is dictionary type
-    ::Returns::
-        params (dict):
-            dictionary with pkeys as keys with values as 1d arrays ninits long
-            of randomly sampled parameter values
-    """
-    if isinstance(pkeys, dict):
-        pkeys = list(pkeys)
-    params = {}
-    if method=='random':
-        for pk in pkeys:
-            params[pk] = init_distributions(pk, nrvs=ninits, kind=kind, force_normal=force_normal)
-    elif method=='lhs':
-        params = latin_hypercube(pkeys, nrvs=ninits, kind=kind)
-    if as_list:
-        params = np.array([{pk: params[pk][i] for pk in pkeys} for i in range(ninits)])
-    return params
-
 
 def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
     """ Generates and returns an lmfit Parameters object with
@@ -170,6 +172,7 @@ def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
         mx = bounds[pkey][1]
         for k, v in zip(pclist, vals):
             if isinstance(v, np.ndarray):
+                print(v)
                 v = np.asscalar(v)
             lmParams.add(k, value=v, vary=True, min=mn, max=mx)
     for pk in pfit:

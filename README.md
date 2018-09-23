@@ -10,10 +10,5 @@ Click the "launch binder" button below to open up an interactive demo of radd in
 
 ### Install with pip
 ```sh
-# NOTE: requires Python 2.*
 pip install radd
 ```
-
-### Description of branches
-* The **elife2015** branch is a snapshot of the code at the time of publication
-* Ongoing developments will be pushed to the **dev** branch and periodically merged with the **master** branch

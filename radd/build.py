@@ -12,7 +12,7 @@ from radd.tools import utils, analyze, messages
 from radd.tools.analyze import pandaify_results, rangl_data
 import multiprocessing as mp
 import matplotlib.pyplot as plt
-
+from IPython.display import clear_output
 
 
 class Model(RADDCore):
@@ -39,9 +39,9 @@ class Model(RADDCore):
             set the RT quantiles used to fit model
     """
 
-    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, learn=False, bwfactors=None, custompath=None, presample=False, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1)):
+    def __init__(self, data=pd.DataFrame, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, weighted=True, ssd_method=None, learn=False, bwfactors=None, custompath=None, presample=False, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1), ksfit=False):
 
-        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, presample=presample, ssdelay=ssdelay, gbase=gbase)
+        super(Model, self).__init__(data=data, inits=inits, fit_on=fit_on, depends_on=depends_on, kind=kind, quantiles=quantiles, weighted=weighted, ssd_method=ssd_method, learn=learn, bwfactors=bwfactors, custompath=custompath, presample=presample, ssdelay=ssdelay, gbase=gbase, ksfit=ksfit)
 
         groups = self.handler.groups
         bwcol = None
@@ -50,7 +50,7 @@ class Model(RADDCore):
             self.bwcol = [df[self.bwfactors].unique()[0] for _, df in self.data.groupby('idx')]
 
 
-    def optimize(self, plotfits=False, saveplot=False, saveresults=False, custompath=None, progress=True, get_results=False):
+    def optimize(self, plotfits=False, saveplot=False, saveresults=False, custompath=None, progress=True, get_results=False, powell=True, hop=False):
         """ Method to be used for accessing fitting methods in Optimizer class
         see Optimizer method optimize()
         ::Arguments::
@@ -68,7 +68,7 @@ class Model(RADDCore):
             progress (bool):
                 track progress across ninits and basinhopping
         """
-        self.toggle_pbars(progress=progress)
+        #self.toggle_pbars(progress=progress)
         self.custompath=custompath
 
         if self.fit_on == 'subjects':
@@ -82,7 +82,7 @@ class Model(RADDCore):
             finfo, popt, yhat = self.optimize_flat(get_results=True)
 
             if not self.is_flat:
-                finfo, popt, yhat = self.optimize_conditional(popt, get_results=True)
+                finfo, popt, yhat = self.optimize_conditional(popt, get_results=True, powell=powell, hop=hop)
 
             if plotfits:
                 self.plot_model_fits(save=saveplot)
@@ -92,6 +92,11 @@ class Model(RADDCore):
                 self.idxbar.clear()
             self.opt.ibar.clear()
             self.opt.gbar.clear()
+
+        try:
+            self.write_results(finfo=finfo, popt=popt, yhat=yhat)
+        except Exception:
+            pass
 
         if get_results:
             return finfo, popt, yhat
@@ -157,24 +162,28 @@ class Model(RADDCore):
         """
         if self.basinparams['method']=='basin':
             # Global Optimization w/ Basinhopping (+TNC)
-            gpopt = self.opt.hop_around(param_sets)
+            gpopt = self.opt.hop_around(param_sets, learn=self.learn)
         else:
             # Global Optimization w/ Diff. Evolution (+TNC)
-            gpopt, gfmin = self.opt.optimize_global(self.inits, resetProgress=True)
-        self.gpopt = deepcopy(gpopt)
+            gpopt, gfmin = self.opt.optimize_global(self.inits, learn=self.learn, resetProgress=False)
+
         # Flat Simplex Optimization of Parameters at Global Minimum
         self.set_fitparams(inits=gpopt)
-        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=gpopt)
+        self.finfo, gpopt, self.yhat = self.opt.gradient_descent(p=gpopt, learn=self.learn)
+        self.gpopt = deepcopy(gpopt)
+        self.popt = deepcopy(gpopt)
         # if self.is_flat:
         #     self.write_results()
         if get_results:
             return self.finfo, self.popt, self.yhat
         if self.opt.progress:
             self.opt.ibar.clear()
+            self.opt.gbar.clear()
+            clear_output()
         return self.popt
 
 
-    def optimize_conditional(self, flatp, hop=False, get_results=False):
+    def optimize_conditional(self, flatp, hop=False, powell=True, get_results=False):
         """ optimizes full model to all conditions in data
         ::Arguments::
             None
@@ -190,20 +199,30 @@ class Model(RADDCore):
         self.set_fitparams(force='cond', inits=gpopt)
         # Pretune Conditional Parameters
         if hop:
-            gpopt, fmin = self.opt.optimize_global(gpopt)
+            gpopt, fmin = self.opt.optimize_global(gpopt, learn=self.learn)
             self.opt.update(inits=gpopt)
-        # Final Simplex Optimization
-        self.finfo, self.popt, self.yhat = self.opt.gradient_descent(p=gpopt)
+
+        # Final Simplex Optimization(s)
+        self.set_fitparams(method='nelder', maxfev=300)
+        finfo, popt, yhat = self.opt.gradient_descent(p=gpopt, learn=self.learn)
+
+        if powell:
+            self.set_fitparams(method='powell', inits=popt, force='cond', maxfev=1000)
+            self.opt.update(inits=popt)
+            finfo, popt, yhat = self.opt.gradient_descent(p=popt, learn=self.learn)
+
+        self.finfo, self.popt, self.yhat = finfo, popt, yhat
+
         if get_results:
             return self.finfo, self.popt, self.yhat
 
 
-    def nested_optimize(self, models=[], flatp=None, saveplot=True, plotfits=True, custompath=None, progress=True, saveresults=True, saveobserved=False):
+    def nested_optimize(self, depends=[], flatp=None, saveplot=True, plotfits=False, custompath=None, progress=True, saveresults=True, saveobserved=False):
         """ optimize a series of models using same init parameters where the i'th model
-            has depends_on = {<models[i]> : <cond>}.
+            has depends_on = {<depends[i]> : <cond>}.
             NOTE: only for models with fit_on='average'
         ::Arguments::
-            models (list):
+            depends (list):
                 list of depends_on dictionaries to fit using a single set of init parameters (self.flat_popt)
             plotfits (bool):
                 if True (default), plot model predictions over observed data
@@ -216,38 +235,16 @@ class Model(RADDCore):
                 track progress across model fits, ninits, and basinhopping
         """
 
-        fits, popts, yhats = [], [], []
-        self.is_nested = True
-        self.custompath = custompath
-        pnames = self.toggle_pbars(progress=progress, models=models)
-
         if flatp is None:
+            self.set_basinparams(method='basin', nsamples=1000)
+            self.set_testing_params()
             self.set_fitparams(force='flat')
-            flatp = self.optimize_flat()
-            # models = [{'all': 'flat'}] + models
-            # self.param_sets = self.opt.sample_param_sets()
-        # loop over depends_on dictionaries and optimize cond models
-        for i, depends_on in enumerate(models):
-            if progress:
-                self.mbar.update(value=i, status=pnames[i])
-            # if flatp is None:
-            #     # self.param_sets = self.opt.sample_param_sets()
-            #     self.set_fitparams(force='flat')
-            #     flatp = self.optimize_flat()
-            #     continue
-            self.set_fitparams(depends_on=depends_on)
-            finfo, popt, yhat = self.optimize_conditional(flatp, get_results=True)
-            fits.append(finfo); popts.append(popt); yhats.append(yhat)
-            # if plotfits:
-            #     self.plot_model_fits(save=saveplot)
-            # if saveresults:
-            #     self.handler.save_results(saveobserved=saveobserved)
+            flatp = deepcopy(self.optimize_flat())
 
-        if progress:
-            self.mbar.clear()
-            self.opt.gbar.clear()
-            self.opt.ibar.clear()
-        return fits, popts, yhats
+        self.fitdf, self.poptdf, self.yhatdf = nested_optimize(depends, self.data, kind=self.kind, flatp=flatp, saveplot=saveplot, plotfits=plotfits, custompath=custompath, progress=progress, saveresults=saveresults)
+
+        return self.fitdf, self.poptdf, self.yhatdf
+
 
     def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit
@@ -260,34 +257,21 @@ class Model(RADDCore):
         """ logs fit info to txtfile, fills yhatdf and fitdf
         """
 
+        from radd import theta
+
         finfo, popt, yhat = self.set_results(finfo, popt, yhat)
         self.log_fit_info(finfo, popt, yhat)
+
         self.yhatdf = self.handler.fill_yhatdf(yhat=yhat, fitparams=self.fitparams)
         self.fitdf = self.handler.fill_fitdf(finfo=finfo, fitparams=self.fitparams)
-        self.poptdf = self.handler.fill_poptdf(popt=popt, fitparams=self.fitparams)
+
+        # pcopy = theta.scalarize_params(deepcopy(popt))
+        pcopy = deepcopy(popt)
+        self.poptdf = self.handler.fill_poptdf(popt=pcopy, fitparams=self.fitparams)
 
 
-    def plot_idx_model_fits(self, idxlist=None, clrs=['k'], lbls=None, samefig=None):
 
-        if idxlist is None:
-            idxlist = self.idx
-        nidx = len(idxlist)
-        if nidx > len(clrs):
-            clrs = clrs * nidx
-        if lbls is None:
-            lbls = [None] * nidx
-        if samefig is True:
-            samefig, _ = plt.subplots(1, 3, figsize=(13, 4.3))
-        for i, idx in enumerate(idxlist):
-            self.set_fitparams(ix=self.idx.index(idx))
-            y = self.fitparams.y.flatten()
-            yhat = self.yhatdf.loc[self.yhatdf.idx==idx, 'acc':].values
-            if len(yhat)==0:
-                yhat = y
-            self.plot_model_fits(y=y, yhat=yhat, clrs=[clrs[i]], figure=samefig, lbls=[lbls[i]])
-
-
-    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw='scott', savestr=None, same_axis=True, clrs=None, lbls=None, cumulative=True, simdf=None, suppressLegend=False, simData=None, condData=None, shade=True, plot_error_rts=True, figure=None):
+    def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw='scott', savestr=None, same_axis=True, clrs=None, lbls=None, cumulative=True, simdf=None, suppressLegend=False, simData=None, condData=None, shade=True, plot_error_rts=True, figure=None, reorder=None):
         """ wrapper for radd.tools.vis.plot_model_fits
         """
         data = self.handler.data.copy()
@@ -301,6 +285,12 @@ class Model(RADDCore):
             except AttributeError:
                 print("No Model Predictions to Plot (need yhat argument)")
                 yhat = analyze.rangl_data(simdf, quantiles=self.quantiles)
+
+        if reorder is not None:
+            y = y.reshape(self.fitparams.nlevels, -1)
+            yhat = yhat.reshape(self.fitparams.nlevels, -1)
+            y = np.array([y[i] for i in reorder])
+            yhat = np.array([yhat[i] for i in reorder])
         if save:
             if savestr is None:
                 savestr = self.fitparams.model_id
@@ -347,7 +337,7 @@ class Model(RADDCore):
         return yhat
 
 
-    def optimize_idx_params(self, idxlist=None, pos=0, output=None):
+    def optimize_idx_params(self, idxlist=None, pos=0, output=None, progress=True):
         """ optimize parameters for individual subjects, store results
         :: Arguments ::
             param_sets (list):
@@ -368,6 +358,8 @@ class Model(RADDCore):
         # fit result lists for each param set
         finfoList, poptList, yhatList = [], [], []
         for idx in self.idx:
+
+            self.toggle_pbars(progress=progress)
 
             ix = self.idx.index(idx)
             if hasattr(self, 'idxbar'):
@@ -391,6 +383,10 @@ class Model(RADDCore):
             poptList.append(deepcopy(popt))
             yhatdf.loc[yhatdf.idx==idx, datcols] = yhat
 
+            self.opt.ibar.clear()
+            self.opt.gbar.clear()
+            clear_output()
+
         # concatenate all subjects together into single fitdf, poptdf, & yhatdf
         fitdf = pd.concat(finfoList, axis=1).T
         poptdf = pd.DataFrame.from_dict(poptList)
@@ -403,6 +399,58 @@ class Model(RADDCore):
         self.fitdf, self.poptdf, self.yhatdf = self.iohandler.read_model_results()
         return self.fitdf, self.poptdf, self.yhatdf
 
+
+def nested_optimize(depends, data, kind='xdpm', flatp=None, saveplot=True, plotfits=False, custompath=None, progress=True, saveresults=False, saveobserved=False):
+    """ optimize a series of models using same init parameters where the i'th model
+        has depends_on = {<depends[i]> : <cond>}.
+        NOTE: only for models with fit_on='average'
+    ::Arguments::
+        depends (list):
+            list of depends_on dictionaries to fit using a single set of init parameters (m.flat_popt)
+        data (DataFrame):
+            input dataframe to fit nested models to
+        plotfits (bool):
+            if True (default), plot model predictions over observed data
+        saveplot (bool):
+            if True (default), save plots to model.handler.results_dir
+        custompath (str):
+            path starting from any subdirectory of "~/" (e.g., home).
+            all saved output will write to "~/<custompath>/<m.model_id>/"
+        progress (bool):
+            track progress across model fits, ninits, and basinhopping
+    """
+
+    fits, popts, yhats = [], [], []
+
+    for i, depends_on in enumerate(depends):
+        m = Model(data=data, kind=kind, depends_on=depends_on)
+        m.set_basinparams(method='basin', nsamples=1000)
+        m.set_testing_params()
+        m.custompath = custompath
+        pnames = m.toggle_pbars(progress=progress, models=depends)
+
+        if progress:
+            m.mbar.update(value=i, status=pnames[i])
+
+        m.set_fitparams(force='cond')
+        flatp_ = deepcopy(flatp)
+        finfo, popt, yhat = m.optimize_conditional(flatp_, get_results=True)
+
+        m.write_results(finfo, popt, yhat)
+        m.fitdf.insert(0, 'modelID', '_'.join(list(m.depends_on)))
+        m.poptdf.insert(0, 'modelID', '_'.join(list(m.depends_on)))
+        m.yhatdf.insert(0, 'modelID', '_'.join(list(m.depends_on)))
+        fits.append(m.fitdf); popts.append(m.poptdf); yhats.append(m.yhatdf)
+
+        if plotfits:
+            m.plot_model_fits(save=saveplot)
+
+        if progress:
+            m.mbar.clear()
+            m.opt.gbar.clear()
+            m.opt.ibar.clear()
+
+    return [pd.concat(outdata).reset_index(drop=True) for outdata in [fits, popts, yhats]]
 
 
 class ModelIO(object):

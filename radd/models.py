@@ -3,11 +3,12 @@
 #   Kyle Dunovan (ked64@pitt.edu) &
 #   Jeremy Huang (jeremyhuang@cmu.edu)
 from __future__ import division
-from future.utils import listvalues
+from future.utils import listvalues, listitems
 from copy import deepcopy
 import pandas as pd
 import numpy as np
 from numpy.random import random_sample as randsample
+from scipy.stats import ks_2samp as KS
 from scipy.stats.mstats import mquantiles
 from itertools import product
 from radd import theta
@@ -21,9 +22,10 @@ class Simulator(object):
     def __init__(self, inits, fitparams=None, ssdMethod='all', **kwargs):
         self.ssdMethod = ssdMethod
         self.update(fitparams=fitparams, inits=inits)
+        self.ksData=None
 
 
-    def update(self, force=False, **kwargs):
+    def update(self, force=False, ksData=None, **kwargs):
         kw_keys = list(kwargs)
         if 'fitparams' in kw_keys:
             self.fitparams = kwargs['fitparams']
@@ -36,6 +38,14 @@ class Simulator(object):
             lmParamsNames = kwargs['lmParamsNames']
         else:
             lmParamsNames = None
+        if ksData is not None:
+            self.ksData = ksData
+            nl = self.fitparams['nlevels']
+            corRT = self.ksData['corRT']
+            errRT = self.ksData['errRT']
+            self.RT = [np.concatenate([-errRT[i], corRT[i]]) for i in range(nl)]
+            self.goAcc = self.ksData['goAcc']
+            self.stopAcc = self.ksData['stopAcc']
 
         self.kind = self.fitparams.kind
         self.clmap = self.fitparams.clmap
@@ -50,10 +60,20 @@ class Simulator(object):
         self.ntrials = self.fitparams['ntrials']
         self.y = self.fitparams.y.flatten()
         self.wts = self.fitparams.wts.flatten()
-        self.ssd, nssd, nss, nss_per, ssd_ix = self.fitparams.ssd_info
+
+        try:
+            self.ssd, nssd, nss, nss_per, ssd_ix = self.fitparams.ssd_info
+            nfree = self.pmatrix_vals.shape[0]
+            if self.ssd.shape[0]!=nfree:
+                ntile = nfree/self.ssd.shape[0]
+                self.ssd = np.tile(self.ssd, ntile).reshape(nfree, -1)
+        except Exception:
+            pass
+
         self.format_cond_params(lmParamsNames=lmParamsNames)
         self.make_io_vectors()
         self.__init_analyze_functions__()
+
 
 
     def __init_analyze_functions__(self):
@@ -63,7 +83,7 @@ class Simulator(object):
         prob = self.quantiles
         # self.RTQ = lambda zpd: map((lambda x: mquantiles(x[0][x[0] < x[1]], prob)), zpd)
         self.RTQ = lambda zpd: [mquantiles(rt[rt < deadline], prob) for rt, deadline in zpd]
-
+        self.filterRT = lambda zpd: [rt[rt < deadline] for rt, deadline in zpd]
 
     def cost_fx(self, theta_array):
         yhat = self.simulate_model(theta_array)
@@ -88,10 +108,46 @@ class Simulator(object):
         chi2 = np.sum((O_i - E_i)**2 / E_i)
 
 
+    def ks_stat_lmfit(self, lmParams):
+        thetaSeries = pd.Series(lmParams.valuesdict())[self.lmParamsNames]
+        crtHat, ssrt = self.simulate_model(thetaSeries.values, analyze=False, get_rts=True)
+        nl, nssd, nssPer = ssrt.shape
+        nss = nssd * nssPer
+        ertHat = crtHat[:, :nss].reshape(ssrt.shape)
+        gacc = np.mean(ufunc_where(crtHat < self.tb, 1, 0), axis=1)
+        sacc = np.mean(ufunc_where(ssrt <= ertHat, 1, 0), axis=2)
+        crtHat = self.filterRT(zip(crtHat, [self.tb]*nl))
+        ertHat = self.filterRT(zip(ertHat, ssrt))
+        rtHat = [np.concatenate([-ertHat[i], crtHat[i]]) for i in range(nl)]
+        ksRT = np.sum([np.log(KS(self.RT[i], rtHat[i])[0]) for i in range(nl)])
+        llGo = np.sum([-np.log(np.exp(-((self.goAcc[i]-gacc[i])/.1)**2)) for i in range(nl)])
+        llStop = np.sum([[-np.log(np.exp(-((self.stopAcc[i][ii]-sacc[i][ii])/.1)**2)) for ii in range(nssd)] for i in range(nl)])
+        LL = ksRT + llGo + llStop
+        return LL
+
+
+    def ks_stat(self, theta_array):
+        crtHat, ssrt = self.simulate_model(theta_array, analyze=False, get_rts=True)
+        nl, nssd, nssPer = ssrt.shape
+        nss = nssd * nssPer
+        ertHat = crtHat[:, :nss].reshape(ssrt.shape)
+        gacc = np.mean(ufunc_where(crtHat < self.tb, 1, 0), axis=1)
+        sacc = np.mean(ufunc_where(ssrt <= ertHat, 1, 0), axis=2)
+
+        crtHat = self.filterRT(zip(crtHat, [self.tb]*nl))
+        ertHat = self.filterRT(zip(ertHat, ssrt))
+        rtHat = [np.concatenate([-ertHat[i], crtHat[i]]) for i in range(nl)]
+        ksRT = np.sum([np.log(KS(self.RT[i], rtHat[i])[0]) for i in range(nl)])
+        llGo = np.sum([-np.log(np.exp(-((self.goAcc[i]-gacc[i])/.1)**2)) for i in range(nl)])
+        llStop = np.sum([[-np.log(np.exp(-((self.stopAcc[i][ii]-sacc[i][ii])/.1)**2)) for ii in range(nssd)] for i in range(nl)])
+        LL = ksRT + llGo + llStop
+        return LL
+
+
     def simulate_model(self, params, analyze=True, get_rts=False):
-        xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
+        xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
         dvg, goRT, ssRT = self.get_io_copies()
-        sim_many_dpm(self.rProb, self.rProbSS, dvg, goRT, ssRT, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, self.dt)
+        sim_many_dpm(self.rProb, self.rProbSS, dvg, goRT, ssRT, xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx, self.si, self.dt)
         if analyze:
             return self.analyze(goRT, ssRT)
         elif get_rts:
@@ -100,10 +156,10 @@ class Simulator(object):
 
 
     def _simulate_traces(self, params):
-        xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
+        xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
         dvg, goRT, ssRT = self.get_io_copies()
         dvs = self.dvs.copy()
-        sim_many_dpm_traces(self.rProb, self.rProbSS, dvg, dvs, goRT, ssRT, xtb, vProb, vsProb, bound, gbase, gOnset, ssOnset, dx, self.dt)
+        sim_many_dpm_traces(self.rProb, self.rProbSS, dvg, dvs, goRT, ssRT, xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx, self.si, self.dt)
         return [dvg, dvs, goRT, ssRT]
 
 
@@ -188,15 +244,17 @@ class Simulator(object):
         gOnset = np.round(tr / self.dt, 1).astype(int)
         self.vProb = vProb
         self.vsProb = vsProb
+        self.drift = v
+        self.ssdrift = ssv
         self.gOnset = gOnset
         self.ssOnset = ssOnset
         self.dx = dx
-        self. xtb = xtb
+        self.xtb = xtb
         self.bound = a
         self.gbase = gbase
         self.si = si
 
-        return [xtb] + [vProb, vsProb, a, gbase, gOnset, ssOnset, dx]
+        return [xtb] + [v, ssv, a, gbase, gOnset, ssOnset, dx]
 
 
     def format_cond_params(self, lmParamsNames=None):
@@ -227,19 +285,22 @@ class Simulator(object):
 
 
     def make_io_vectors(self):
-        self.ssd, nssd, nss, nss_per, ssd_ix = self.fitparams.ssd_info
-        self.rProb = randsample((self.nlevels, self.ntrials, self.ntime))
-        self.rProbSS = randsample((self.nlevels, nssd, nss_per, self.ntime))
-        self.rProbSS3d = randsample((self.nlevels, nssd * nss_per, self.ntime))
-        dvg = np.zeros_like(self.rProb)
-        self.dvs = np.zeros_like(self.rProbSS)
-        self.goRT = np.zeros((self.nlevels, self.ntrials))
-        self.ssRT = np.zeros((self.nlevels, nssd, nss_per))
-        # self.ssRT2d = np.zeros((self.nlevels, nssd * nss_per))
-        self.vectors = [dvg, self.goRT, self.ssRT]
-        ssdSteps = get_onset_index(self.ssd, self.dt)
-        self.ssdTrials = np.sort(np.tile(ssdSteps, nss_per))
 
+        self.rProb = randsample((self.nlevels, self.ntrials, self.ntime))
+        dvg = np.zeros_like(self.rProb)
+        self.goRT = np.zeros((self.nlevels, self.ntrials))
+        if 'ssd_info' in self.fitparams.keys():
+            self.ssd, nssd, nss, nss_per, ssd_ix = self.fitparams.ssd_info
+            self.rProbSS = randsample((self.nlevels, nssd, nss_per, self.ntime))
+            self.rProbSS3d = randsample((self.nlevels, nssd * nss_per, self.ntime))
+            self.ssRT = np.zeros((self.nlevels, nssd, nss_per))
+            self.dvs = np.zeros_like(self.rProbSS)
+            self.vectors = [dvg, self.goRT, self.ssRT]
+            ssdSteps = get_onset_index(self.ssd, self.dt)
+            self.ssdTrials = np.sort(np.tile(ssdSteps, nss_per))
+            # self.ssRT2d = np.zeros((self.nlevels, nssd * nss_per))
+        else:
+            self.vectors = [dvg, self.goRT]
 
     def get_io_copies(self):
         return [v.copy() for v in self.vectors]

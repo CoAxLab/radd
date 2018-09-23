@@ -13,7 +13,7 @@ from itertools import product
 
 class DataHandler(object):
 
-    def __init__(self, model, max_wt=2.5, verbose=False):
+    def __init__(self, model, max_wt=3., verbose=False):
         self.model = model
         self.data = model.data
         self.inits = model.inits
@@ -102,7 +102,15 @@ class DataHandler(object):
         if self.bwfactors is not None and self.model.fit_on=='subjects':
             bwix = self.observedDF[self.groups].columns.size
             bwunique = [self.data[self.data.idx==idx][self.bwfactors].unique() for idx in self.idx]
+            #wfactors = list(self.clmap)
+            #wfactors.remove(self.bwfactors)
+            # nwithin = np.sum([len(self.clmap[wfactor]) for wfactor in wfactors])
             bwcast = np.hstack([np.tile(bw, self.nlevels) for bw in bwunique])
+
+            print(len(bwcast))
+            print(self.observedDF.shape[0])
+            print(self.bwfactors)
+            #print(self.observedDF)
             self.observedDF.insert(bwix, self.bwfactors, bwcast)
             self.wtsDF.insert(bwix, self.bwfactors, bwcast)
             errdf = self.observedDF.groupby(self.conds+[self.bwfactors]).sem()*2.
@@ -110,6 +118,7 @@ class DataHandler(object):
         else:
             errdf = self.observedDF.groupby(self.conds).sem()*2
             self.observedErr = errdf.reset_index()[self.observedDF.columns[1:]]
+
 
     def make_freq_df(self):
         data = self.data.copy()
@@ -156,7 +165,8 @@ class DataHandler(object):
         go and stop accuracy for each subject (see funcs in radd.tools.analyze)
         """
         data = self.data.copy()
-        quant_wts = [analyze.idx_quant_weights(df, conds=self.conds, max_wt=self.max_wt, quantiles=self.quantiles, bwfactors=self.bwfactors) for i, df in data.groupby('idx')]
+        # quant_wts = [analyze.idx_quant_weights(df, conds=self.conds, max_wt=self.max_wt, quantiles=self.quantiles, bwfactors=self.bwfactors) for i, df in data.groupby('idx')]
+        quant_wts = analyze.idx_quant_weights_OLD(data, prob=self.quantiles, groups=self.groups, nsplits=np.cumprod(self.cond_matrix)[-1], max_wt=self.max_wt)
         acc_wts = [analyze.idx_acc_weights(df, conds=self.conds, ssd_method=self.ssd_method) for i, df in data.groupby('idx')]
         return quant_wts, acc_wts
 
@@ -193,6 +203,7 @@ class DataHandler(object):
         self.empty_poptdf = poptdf.copy()
         return poptdf
 
+
     def make_fit_df(self):
         """ make empty dataframe for storing fit info
         """
@@ -210,18 +221,24 @@ class DataHandler(object):
             fitparams (Series):
                 model.fitparams dict w/ meta info for last fit
         """
+
         if fitparams is None:
             fitparams = self.model.fitparams
+
         poptdf = self.empty_poptdf.copy()
-        # popt = self.model.simulator.vectorize_params(popt)
-        popt_vals = np.array([popt[pkey] for pkey in self.poptdf_cols]).T
-        poptdf.loc[:, self.poptdf_cols] = popt_vals
         poptdf['idx'] = str(fitparams.idx)
         poptdf['pvary'] = '_'.join(list(self.model.depends_on))
+
+        p = pd.Series(deepcopy(popt))[self.poptdf_cols].to_dict()
+        poptdf.loc[:, self.poptdf_cols] = pd.DataFrame(p, index=poptdf.index)
+        # popt = self.model.simulator.vectorize_params(popt)
+        # popt_vals = np.array([popt[pkey] for pkey in self.poptdf_cols]).T
+        # poptdf.loc[:, self.poptdf_cols] = popt_vals
         if np.any(self.poptdf.isnull()):
             poptdf = poptdf
         else:
             poptdf = pd.concat([self.poptdf, poptdf], axis=0)
+
         self.poptdf = poptdf.reset_index(drop=True)
         return self.poptdf
 
@@ -266,7 +283,7 @@ class DataHandler(object):
         if fitparams is None:
             fitparams = self.model.fitparams
         nl = fitparams['nlevels']
-        yhat = yhat.reshape(nl, int(yhat.size/nl))
+        yhat = yhat.reshape(nl, -1)
         yhatdf = self.empty_yhatdf.copy()
         yhatdf.loc[:, 'acc':] = yhat
         yhatdf['idx'] = str(fitparams.idx)
@@ -338,6 +355,7 @@ class DataHandler(object):
         else:
             self.idx_cols = [self.p_cols + self.q_cols]*self.nrows
 
+
     def make_q_cols(self):
         """ make header names for correct/error RT quants
         in observedDF, yhatdf, and wtsDF
@@ -345,6 +363,7 @@ class DataHandler(object):
         cq = ['c' + str(int(n * 100)) for n in self.model.quantiles]
         eq = ['e' + str(int(n * 100)) for n in self.model.quantiles]
         self.q_cols = cq + eq
+
 
     def make_p_cols(self, ssd_list=None):
         """ make header names for response accuracy in observedDF,
@@ -355,12 +374,14 @@ class DataHandler(object):
             ssd_unique = np.unique(np.hstack(ssd_list)).tolist()
             self.p_cols = self.p_cols + ssd_unique
 
+
     def make_f_cols(self):
         """ make header names for various fit statistics in fitdf
         (model parameters, goodness-of-fit measures, etc)
         """
         self.poptdf_cols = np.sort(list(self.inits)).tolist()
         self.f_cols = ['idx', 'pvary', 'nvary', 'AIC', 'BIC', 'nfev', 'df', 'ndata', 'chi', 'rchi', 'logp', 'cnvrg']
+
 
     def save_results(self, saveobserved=False):
         """ Saves yhatdf and fitdf results to model output dir
@@ -380,6 +401,7 @@ class DataHandler(object):
         if saveobserved:
             self.observedDF.to_csv(os.path.join(self.resultsdir, make_fname('observed_data')))
             self.wtsDF.to_csv(os.path.join(self.resultsdir, make_fname('cost_weights')))
+
 
     def make_results_dir(self, custompath=None, get_path=False):
         """ make directory for writing model output and figures

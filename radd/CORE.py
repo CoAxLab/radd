@@ -1,6 +1,6 @@
 #!/usr/local/bin/env python
 from __future__ import division
-from future.utils import listvalues
+from future.utils import listvalues, listitems
 from copy import deepcopy
 import os
 import numpy as np
@@ -22,7 +22,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
-    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1), presample=False):
+    def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1), presample=False, ksfit=False):
         self.kind = kind
         self.fit_on = fit_on
         self.ssd_method = ssd_method
@@ -32,7 +32,8 @@ class RADDCore(object):
         self.ssdelay = ssdelay
         self.gbase = gbase
         self.custompath = custompath
-        self.data = analyze.remove_outliers(data, 3.5)
+        self.data = data.copy()
+        # self.data = analyze.remove_outliers(data, 3.5)
         self.tb = analyze.estimate_timeboundary(self.data)
         self.idx = list(self.data.idx.unique())
         self.nidx = len(self.idx)
@@ -43,6 +44,7 @@ class RADDCore(object):
         self.track_basins = False
         self.pbars = None
         self.is_nested = False
+        self.ksfit=ksfit
         self.__prepare_fit__(depends_on, presample=presample)
 
 
@@ -76,6 +78,10 @@ class RADDCore(object):
 
         # set fit parameters with default values
         self.set_fitparams()
+
+        # # set ssd info
+        # self.__set_ssd_info__()
+
         # set basinhopping parameters with default values
         self.set_basinparams()
 
@@ -107,7 +113,7 @@ class RADDCore(object):
         self.observed_flat = self.handler.observed_flat
 
         # observed frequency bins dataframe
-        self.freqDF = self.handler.make_freq_df()
+        # self.freqDF = self.handler.make_freq_df()
 
         # dataframe with same dim as observeddf for storing model predictions
         self.yhatdf = self.handler.yhatdf
@@ -141,15 +147,17 @@ class RADDCore(object):
         """ dictionary of fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'fitparams'):
+
             # initialize with default values and first arrays in observed_flat, flat_wts
+            #local methods = ['nelder', 'powell', 'lbfgsb' 'tnc', 'cobyla']
             self.fitparams = {'ix':0,
-                            'ntrials': 20000,
+                            'ntrials': 10000,
                             'si': .1,
-                            'dt':.001,
-                            'tol': 1.e-15,
+                            'dt':.003,
+                            'tol': 1.e-25,
                             'method': 'nelder',
-                            'maxfev': 400,
-                            'maxiter': 400,
+                            'maxfev': 800,
+                            'maxiter': 800,
                             'kind': self.kind,
                             'clmap': self.clmap,
                             'pcmap':self.pcmap,
@@ -174,28 +182,30 @@ class RADDCore(object):
 
         if 'quantiles' in list(kwargs):
             self.update_quantiles()
+
         if 'depends_on' in list(kwargs):
-            # reformat_dataframes = False
-            # conds = listvalues(kwargs['depends_on'])
-            # if self.is_flat or conds != listvalues(self.depends_on):
-            #     reformat_dataframes = True
-            # self.set_conditions(kwargs['depends_on'])
-            # if reformat_dataframes:
             self.__prepare_fit__(kwargs['depends_on'])
             self.generate_model_id()
-            self.set_fitparams(nlevels=self.nlevels, clmap=self.clmap, model_id=self.model_id)
+            self.set_fitparams(nlevels = self.nlevels, clmap=self.clmap, model_id=self.model_id)
             self.fitparams['nlevels'] = self.nlevels
+
         if force=='cond':
             self.fitparams['nlevels'] = self.nlevels
+
         elif force=='flat':
             self.fitparams['nlevels'] = 1
 
         self.update_data(self.fitparams.nlevels)
 
-        if hasattr(self, 'ssdDF'):
+        if hasattr(self, 'ssdDF') and 'ssd' in self.data.columns:
             self.__set_ssd_info__()
+
+        ksData=None
+        if self.ksfit:
+            ksData = self.get_ksdata(nlevels=self.fitparams['nlevels'])
+
         if hasattr(self, 'opt'):
-            self.opt.update(fitparams=self.fitparams, inits=self.fitparams.inits)
+            self.opt.update(fitparams=self.fitparams, inits=self.fitparams.inits, ksData=ksData)
             self.sim = self.opt.sim
 
 
@@ -203,21 +213,22 @@ class RADDCore(object):
         """ dictionary of global fit parameters, passed to Optimizer/Simulator objects
         """
         if not hasattr(self, 'basinparams'):
-            self.basinparams =  {'ninits': 3,
-                                'nsamples': 1500,
+            self.basinparams =  {'ninits': 4,
+                                'nsamples': 2500,
                                 'interval': 10,
-                                'T': .03,
-                                'stepsize': .015,
+                                'T': .015,
+                                'mutation': (0.5, 1),
+                                'stepsize': .25,
                                 'niter': 500,
                                 'maxiter': 500,
                                 'nsuccess': 150,
-                                'polish_tol': 1.e-15,
-                                'tol': .025,
-                                'method': 'basin',
-                                'local_method': 'L-BFGS-B',
-                                'sample_method': 'random',
-                                'popsize': 12,
-                                'recombination': .8,
+                                'polish_tol': 1.e-25,
+                                'tol': .001,
+                                'method': 'evolution',
+                                'local_method': 'powell', #'L-BFGS-B', 'TNC'
+                                'sample_method':'random',
+                                'popsize': 15,
+                                'recombination': .65,
                                 'progress': True,
                                 'strategy': 'best1bin',
                                 'disp': False}
@@ -225,6 +236,9 @@ class RADDCore(object):
             # fill with kwargs for the upcoming fit
             for kw_arg, kw_val in kwargs.items():
                 self.basinparams[kw_arg] = kw_val
+            if self.basinparams['method']=='basin':
+                self.basinparams['local_method']='TNC'
+                self.basinparams['tol'] = 1e-20
 
         if hasattr(self, 'opt'):
             old_method = self.opt.basinparams['method']
@@ -233,6 +247,47 @@ class RADDCore(object):
             if old_method != self.basinparams['method']:
                 self.opt.make_progress_bars()
 
+
+    def get_ksdata(self, nlevels=1):
+        self.ksDataCond = {'corRT':[], 'errRT':[], 'goAcc':[], 'stopAcc':[]}
+        self.ksDataFlat = deepcopy(self.ksDataCond)
+
+
+        df = self.data.copy()
+        self.ksDataFlat['corRT'].append(df[(df.ttype=='go')&(df.acc==1)].rt.values)
+        self.ksDataFlat['errRT'].append(df[(df.ttype=='stop')&(df.acc==0)].rt.values)
+        self.ksDataFlat['goAcc'].append(df[df.ttype=='go'].acc.mean())
+
+        if self.ssd_method=='all':
+            nssd = self.fitparams.ssd_info[1]
+            self.ksDataFlat['stopAcc'].append(df.iloc[:, 3:3+nssd].mean())
+        else:
+            self.ksDataFlat['stopAcc'].append(df[df.ttype=='stop'].acc.mean())
+
+        for col, vals in listitems(self.clmap):
+            for lvl in vals:
+                if lvl.isalnum():
+                    try:
+                        lvl = int(lvl)
+                    except ValueError:
+                        lvl = lvl
+                dfi = self.data[self.data[col]==lvl]
+                self.ksDataCond['corRT'].append(dfi[(dfi.ttype=='go')&(dfi.acc==1)].rt.values)
+                self.ksDataCond['errRT'].append(dfi[(dfi.ttype=='stop')&(dfi.acc==0)].rt.values)
+                self.ksDataCond['goAcc'].append(dfi[dfi.ttype=='go'].acc.mean())
+
+                if self.ssd_method=='all':
+                    dfStop = self.observedDF[self.observedDF[col]==lvl]
+                    nssd = self.fitparams.ssd_info[1]
+                    self.ksDataCond['stopAcc'].append(dfStop.iloc[:, 3:3+nssd].mean().values)
+                else:
+                    self.ksDataCond['stopAcc'].append(dfi[dfi.ttype=='stop'].acc.mean())
+
+                #self.ksDataCond['stopAcc'].append(dfi[(dfi.ttype=='stop')&(dfi.probe==1)].acc.mean())
+
+        if nlevels==1:
+            return self.ksDataFlat
+        return self.ksDataCond
 
 
     def update_data(self, nlevels=1):
@@ -277,6 +332,7 @@ class RADDCore(object):
         self.opt.init_params = self.init_params
         self.opt.init_yhats = self.init_yhats
         self.opt.sample_theta()
+
 
     def set_conditions(self, depends_on=None, bwfactors=None):
         data = self.data.copy()
@@ -330,6 +386,7 @@ class RADDCore(object):
         self.pcmap = pcmap
         if hasattr(self, 'handler'):
             self.handler.pcmap = pcmap
+
 
     def __set_ssd_info__(self):
         """ set ssd_info for upcoming fit and store in fitparams dict

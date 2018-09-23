@@ -14,9 +14,12 @@ from scipy.interpolate import interp1d
 from scipy import stats
 from scipy.optimize import leastsq, minimize, curve_fit
 
+
 def ezdiff(rt, correct, s=1.):
+
     """ estimate ezDDM parameters
     """
+
     logit = lambda p:np.log(p/(1-p))
     pc = np.mean(correct)
 
@@ -34,15 +37,19 @@ def ezdiff(rt, correct, s=1.):
     y = (-1*v*a)/(s**2)
     MDT = (a/(2*v))*((1-np.exp(y))/(1+np.exp(y)))
     tr = MRT-MDT
+
     return([a, v, tr])
 
 
+
 def blockify_trials(data, nblocks=5, conds=None, groups=['idx']):
+
     datadf = data.copy()
     if conds is not None:
         if type(conds) is str:
             conds = [conds]
         groups = groups + conds
+
     idxdflist = []
     for dfinfo, idxdf in datadf.groupby(groups):
         ixblocks = np.array_split(idxdf.trial.values, nblocks)
@@ -51,7 +58,9 @@ def blockify_trials(data, nblocks=5, conds=None, groups=['idx']):
         colname = 'block{}'.format(nblocks)
         idxdf[colname] = blocks
         idxdflist.append(idxdf)
+
     return pd.concat(idxdflist)
+
 
 
 def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on='average'):
@@ -146,7 +155,6 @@ def calc_chi_square(rt, ssrt, fitparams):
     return chi2
 
 
-
 def calculate_qpdata(data, quantiles=np.linspace(.02,.98,10)):
     data = data[data.response==1].copy()
     cor = data[data['acc']==1]
@@ -158,7 +166,52 @@ def calculate_qpdata(data, quantiles=np.linspace(.02,.98,10)):
     return quantMeans, quantErr
 
 
-def idx_quant_weights(data, conds, quantiles=np.linspace(.02,.98,10), max_wt=3, bwfactors=None):
+def idx_quant_weights_OLD(df, groups=[], nsplits=1, prob=np.arange(.1,1.,.1), max_wt=2.5):
+
+    """ calculates weight vectors for reactive RT quantiles by
+    first estimating the SEM of RT quantiles for corr. and err. responses.
+    (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
+    Then representing these variances as ratios.
+    e.g.
+          QSEM = mjci(rtvectors)
+          wts = median(QSEM)/QSEM
+    """
+    idx_mjci = lambda x: mjci(x.rt, prob=prob)
+
+    nquant = prob.size
+
+    if 'idxN' in df.columns:
+        nidx = df.idxN.unique().size
+    else:
+        nidx = df.idx.unique().size
+
+    # get all trials with response recorded
+    godf = df.query('response==1')
+
+    # sort by ttype first so go(acc==1) occurs before stop(acc==0)
+    ttype_ordered_groups = np.hstack([groups, 'ttype', 'acc']).tolist()
+    godf_grouped = godf.groupby(ttype_ordered_groups)
+
+    # apply self.idx_mjci() to estimate quantile CI's
+    quant_err = np.vstack(godf_grouped.apply(idx_mjci).values)
+
+    # reshape [nidx   x   ncond * nquant * nacc]
+    idx_qerr = quant_err.reshape(nidx, nsplits * nquant * 2)
+
+    # calculate subject median across all conditions quantiles and accuracy
+    # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
+    # for conditions with greater number of observations (i.e., more acc==1 in godf)
+    idx_medians = np.nanmedian(idx_qerr, axis=1)
+    idx_qratio = idx_medians[:, None] / idx_qerr
+
+    # set extreme values to max_wt arg val
+    idx_qratio[idx_qratio >= max_wt] = max_wt
+
+    # reshape to fit in wtsDF[:, q_cols]
+    return idx_qratio.reshape(nsplits * nidx, nquant * 2)
+
+
+def idx_quant_weights(data, conds, quantiles=np.linspace(.02,.98,10), max_wt=3.5, bwfactors=None):
     """ calculates weight vectors for reactive RT quantiles by
     first estimating the SEM of RT quantiles for corr. and err. responses.
     (using Maritz-Jarrett estimatation: scipy.stats.mstats_extras.mjci).
@@ -189,12 +242,14 @@ def idx_quant_weights(data, conds, quantiles=np.linspace(.02,.98,10), max_wt=3, 
     # calculate subject median across all conditions quantiles and accuracy
     # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
     # for conditions with greater number of observations (i.e., more acc==1 in godf)
-    idx_median = np.nanmedian(quant_err)
+    idx_median = np.median(quant_err)
     # idx_qratio = idx_median / quant_err
     idx_qratio = idx_median / quant_err
     # set extreme values to max_wt arg val
     idx_qratio[idx_qratio >= max_wt] = max_wt
+
     return idx_qratio.reshape(nlevels, -1)
+
 
 def idx_acc_weights(data, conds=['flat'], ssd_method='all'):
     """ count number of observed responses across levels, transform into ratios
@@ -223,10 +278,18 @@ def idx_acc_weights(data, conds=['flat'], ssd_method='all'):
     df['n'] = 1
     countdf = df.pivot_table('n', index=index, columns=split_by, aggfunc=np.sum)
     idx_pwts = countdf.values / countdf.median(axis=1).values[:, None]
+    idx_pwts = np.ones_like(idx_pwts) #+ .5
     # idx_pwts = countdf.values / countdf.median(axis=0).values
     if ssd_method=='all':
-        go_wts = np.ones(countdf.shape[0]) * .5
-        idx_pwts = np.concatenate((go_wts[:,None], idx_pwts*.5), axis=1)
+        go_wts = np.ones(countdf.shape[0]) #* .5
+        # idx_pwts[:, -5] = .5
+        # idx_pwts[:, -4] = .5
+        # idx_pwts[:, -3] = .5
+        # idx_pwts[:, -2] = .5
+        # idx_pwts[:, -1] = .5
+
+        idx_pwts = np.concatenate((go_wts[:,None], idx_pwts), axis=1)
+
     return idx_pwts
 
 
@@ -284,6 +347,7 @@ def pandaify_results(gort, ssrt, tb=.7, bootstrap=False, bootinfo={'nsubjects':2
         resultsdf = bootstrap_data(resultsdf, nsubjects=bootinfo['nsubjects'], n=bootinfo['ntrials'], groups=bootinfo['groups'])
     return resultsdf
 
+
 def bootstrap_data(data, nsubjects=25, n=120, groups=['cond', 'ssd']):
     """ generates n resampled datasets using rwr()
     for bootstrapping model fits
@@ -314,6 +378,7 @@ def bootstrap_data(data, nsubjects=25, n=120, groups=['cond', 'ssd']):
     # bootdf = pd.concat(bootdfList)
     return bootdf
 
+
 def rwr(X, get_index=False, n=None):
     """
     Modified from http://nbviewer.ipython.org/gist/aflaxman/6871948
@@ -335,6 +400,7 @@ def estimate_timeboundary(data):
     goDF = data[data.response==1].copy()
     return np.int(np.round(goDF.rt.max(), 2)*1000) * .001
 
+
 def determine_ssd_method(stopdf):
     ssd_n = [df.size for _, df in stopdf.groupby('ssd')]
     # test if equal # of trials per ssd & return ssd_n
@@ -343,6 +409,7 @@ def determine_ssd_method(stopdf):
         return 'all'
     else:
         return'central'
+
 
 def get_model_ssds(stopdf, conds, ssd_method='all', scale=.001, bwfactors=None):
 
@@ -403,6 +470,7 @@ def remove_outliers(data, sd=1.5, verbose=False):
     cleandf = clean.sort_values(by=sortby)
     return cleandf
 
+
 def ensure_numerical_wts(wts, flat_wts):
     # test inf
     wts[np.isinf(wts)] = np.median(wts[~np.isinf(wts)])
@@ -412,6 +480,7 @@ def ensure_numerical_wts(wts, flat_wts):
     flat_wts[np.isnan(flat_wts)] = np.median(flat_wts[~np.isnan(flat_wts)])
     return wts, flat_wts
 
+
 def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
     """ takes quantile estimates and fits cumulative density function
     returns samples to pass to sns.kdeplot()
@@ -420,11 +489,13 @@ def kde_fit_quantiles(rtquants, nsamples=1000, bw=.1):
     samples = kdefit.sample(n_samples=nsamples).flatten()
     return samples
 
+
 def scurve_interpolate(x, y, kind='cubic'):
     interpol_fx = interp1d(x, y, kind=kind)
     xsim = np.linspace(x[0], x[-1], 50, endpoint=True)
     ysim = interpol_fx(xsim)
     return xsim, ysim
+
 
 def scurve_poly_fit(x, y, n=20):
     polysim = lambda p, pi, x, xi: p[pi]*x**xi
@@ -434,6 +505,7 @@ def scurve_poly_fit(x, y, n=20):
     xsim = np.linspace(x.min()-.05, x.max()+.08, 2500, endpoint=True)
     ysim = np.sum([polysim(p, pi, xsim, xi) for pi, xi in poly_ix],axis=0)
     return xsim, ysim
+
 
 def fit_sigmoid(x, y):
     #x, y = scurve_interpolate(x, y)
