@@ -10,5 +10,5 @@ Click the "launch binder" button below to open up an interactive demo of radd in
 
 ### Install with pip
 ```sh
-pip install radd
+pip install --upgrade radd
 ```
