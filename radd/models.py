@@ -22,7 +22,7 @@ class Simulator(object):
     def __init__(self, inits, fitparams=None, ssdMethod='all', **kwargs):
         self.ssdMethod = ssdMethod
         self.update(fitparams=fitparams, inits=inits)
-        self.ksData=None
+        self.ksData = None
 
 
     def update(self, force=False, ksData=None, **kwargs):

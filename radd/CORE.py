@@ -13,7 +13,6 @@ from radd import theta, vis
 from itertools import product
 
 
-
 class RADDCore(object):
     """ Parent class for constructing attributes and methods used by
     of Model objects. Not meant to be used directly
@@ -469,7 +468,7 @@ class RADDCore(object):
         if models is not None:
             pvary = [list(depends_on) for depends_on in models]
             pnames = [vis.parameter_name(p, False) for p in pvary]
-            self.mbar = utils.PBinJ(n=len(pnames), color='b', status='{} Model')
+            self.mbar = utils.PBinJ(n=len(pnames), color='b', status='{}')
             return pnames
 
 

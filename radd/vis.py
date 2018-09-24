@@ -26,6 +26,7 @@ heat = cdict['heat']
 cool = cdict['cool']
 slate = cdict['slate']
 
+sns.set(style='white', font_scale=1.3)
 
 def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.1), err=None, clrs=None, save=False, bw='scott', savestr=None, same_axis=True, lbls=None, cumulative=True, suppressLegend=False, hist=False, kde=True,  shade=True, norm_hist=True, data=None, simData=None, plot_error_rts=True, figure=None):
     """ main plotting function for displaying model fit predictions over data
@@ -405,6 +406,7 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
 
 def plot_param_distributions(p=['a', 'sso', 'ssv', 'tr', 'v', 'xb', 'z'], n=2000, method='random'):
     from radd import theta
+    sns.set(style='white', font_scale=1.3)
     pkeys = np.sort(list(p))
     nparams = pkeys.size
     p_dists = theta.random_inits(pkeys=pkeys, ninits=n, method=method)
@@ -416,8 +418,10 @@ def plot_param_distributions(p=['a', 'sso', 'ssv', 'tr', 'v', 'xb', 'z'], n=2000
     for i, pk in enumerate(pkeys):
         sns.distplot(p_dists[pk], kde=False, ax=axes[i], norm_hist=True, color=clrs[pk], label=lbls[pk], hist_kws={'alpha':.8})
         sns.kdeplot(p_dists[pk], ax=axes[i], color=clrs[pk], shade=True, linewidth=0, alpha=.5, bw='scott')
-    for ax in axes:
+    for ax in axes[:len(pkeys)]:
         ax.legend(loc=1, fontsize=15)
+    for ax in axes:
+        ax.set_yticklabels([])
     plt.tight_layout()
     sns.despine()
 
