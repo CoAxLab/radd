@@ -103,14 +103,14 @@ def plot_model_fits(y, yhat, ssd=None, ssderr=None, quantiles=np.arange(.1, 1.,.
             qpcHatX, qpcHatCurve = analyze.fit_logistic(qpcHat, quantiles)
             ax2.errorbar(quant[0], quantiles, xerr=quantErr[0], marker='o', color=clrs[i], ms=6.5, linewidth=0, elinewidth=2.)
             ax2.plot(qpcHatX, qpcHatCurve, linewidth=2, color=clrs[i])
-            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=10, mew=0, alpha=.1, mfc=clrs[i], mec=clrs[i], color=clrs[i])
-            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=clrs[i])
+            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=10, mew=0, alpha=1., mfc='k', mec=clrs[i], color=clrs[i])
+            ax2.plot(qpcHat, quantiles, lw=0., marker='o', ms=10, mew=1.25, alpha=1., mfc='k', mec=clrs[i])
             if plot_error_rts:
                 qpeHatX, qpeHatCurve = analyze.fit_logistic(qpeHat, quantiles)
                 ax3.errorbar(quant[1], quantiles, xerr=quantErr[1], marker='o', color=clrs[i], ms=6.5, linewidth=0, elinewidth=2.)
                 ax3.plot(qpeHatX, qpeHatCurve, linewidth=2, color=clrs[i])
-                ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=10, mew=0, alpha=.1, mfc=clrs[i], mec=clrs[i], color=clrs[i])
-                ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=clrs[i])
+                ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=10, mew=0, alpha=1., mfc='k', mec=clrs[i], color=clrs[i])
+                ax3.plot(qpeHat, quantiles, lw=0., marker='o', ms=10, mew=1.25, alpha=1., mfc='k', mec=clrs[i])
 
         format_rt_axes(qAxes, cdf=cumulative, yhat=yhat, quantiles=quantiles)
         if nssd==1:
@@ -147,7 +147,7 @@ def plot_stop_fit(y, yhat, x=None, err=None, color=None, label=None, ax=None, al
 
 
 
-def plot_stop_data(y, x=None, err=None, label=None, lw=2, alpha=1, color='k', ax=None, **kwargs):
+def plot_stop_data(y, x=None, err=None, label=None, lw=2, alpha=1, color='b', ax=None, **kwargs):
     """
     PLOT empirical stop curve
     """
@@ -176,10 +176,10 @@ def plot_stop_curve_predicted(y, x=None, label=None, alpha=1., color='k', ax=Non
         x = np.linspace(.250, .50, len(y))
     # xsim, ysim = analyze.fit_sigmoid(x, y)
     xsim, ysim = analyze.fit_logistic(x[::-1], y)
-    ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.5, alpha=.1, mfc=color, mec=color)
-    ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=color)
+    ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.25, alpha=1, mfc='k', mec=color)
+    ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.25, alpha=1, mfc='k', mec=color)
     ax.plot(xsim[::-1], ysim, lw=2., color=color, alpha=1, linestyle='-')
-    ax.plot(x[0], y[0], lw=2., marker='o', ms=10, mew=1.5, alpha=.8, mfc='none', mec=color, label=label, color=color)
+    ax.plot(x[0], y[0], lw=2., marker='o', ms=10, mew=1.25, alpha=1, mfc='k', mec=color, label=label, color=color)
     if get_pse:
         PSEix = (np.abs(ysim - .5)).argmin()
         return xsim[PSE]

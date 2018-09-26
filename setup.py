@@ -5,7 +5,7 @@ package_data = {'radd':['docs/*.md', 'docs/*.txt', 'styles/*.css', 'docs/dataset
 
 setup(
     name='RADD',
-    version='0.4.0',
+    version='0.4.1',
     author='Kyle Dunovan, Timothy Verstynen, Jeremy Huang',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
