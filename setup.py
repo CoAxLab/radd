@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 import numpy as np
 import os
+
 package_data = {'radd':['docs/*.md', 'docs/*.txt', 'styles/*.css', 'docs/datasets/*', 'docs/examples/*.csv', 'docs/examples/*.mp4']}
 
 setup(

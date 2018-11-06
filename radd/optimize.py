@@ -65,9 +65,9 @@ class HopStep(object):
                     'sso': .01,
                     'z': .05,
                     'si': .005,
-                    'C': .002,
-                    'B': .008,
-                    'R': .002,
+                    'C': .035,
+                    'B': .05,
+                    'R': .01,
                     'vi': 1.1,
                     'vd': 1.5,
                     'Beta': .1}
@@ -176,10 +176,13 @@ class Optimizer(object):
 
         if self.learn:
             constants = self.simRL.constants
+            simfx_version = self.simRL.simfx_version
             if 'constants' in kw_keys:
                 constants = kw['constants']
+            if 'simfx_version' in kw_keys:
+                simfx_version = kw['simfx_version']
             data = self.get_trials_data()
-            self.simRL.update(inits=self.inits, fitparams=self.fitparams, data=data, constants=constants, nruns=self.nruns)
+            self.simRL.update(inits=self.inits, fitparams=self.fitparams, data=data, constants=constants, nruns=self.nruns, simfx_version=simfx_version)
 
         self.sim.update(inits=self.inits, fitparams=self.fitparams, ksData=ksData)
 
@@ -218,6 +221,10 @@ class Optimizer(object):
 
         keep_ix = np.argmin(xfmin)
         popt = xpopt[keep_ix]
+
+        if self.kind=='dpm' and 'xb' in list(popt):
+            _=popt.pop('xb')
+
         self.global_popt = deepcopy(popt)
         self.global_fmin = xfmin[keep_ix]
         self.global_results = global_results[keep_ix]
@@ -226,6 +233,7 @@ class Optimizer(object):
             self.rlpopt = deepcopy(popt)
         else:
             self.popt = deepcopy(popt)
+
         return popt
 
 
@@ -270,6 +278,7 @@ class Optimizer(object):
                 pkeys = [k for k in list(p) if k not in rateParams]
             else:
                 pkeys = []
+
             self.simRL.update(inits=p, constants=pkeys)
             x0 = self.simRL.preproc_params(p, asarray=True)
         else:
@@ -303,6 +312,10 @@ class Optimizer(object):
         pdict = self.popt_array_to_dict(fit_info.x,  learn=learn)
         popt.update(pdict)
         fmin = fit_info.fun
+
+        if self.kind=='dpm' and 'xb' in list(popt):
+            _=popt.pop('xb')
+
         if return_all:
             return popt, fmin, out
 
@@ -333,9 +346,9 @@ class Optimizer(object):
         if learn:
             sim = self.simRL
             pflat = sim.pflat
-            pvary = sim.pvary
+            pvary =  sim.pvary
             x0 = sim.preproc_params(p, asarray=True)
-            lmParams = theta.loadParameters_RL(inits=p, pflat=pflat, pvary=pvary, kind=self.kind)
+            lmParams = theta.loadParameters_RL(inits=p, pvary=pvary, pflat=pflat, kind=self.kind)
             costfx = sim.cost_fx_lmfit
         else:
             sim = self.sim
@@ -366,7 +379,12 @@ class Optimizer(object):
             self.lbar.clear()
 
         self.param_report = fit_report(self.lmMin.params)
-        return self.assess_fit(flat=flat, learn=learn)
+        finfo, popt, yhat = self.assess_fit(flat=flat, learn=learn)
+
+        if self.kind=='dpm' and 'xb' in list(popt):
+            _=popt.pop('xb')
+
+        return finfo, popt, yhat
 
 
     def set_global_options(self, learn=False):
@@ -415,20 +433,23 @@ class Optimizer(object):
 
 
     def sample_rl_theta(self, fitDynamics=True):
-        if fitDynamics:
-            costfx = self.simRL.cost_fx_rl
-        else:
-            costfx = self.simRL.cost_fx
+
+        simfx = self.simRL.sim_rt_sacc_blocks
         nsamples = self.basinparams['nsamples']
         nkeep = self.basinparams['ninits']
-        idxParams = pd.DataFrame([pd.Series(self.popt)]*nsamples)
-        rlParams = theta.random_inits(['B', 'C', 'R'], ninits=nsamples, kind=self.kind, as_list=True, method=self.basinparams['sample_method'])
-        rlParamsDF = pd.concat([idxParams, pd.DataFrame(rlParams.tolist())], axis=1)
-        rlParams = np.array(rlParamsDF.to_dict('records'))
 
-        self.simRL.update(inits=self.popt, constants=list(self.popt))
-        cost = np.vstack([costfx(p) for p in rlParams])
-        rlPsets = rlParams[np.argsort(np.hstack(cost))[:nkeep]]
+        if hasattr(self, 'popt'):
+            idxParams = pd.DataFrame([pd.Series(self.inits)]*nsamples)
+
+        idxParams = pd.DataFrame([pd.Series(self.popt)]*nsamples)
+
+        if not hasattr(self, 'rlParams'):
+            rlParams = theta.random_inits(['B', 'C', 'R'], ninits=nsamples, kind=self.kind, as_list=True, method=self.basinparams['sample_method'])
+            rlParamsDF = pd.concat([idxParams,pd.DataFrame(rlParams.tolist())], axis=1)
+            self.rlParams = np.array(rlParamsDF.to_dict('records'))
+            self.rlYhat = pd.DataFrame(np.vstack([simfx(p) for p in self.rlParams]))
+
+        rlPsets = self.filter_rlParams(self.rlParams, self.rlYhat)
         self.param_sets = rlPsets
 
 
@@ -440,7 +461,6 @@ class Optimizer(object):
         """
 
         if psets is None:
-
             psets = self.init_params
             yhatDF = self.init_yhats.copy()
 
@@ -460,6 +480,36 @@ class Optimizer(object):
         sseVals =sseDF.values
         bestIX = sseVals.argsort()[:nkeep]
 
+        return psets[bestIX]
+
+
+    def filter_rlParams(self, psets=None, yhatDF=None):
+        """ sample *nsamples* (default=5000, see set_fitparams) different
+        parameter sets (param_sets) and get model yhat for each set (param_yhats)
+            if fit_on==subjects flat_y shape is (n_idx X ndata)
+            elseif fit_on==average flat_y shape is (1 X ndata)
+        """
+
+        if psets is None:
+            psets = self.rlParams
+            yhatDF = self.rlYhat.copy()
+
+        nkeep = self.basinparams['ninits']
+        y = np.hstack([self.simRL.rtBlocks*10, self.simRL.saccBlocks])
+        wts = np.hstack([self.simRL.rt_weights, self.simRL.sacc_weights])
+        keys = yhatDF.columns.tolist()
+
+        ySeries = pd.Series(dict(zip(keys, y)))
+        wSeries = pd.Series(dict(zip(keys, wts)))
+        psets = np.asarray(psets)
+
+        diff = yhatDF - ySeries
+        wDiff = diff * wSeries
+
+        sqDiff = wDiff.apply(lambda x: x**2, axis=0)
+        sseDF = sqDiff.apply(lambda x: np.sum(x), axis=1)
+        sseVals = sseDF.values
+        bestIX = sseVals.argsort()[:nkeep]
         return psets[bestIX]
 
 
@@ -493,6 +543,10 @@ class Optimizer(object):
 
         # gen dict of lmfit optimized Parameters object
         popt = dict(self.lmMin.params.valuesdict())
+
+        if self.kind=='dpm' and 'xb' in list(popt):
+            _=popt.pop('xb')
+
         fmin = self.lmMin.chisqr
         nvary = len(self.lmMin.var_names)
         residuals = self.lmMin.residual

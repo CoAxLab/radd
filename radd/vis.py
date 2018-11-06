@@ -468,15 +468,15 @@ def parameter_name(param, tex=False):
         'xb': ['Dynamic Gain', '$\gamma$'],
         'sso': ['Brake Onset', '$so_{B}$'],
         'z': ['Execution Baseline', '$z_{E}$'],
-        #'v_ssv': ['Drift Ratio', '$v_{E},v_{B}$'],
         'aG': ['Alpha+', '$\\alpha^+$'],
         'aErr': ['Alpha-', '$\\alpha^-$'],
-        'A': ['Alpha', '$\\beta$'],
-        'B': ['Beta', '$\\alpha$'],
-        'R': ['Rho', '$\\rho$'],
+        'B': ['Alpha', '$\\alpha$'],
+        'C': ['Beta', '$\\beta$'],
+        'R': ['Rho', '$p$'],
         'flat': ['Flat', 'Flat'],
         'all': ['Flat', 'Flat']}
-    if '_' in param:# and param!='v_ssv':
+        
+    if '_' in param: # and param!='v_ssv':
         param = param.split('_')
     if isinstance(param, list):
         return ','.join([param_name[p][ix] for p in param])

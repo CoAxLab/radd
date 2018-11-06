@@ -1,22 +1,22 @@
 <style>
 	div#notebook {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
-	 line-height: 180%;
+	 font-size: 11pt;
+	 line-height: 160%;
 	 color: #303030;
 	 -webkit-font-smoothing: antialiased !important;
-	 padding-top: 8px !important;
+	 padding-top: 25px !important;
 	}
 	.notebook_app {
 	 background-color: #ffffff;
 	}
 	div#notebook_panel {
-	 margin-top: 3px;
+	 margin-top: 0px;
 	}
 	body,
 	div.body {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 color: #070707;
 	 background-color: #ffffff;
 	 -webkit-font-smoothing: subpixel-antialiased !important;
@@ -182,7 +182,7 @@
 	}
 	div#notebook_toolbar div.dynamic-instructions {
 	 font-family: sans-serif;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 color: #828892;
 	}
 	span#login_widget > .button,
@@ -241,14 +241,14 @@
 	 z-index: 100;
 	}
 	.list_container {
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 color: #070707;
 	 border: none;
 	 text-shadow: none !important;
 	}
 	.list_container > div {
 	 border-bottom: 1px solid rgba(61,59,73,.10);
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	}
 	.list_header > div,
 	.list_item > div {
@@ -261,7 +261,7 @@
 	 margin-left: -1px;
 	 vertical-align: middle;
 	 line-height: 22px;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	}
 	.item_icon {
 	 color: #007dc5;
@@ -280,7 +280,7 @@
 	 margin-left: -1px;
 	 vertical-align: middle;
 	 line-height: 1.5em;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 display: inline-table;
 	 position: static;
 	}
@@ -307,7 +307,7 @@
 	}
 	button#tree-selector-btn {
 	 height: 34px;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 border: none;
 	 left: 0px;
 	 border-radius: 0px !important;
@@ -353,7 +353,7 @@
 	 background-color: #fbfbfb;
 	}
 	.breadcrumb > li {
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 color: #070707;
 	 border: none;
 	 text-shadow: none !important;
@@ -373,14 +373,14 @@
 	}
 	ul#tabs a {
 	 font-family: sans-serif;
-	 font-size: 11.5pt !important;
+	 font-size: 11pt !important;
 	 font-weight: normal;
 	 font-style: normal;
 	 text-shadow: none !important;
 	}
 	.nav-tabs {
 	 font-family: sans-serif;
-	 font-size: 11.5pt !important;
+	 font-size: 11pt !important;
 	 font-weight: normal;
 	 font-style: normal;
 	 background-color: transparent;
@@ -444,28 +444,28 @@
 	 background-color: #ffffff;
 	 min-height: 0px;
 	 box-shadow: none;
-	 width: 83%;
+	 width: 88%;
 	 margin-right: auto;
 	 margin-left: auto;
 	}
 	div#ipython-main-app.container {
-	 width: 83%;
+	 width: 88%;
 	 margin-right: auto;
 	 margin-left: auto;
 	 margin-right: auto;
 	 margin-left: auto;
 	}
 	.container {
-	 width: 83%;
+	 width: 88%;
 	 margin-right: auto;
 	 margin-left: auto;
 	}
 	div#menubar-container {
 	 width: 100%;
-	 width: 83%;
+	 width: 88%;
 	}
 	div#header-container {
-	 width: 83%;
+	 width: 88%;
 	}
 	.notebook_app #header {
 	 border: none !important;
@@ -482,7 +482,7 @@
 	#header,
 	.edit_app #header {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 box-shadow: none;
 	}
 	body > #header .header-bar {
@@ -509,11 +509,11 @@
 	}
 	div#maintoolbar {
 	 position: absolute;
-	 width: 90%;
-	 margin-left: -10%;
+	 width: 100%;
+	 margin-left: -11%;
 	 padding-right: 8%;
 	 float: left;
-	 background: #ffffff;
+	 background: #ffffff !important;
 	}
 	#maintoolbar {
 	 margin-bottom: -3px;
@@ -549,13 +549,13 @@
 	}
 	.navbar-default {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 line-height: 1.5em;
 	 padding-bottom: 0px;
 	}
 	.navbar-default .navbar-nav > li > a {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 color: #070707;
 	 display: block;
 	 line-height: 1.5em;
@@ -649,7 +649,7 @@
 	}
 	.item_buttons .kernel-name {
 	 padding-top: 4px;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 color: #d31242;
 	}
 	.running_notebook_icon:before {
@@ -668,7 +668,7 @@
 	 padding-top: 3px;
 	 color: #488f0c;
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 text-rendering: auto;
 	 -webkit-font-smoothing: antialiased;
 	}
@@ -715,7 +715,7 @@
 	 padding-left: 0px;
 	 padding-right: 5px;
 	 color: #d31242;
-	 font-size: 11.5pt !important;
+	 font-size: 11pt !important;
 	 vertical-align: inherit;
 	 line-height: 1.5em;
 	 padding-top: 2px;
@@ -827,7 +827,7 @@
 	i#notebook-trusted-indicator.fa.fa-question.notebook-trusted {
 	 color: #828892 !important;
 	 display: none !important;
-	 font-size: 11.5pt !important;
+	 font-size: 11pt !important;
 	 vertical-align: inherit;
 	 line-height: 1.5em;
 	 padding-top: 2px;
@@ -835,7 +835,7 @@
 	}
 	.dropdown-menu {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 box-shadow: none;
 	 padding: 0px;
 	 text-align: left;
@@ -847,7 +847,7 @@
 	}
 	.dropdown-menu:hover {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 box-shadow: none;
 	 padding: 0px;
 	 text-align: left;
@@ -860,7 +860,7 @@
 	}
 	.dropdown-menu > li > a {
 	 font-family: sans-serif;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 display: block;
 	 padding: 10px 20px 9px 10px;
 	 color: #070707;
@@ -893,7 +893,7 @@
 	.dropdown-menu > .disabled > a:hover,
 	.dropdown-menu > .disabled > a:focus {
 	 font-family: sans-serif;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 font-weight: normal;
 	 color: #828892;
 	 padding: none;
@@ -1022,7 +1022,7 @@
 	.item_buttons > .btn,
 	.item_buttons > .btn-group,
 	.item_buttons > .input-group {
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 background: transparent;
 	 background-color: transparent;
 	 border: 0px solid #e4e4e4;
@@ -1070,7 +1070,7 @@
 	}
 	.btn-xs,
 	.btn-group-xs > .btn {
-	 font-size: initial !important;
+	 font-size: 10.0pt !important;
 	 background-image: none;
 	 font-weight: normal;
 	 text-shadow: none;
@@ -1145,7 +1145,7 @@
 	}
 	.dropdown-header {
 	 font-family: sans-serif !important;
-	 font-size: 11.5pt !important;
+	 font-size: 11pt !important;
 	 color: #d31242 !important;
 	 border-bottom: none !important;
 	 padding: 0px !important;
@@ -1209,7 +1209,7 @@
 	}
 	.input-group-addon {
 	 padding: 2px 5px;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 font-weight: normal;
 	 height: auto;
 	 color: #070707;
@@ -1285,7 +1285,7 @@
 	}
 	.modal-content {
 	 font-family: sans-serif;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 position: relative;
 	 background: #e4e4e4;
 	 background-color: #e4e4e4;
@@ -1296,7 +1296,7 @@
 	}
 	.modal-header {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 color: #070707;
 	 background: #e4e4e4;
 	 background-color: #e4e4e4;
@@ -1340,7 +1340,7 @@
 	.panel,
 	.panel-default {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 background-color: #f4f4f4;
 	 color: #070707;
 	 margin-bottom: 14px;
@@ -1396,7 +1396,7 @@
 	}
 	select.form-control.select-xs {
 	 height: 33px;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	}
 	.toolbar select,
 	.toolbar label {
@@ -1666,11 +1666,11 @@
 	div.cell.text_cell.selected.jupyter-soft-selected {
 	 border-left-color: #e8e8e8 !important;
 	 border-left-width: 0px !important;
-	 padding-left: 7px !important;
+	 padding-left: 26px !important;
 	 border-right-color: #e8e8e8 !important;
 	 border-right-width: 0px !important;
 	 background: #e8e8e8 !important;
-	 border-radius: 6px !important;
+	 border-radius: 5px !important;
 	}
 	div.cell.jupyter-soft-selected .input,
 	div.cell.selected.jupyter-soft-selected .input {
@@ -1870,8 +1870,7 @@
 	div.text_cell_render pre,
 	div.text_cell_render {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
-	 line-height: 130% !important;
+	 font-size: 11pt;
 	 color: #353535;
 	 background: #ffffff;
 	 background-color: #ffffff;
@@ -1897,32 +1896,32 @@
 	}
 	div.cell.text_cell .CodeMirror,
 	div.cell.text_cell .CodeMirror pre {
-	 line-height: 170% !important;
+	 line-height: 160% !important;
 	}
 	div.cell.text_cell.rendered.selected {
 	 font-family: sans-serif;
-	 line-height: 180% !important;
+	 line-height: 160% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	div.cell.text_cell.unrendered.selected {
 	 font-family: sans-serif;
-	 line-height: 180% !important;
+	 line-height: 160% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	div.cell.text_cell.selected {
 	 font-family: sans-serif;
-	 line-height: 180% !important;
+	 line-height: 160% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
 	}
 	.edit_mode div.cell.text_cell.selected {
 	 font-family: sans-serif;
-	 line-height: 180% !important;
+	 line-height: 160% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
@@ -1944,7 +1943,7 @@
 	div.text_cell.unrendered.selected,
 	div.edit_mode div.text_cell.unrendered {
 	 font-family: sans-serif;
-	 line-height: 180% !important;
+	 line-height: 160% !important;
 	 background: #ffffff;
 	 background-color: #ffffff;
 	 border-radius: 0px;
@@ -2032,7 +2031,7 @@
 	}
 	div.rendered_html code {
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
+	 font-size: 10.5pt;
 	 padding-top: 3px;
 	 padding-left: 2px;
 	 color: #303030;
@@ -2048,8 +2047,8 @@
 	.well code,
 	code {
 	 font-family: monospace, monospace;
-	 font-size: 11pt !important;
-	 line-height: 180% !important;
+	 font-size: 10.5pt !important;
+	 line-height: 160% !important;
 	 color: #353535;
 	 background: #e5e5e5;
 	 background-color: #e5e5e5;
@@ -2057,7 +2056,7 @@
 	}
 	kbd {
 	 padding: 1px;
-	 font-size: 11pt;
+	 font-size: 10.5pt;
 	 font-weight: 800;
 	 color: #303030;
 	 background-color: transparent !important;
@@ -2068,8 +2067,8 @@
 	 display: block;
 	 padding: 8.5px;
 	 margin: 0 0 9px;
-	 font-size: 10.5pt;
-	 line-height: 1.42857143;
+	 font-size: 10.0pt;
+	 line-height: 160% !important;
 	 color: #303030;
 	 background-color: #e5e5e5;
 	 border: 1px solid #e5e5e5;
@@ -2088,8 +2087,8 @@
 	}
 	div.rendered_html pre {
 	 font-family: monospace, monospace;
-	 font-size: 11pt !important;
-	 line-height: 180% !important;
+	 font-size: 10.5pt !important;
+	 line-height: 160% !important;
 	 color: #353535;
 	 background: #e5e5e5;
 	 background-color: #e5e5e5;
@@ -2104,8 +2103,8 @@
 	div.text_cell_render pre,
 	div.text_cell_render code {
 	 font-family: monospace, monospace;
-	 font-size: 11pt !important;
-	 line-height: 180% !important;
+	 font-size: 10.5pt !important;
+	 line-height: 160% !important;
 	 color: #353535;
 	 background: #ffffff;
 	 background-color: #ffffff;
@@ -2258,7 +2257,7 @@
 	}
 	div.widget-area a {
 	 font-family: sans-serif;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 color: #070707;
@@ -2267,7 +2266,7 @@
 	div.widget-area a:hover,
 	div.widget-area a:focus {
 	 font-family: sans-serif;
-	 font-size: 10.5pt;
+	 font-size: 10.0pt;
 	 font-weight: normal;
 	 font-style: normal;
 	 color: #000000;
@@ -2650,7 +2649,7 @@
 	}
 	input.raw_input {
 	 font-family: monospace, monospace;
-	 font-size: 11pt !important;
+	 font-size: 10.5pt !important;
 	 color: #303030;
 	 background-color: #e5e5e5;
 	 border-color: #e2e2e2;
@@ -2773,7 +2772,7 @@
 	.typeahead-dropdown,
 	.typeahead-list {
 	 font-family: sans-serif;
-	 font-size: 11.5pt;
+	 font-size: 11pt;
 	 color: #070707;
 	 background-color: #ffffff;
 	 border: none;
@@ -2909,8 +2908,8 @@
 	}
 	.terminal-app .terminal {
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
-	 line-height: 180%;
+	 font-size: 10.5pt;
+	 line-height: 160%;
 	 color: #303030;
 	 background: #f1f1f1;
 	 padding: 0.4em;
@@ -2971,11 +2970,22 @@
 	 outline-offset: -1px;
 	}
 	.celltoolbar {
-	 font-size: 100%;
-	 padding-top: 3px;
 	 border-color: transparent;
-	 border-bottom: thin solid #828892;
+	 border-bottom: thin solid #e7e7e7;
 	 background: transparent;
+	 background-color: #e7e7e7;
+	 display: -webkit-flex !important;
+	 padding-top: 0px;
+	}
+	.ctb_global_show .ctb_show.ctb_hideshow {
+	 display: flex;
+	}
+	.ctb_global_show .ctb_show ~ div.text_cell_render {
+	 border: none;
+	}
+	div.cell.text_cell .celltoolbar {
+	 background-color: #f7f7f7;
+	 border-bottom: thin solid #f7f7f7;
 	}
 	.cell-tag,
 	.tags-input input,
@@ -2990,6 +3000,36 @@
 	 font-size: inherit;
 	 height: 22px;
 	 line-height: 22px;
+	}
+	.rise-enabled .reveal pre {
+	 transition-property: all;
+	 transition-duration: 0.2s;
+	 transition-timing-function: ease;
+	 font-size: 70% !important;
+	 width: 100%;
+	 box-shadow: 0px 0px 0px rgba(0,0,0,0);
+	 overflow: hidden;
+	}
+	.rise-enabled .CodeMirror {
+	 transition-property: all;
+	 transition-duration: 0.2s;
+	 transition-timing-function: ease;
+	 font-size: 70% !important;
+	}
+	.reveal table th,
+	.reveal table td {
+	 text-align: left;
+	 padding: 0.25em 0.5em 0.25em 0.5em !important;
+	 border-bottom: 1px solid transparent !important;
+	}
+	.reveal pre {
+	 width: inherit;
+	 padding: none;
+	 margin: 0px;
+	 font-family: monospace, sans-serif;
+	 font-size: 60% !important;
+	 line-height: 160% !important;
+	 box-shadow: 0px 0px 0px rgba(0,0,0,0);
 	}
 	#notebook-container > div.cell.code_cell.rendered.selected > div.input > div.inner_cell > div.ctb_hideshow.ctb_show > div > div > button,
 	#notebook-container > div.input > div.inner_cell > div.ctb_hideshow.ctb_show > div > div > button {
@@ -3025,8 +3065,8 @@
 	div.CodeMirror,
 	div.CodeMirror pre {
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
-	 line-height: 180%;
+	 font-size: 10.5pt;
+	 line-height: 160%;
 	 color: #303030;
 	}
 	div.CodeMirror-lines {
@@ -3087,8 +3127,8 @@
 	}
 	.ipython_tooltip {
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
-	 line-height: 180%;
+	 font-size: 10.5pt;
+	 line-height: 160%;
 	 border: 2px solid #e1e1e1;
 	 background: #f5f5f5;
 	 background-color: #f5f5f5;
@@ -3101,8 +3141,8 @@
 	}
 	.ipython_tooltip .tooltiptext pre {
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
-	 line-height: 180%;
+	 font-size: 10.5pt;
+	 line-height: 160%;
 	 background: #f5f5f5;
 	 background-color: #f5f5f5;
 	 color: #303030;
@@ -3123,7 +3163,7 @@
 	}
 	.cm-s-ipython.CodeMirror {
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
+	 font-size: 10.5pt;
 	 background: #f1f1f1;
 	 color: #303030;
 	 border-radius: 2px;
@@ -3141,6 +3181,8 @@
 	}
 	.cm-s-ipython .CodeMirror-linenumber {
 	 color: #6a737d;
+	 font-size: 10.5pt !important;
+	 line-height: 160% !important;
 	}
 	.CodeMirror-sizer {
 	 margin-left: 40px;
@@ -3154,8 +3196,12 @@
 	 width: 26px !important;
 	 padding: 0px;
 	 text-align: right;
+	 font-size: 10.5pt !important;
+	 line-height: 160% !important;
 	}
 	.CodeMirror-linenumber {
+	 font-size: 10.5pt !important;
+	 line-height: 160% !important;
 	 color: #6a737d;
 	}
 	.cm-s-ipython .CodeMirror-cursor {
@@ -3342,7 +3388,7 @@
 	 margin-left: 2px;
 	 overflow: auto;
 	 font-family: monospace, monospace;
-	 font-size: 11pt;
+	 font-size: 10.5pt;
 	 color: #303030;
 	 width: auto;
 	}

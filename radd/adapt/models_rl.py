@@ -12,7 +12,7 @@ from radd.compiled import jitfx
 import itertools
 
 class Simulator(object):
-    def __init__(self, inits, data=None, fitparams=None, constants=[], ssdMethod='all', nblocks=25, nruns=10):
+    def __init__(self, inits, data=None, fitparams=None, constants=[], ssdMethod='all', nblocks=30, nruns=10):
         self.analyzeProbes = False
         self.ssdMethod = ssdMethod
         self.kind = fitparams.kind
@@ -20,7 +20,9 @@ class Simulator(object):
         self.fitparams = fitparams
         self.nruns = nruns
         self.allparams = ['B', 'C', 'R', 'a', 'ssv', 'tr', 'v', 'xb']
-        self.update(fitparams=self.fitparams, inits=inits, data=data, constants=constants, nblocks=nblocks)
+        self.simfx_version = 'v1'
+        self.update(fitparams=self.fitparams, inits=inits, data=data, constants=constants, nblocks=nblocks, simfx_version=self.simfx_version)
+        self.simfx = self.simulate_model
 
 
     def update(self, **kwargs):
@@ -28,6 +30,7 @@ class Simulator(object):
         self.tb = self.fitparams['tb']
         self.dt = self.fitparams['dt']
         self.si = self.fitparams['si']
+
         if 'fitparams' in kw_keys:
             self.fitparams = kwargs['fitparams']
         if 'inits' in kw_keys:
@@ -35,7 +38,7 @@ class Simulator(object):
             if 'B' not in list(self.inits):
                 self.inits['B'] = .1
                 self.inits['C'] = .002
-                self.inits['R'] = .1
+                self.inits['R'] = .001
             self.theta = pd.Series(self.inits)
         if 'nruns' in kw_keys:
             self.nruns = kwargs['nruns']
@@ -52,6 +55,13 @@ class Simulator(object):
                 self.sacc_weights = saccErr.mean() / saccErr
         if 'data' in kw_keys:
             self.get_trials_data(kwargs['data'])
+        if 'simfx_version' in kw_keys:
+            if kwargs['simfx_version'] == 'v1':
+                self.simfx_version = kwargs['simfx_version']
+                self.simfx = self.simulate_model
+            elif kwargs['simfx_version'] == 'v2':
+                self.simfx_version = kwargs['simfx_version']
+                self.simfx = self.simulate_model_alt
         self.nlevels = self.fitparams['nlevels']
         self.y = self.fitparams.y.flatten()
         self.wts = self.fitparams.wts.flatten()
@@ -61,18 +71,19 @@ class Simulator(object):
 
 
     def cost_fx_rl(self, p):
-        resultsDF = self.simulate_model(p, analyze=False)
+        # resultsDF = self.simulate_model(p, analyze=False)
+        resultsDF = self.simfx(p, analyze=False)
         return self.analyze_trials(resultsDF)
 
 
     def cost_fx(self, p, analyze=True):
-        resultsDF = self.simulate_model(p, analyze=False)
+        resultsDF = self.simfx(p, analyze=False)
         return self.analyze_trials(resultsDF)
 
 
     def cost_fx_lmfit(self, lmParams, sse=False):
         # resultsDF = self.simulate_model_nruns(lmParams.valuesdict(), analyze=False)
-        resultsDF = self.simulate_model(lmParams.valuesdict(), analyze=False)
+        resultsDF = self.simfx(lmParams.valuesdict(), analyze=False)
         saccBlocks = resultsDF[resultsDF.ttype==0].groupby(self.blocksCol).mean().acc.values
         rtBlocks = resultsDF[resultsDF.response==1].groupby(self.blocksCol).mean().rt.values
         rtErr = self.rt_weights * (rtBlocks*15 - self.rtBlocks*15)
@@ -109,6 +120,14 @@ class Simulator(object):
         self.resultsDF.loc[:, self.resultsHeader] = results
         return self.resultsDF
 
+    def simulate_model_alt(self, p, analyze=True):
+        self.preproc_params(p)
+        results = np.copy(self.results)
+        jitfx.sim_dpm_learning_alt(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.drift, self.ssdrift, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+        if analyze:
+            return self.analyze(results)
+        self.resultsDF.loc[:, self.resultsHeader] = results
+        return self.resultsDF
 
     def analyze(self, res):
         idxIX, ttypeIX, ssdIX, respIX, accIX, rtIX, scoreIX = self.dataColsIX
@@ -263,6 +282,7 @@ class Simulator(object):
 
 
     def blockify_data(self, data, get_var=False, measures=['rt', 'acc']):
+
         data = data.copy()
         if self.blocksCol not in data.columns:
             data = blockify_trials(data, nblocks=self.nblocks)
@@ -292,9 +312,16 @@ class Simulator(object):
         return blockedMeasures
 
 
+    def sim_rt_sacc_blocks(self, p):
+        df = self.simfx(p, analyze=False)
+        saccBlocks = df[df.ttype==0].groupby(self.blocksCol).mean().acc.values
+        rtBlocks = df[df.response==1].groupby(self.blocksCol).mean().rt.values
+        return np.hstack([rtBlocks*12, saccBlocks])
+
+
     def analyze_trials(self, resultsDF):
         saccBlocks = resultsDF[resultsDF.ttype==0].groupby(self.blocksCol).mean().acc.values
         rtBlocks = resultsDF[resultsDF.response==1].groupby(self.blocksCol).mean().rt.values
-        rtErr = np.sum((self.rt_weights * (rtBlocks*10 - self.rtBlocks*10))**2)
+        rtErr = np.sum((self.rt_weights * (rtBlocks*12 - self.rtBlocks*12))**2)
         saccErr = np.sum((self.sacc_weights * (saccBlocks - self.saccBlocks))**2)
         return rtErr + saccErr

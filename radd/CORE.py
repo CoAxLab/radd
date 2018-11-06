@@ -21,6 +21,7 @@ class RADDCore(object):
     that are entered into cost function during fitting as well as calculating
     summary measures and weight matrix for weighting residuals during optimization.
     """
+
     def __init__(self, data=None, kind='xdpm', inits=None, fit_on='average', depends_on={'all':'flat'}, ssd_method=None, weighted=True, verbose=False, custompath=None, nested_models=None, learn=False, bwfactors=None, ssdelay=False, gbase=False, quantiles=np.arange(.1, 1.,.1), presample=False, ksfit=False):
         self.kind = kind
         self.fit_on = fit_on
@@ -88,6 +89,8 @@ class RADDCore(object):
         # (updated with fitparams/basinparams whenever params are set)
         self.opt = optimize.Optimizer(fitparams=self.fitparams, basinparams=self.basinparams, inits=self.inits, data=self.data)
         self.sim = self.opt.sim
+        if self.learn:
+            self.simRL = self.opt.simRL
 
         if presample:
             # sample init params
@@ -206,6 +209,8 @@ class RADDCore(object):
         if hasattr(self, 'opt'):
             self.opt.update(fitparams=self.fitparams, inits=self.fitparams.inits, ksData=ksData)
             self.sim = self.opt.sim
+            if self.learn:
+                self.simRL = self.opt.simRL
 
 
     def set_basinparams(self, **kwargs):
@@ -218,9 +223,9 @@ class RADDCore(object):
                                 'T': .015,
                                 'mutation': (0.5, 1),
                                 'stepsize': .25,
-                                'niter': 500,
-                                'maxiter': 500,
-                                'nsuccess': 150,
+                                'niter': 300,
+                                'maxiter': 300,
+                                'nsuccess': 100,
                                 'polish_tol': 1.e-25,
                                 'tol': .001,
                                 'method': 'evolution',

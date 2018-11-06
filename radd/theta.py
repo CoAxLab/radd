@@ -104,10 +104,10 @@ def get_bounds(kind='dpm', tb=None):
              'xb': (.6, 1.4),
              'z': (0.01, 0.6)}
 
-    boundsRL = {'B': (.1, .4),
-                'Beta': (.5, 5.),
-                'C': (.01, .1),
+    boundsRL = {'B': (.0005, .31),
+                'C': (.001, .20),
                 'R': (.0001, .005),
+                'Beta': (.5, 5.),
                 'vd': (.1, 2.1),
                 'vi': (.1, 1.0)}
 
@@ -137,9 +137,9 @@ def get_theta_params(pkey, kind='dpm'):
              'xb': (1., .35),
              'z': (.3, .2)}
 
-    thetaRL={'B': (.1, .4),
-             'C': (.001, .08),
-             'R': (.0005, .008),
+    thetaRL={'B': (.0005, .3),
+             'C': (.001, .20),
+             'R': (.0001, .005),
              'vd': (.5, .5),
              'vi': (.3, .4)}
 
@@ -149,7 +149,6 @@ def get_theta_params(pkey, kind='dpm'):
 
     theta.update(thetaRL)
     return theta[pkey]
-
 
 
 def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
@@ -172,7 +171,6 @@ def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
         mx = bounds[pkey][1]
         for k, v in zip(pclist, vals):
             if isinstance(v, np.ndarray):
-                print(v)
                 v = np.asscalar(v)
             lmParams.add(k, value=v, vary=True, min=mn, max=mx)
     for pk in pfit:
@@ -190,7 +188,7 @@ def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
     return lmParams
 
 
-def loadParameters_RL(inits, pvary, pflat, nlevels=1, kind='xdpm'):
+def loadParameters_RL(inits, pvary, pflat, nlevels=1, kind='dpm'):
     """ Generates and returns an lmfit Parameters object with
     bounded parameters initialized for flat or non flat model fit
     """

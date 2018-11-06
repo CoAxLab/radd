@@ -25,7 +25,7 @@ def load_dpm_animation():
 
 def style_notebook():
     from IPython.core.display import HTML
-    g3link = "(https://www.github.com/dunovank/jupyter-themes)"
+    # g3link = "(https://www.github.com/dunovank/jupyter-themes)"
     #print("Notebook Theme: Grade3\n{}".format(g3link))
     _styles_dir = os.path.join(_package_dir, 'styles')
     style = os.path.join(_styles_dir, 'custom.css')

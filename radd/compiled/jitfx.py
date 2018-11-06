@@ -282,12 +282,12 @@ def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bou
 
                 if response:
                     correct = 0.; score = -1.; errT = 0.
-                    #vTrial = vTrial * np.exp((rt-tb) * B_t)
+                    # vTrial = vTrial * np.exp((rt-tb) * B_t)
                     #vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
                     vTrial = vTrial + B_t * ((aTrial/tb) - (aTrial/rt))
                 else:
                     correct = 1.; score = 0.; errT += 1.
-                aTrial = bound + C_t * np.exp(-errT)
+                #aTrial = bound + C_t * np.exp(-errT)
 
             else:
                 errT += 1
@@ -300,6 +300,76 @@ def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bou
                 else:
                     correct = 0.
                     score = -1.
+
+            aTrial = bound + C_t * np.exp(-errT)
+
+            if vTrial > 2.0:
+                vTrial = 1.8
+            elif vTrial < .25:
+                vTrial = .28
+
+            idxResults[t] = np.array([idx, ttype, ssOnset, response, correct, rt, sensitivity, vTrial, aTrial])
+
+        results[results[:, 0]==idx] = idxResults
+
+
+
+@jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
+def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bound, onset, B, C, R, dx, dt, tb, maxTrials):
+
+    onsetIX = np.int(onset)
+    TargetRT = .52
+    goStartTrial = 0.
+    ssbound = 0.
+    si = .1
+    tb = tb + .02
+
+    vsProb = 0.5 * (1 + (ssdrift * np.sqrt(dt))/si)
+
+    for idx in idxArray:
+        idxResults = results[results[:, 0]==idx]
+        ntrials = idxResults.shape[0]
+        vTrial = drift
+        aTrial = bound
+        errT = 10000
+
+        for t in range(ntrials):
+            ttype, ssOnset = idxResults[t, 1:3]
+            sensitivity = np.exp2(-t*R) #(t/10.)**-R
+            B_t = B * sensitivity
+            C_t = C * sensitivity
+
+            vProbTrial = 0.5 * (1 + (vTrial * np.sqrt(dt))/si)
+
+            if ttype==0.:
+                ssdIX = np.int(ssOnset)
+                response, rt = sim_dpm_go_stop(rProb[t], xtb, vProbTrial, aTrial, onsetIX, rProbSS[t], vsProb, ssdIX, dx, dt, goStartTrial, ssbound)
+
+                if response:
+                    correct = 0.; score = -1.; errT = 0.
+                    #vTrial = vTrial * np.exp((rt-tb) * B_t)
+                    #vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
+                    # vTrial = vTrial + B_t * ((aTrial/tb) - (aTrial/rt))
+                    # aTrial = aTrial * np.exp((rt-TargetRT) * B)
+                    aTrial = aTrial * 1/np.exp((rt-tb) * B_t)
+                else:
+                    correct = 1.; score = 0.; errT += 1.
+                #vTrial = drift - C_t * np.exp(-errT)
+
+            else:
+                errT += 1
+                response, rt = sim_dpm_go(rProb[t], xtb, vProbTrial, aTrial, onsetIX, dx, dt, goStartTrial)
+                if response:
+                    correct = 1.
+                    score = np.exp(-abs(TargetRT-rt)*10)
+                    aTrial = aTrial * 1/np.exp((rt-TargetRT) * B_t)
+                    #vTrial = vTrial * np.exp((rt-TargetRT) * B)
+                    # vTrial = vTrial + B * ((aTrial/TargetRT) - (aTrial/rt))
+                else:
+                    correct = 0.
+                    score = -1.
+
+            vTrial = drift - C_t * np.exp(-errT)
 
             if vTrial > 2.0:
                 vTrial = 1.8
