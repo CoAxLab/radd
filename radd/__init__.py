@@ -7,10 +7,20 @@ __all__ = [ os.path.basename(f)[:-3] for f in modules]
 _package_dir = os.path.dirname(os.path.realpath(__file__))
 __version__ = '0.4.1'
 
-def load_example_data():
+def load_example_data(name='elife'):
+    """ load example data from elife (2015) or jneuro (2018) publications
+    ::Arguments::
+        name (str): 'elife' or 'jneuro'
+    ::Returns::
+        pandas dataframe with behavioral data from elife or jneuro pubs
+    """
     import pandas as pd
-    _examples_dir = os.path.join(_package_dir, 'docs/examples')
-    data_fpath = os.path.join(_examples_dir, 'reactive_example_idx.csv')
+    if name == 'elife':
+        data_dir = os.path.join(_package_dir, 'datasets/eLife15')
+        data_fpath = os.path.join(data_dir, 'reactive_example_idx.csv')
+    elif name == 'jneuro':
+        data_dir = os.path.join(_package_dir, 'datasets/jNeuro18')
+        data_fpath = os.path.join(data_dir, 'adaptive_ss_behavior.csv')
     return pd.read_csv(data_fpath).copy()
 
 def load_dpm_animation():

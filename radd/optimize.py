@@ -2,7 +2,6 @@
 # Authors:
 #   Kyle Dunovan (ked64@pitt.edu) &
 #   Jeremy Huang (jeremyhuang@cmu.edu)
-
 from __future__ import division
 from future.utils import listvalues
 import os, sys
@@ -65,9 +64,9 @@ class HopStep(object):
                     'sso': .01,
                     'z': .05,
                     'si': .005,
-                    'C': .035,
-                    'B': .05,
-                    'R': .01,
+                    'BX': .035,
+                    'AX': .05,
+                    'PX': .01,
                     'vi': 1.1,
                     'vd': 1.5,
                     'Beta': .1}
@@ -104,7 +103,6 @@ def format_basinhopping_bounds(basin_keys, nvary, kind='xdpm', tb=None):
     xmin = np.hstack(xmin).tolist()
     xmax = np.hstack(xmax).tolist()
     return xmin, xmax
-
 
 
 class Optimizer(object):
@@ -187,7 +185,7 @@ class Optimizer(object):
         self.sim.update(inits=self.inits, fitparams=self.fitparams, ksData=ksData)
 
 
-    def hop_around(self, param_sets=None, learn=False, ratesOnly=True, fitDynamics=True, rateParams=['B', 'C', 'R']):
+    def hop_around(self, param_sets=None, learn=False, ratesOnly=True, fitDynamics=True, rateParams=['AX', 'BX', 'PX']):
         """ initialize model with niter randomly generated parameter sets
         and perform global minimization using basinhopping algorithm
         ::Arguments::
@@ -253,7 +251,7 @@ class Optimizer(object):
         return pdict
 
 
-    def optimize_global(self, p, learn=False, fitDynamics=True, ratesOnly=True, rateParams=['B', 'C', 'R'], resetProgress=False, return_all=False):
+    def optimize_global(self, p, learn=False, fitDynamics=True, ratesOnly=True, rateParams=['AX', 'BX', 'PX'], resetProgress=False, return_all=False):
         """ Global optimization with basinhopping (or differential_evolution)
         ::Arguments::
             p (dict):               parameter dictionary
@@ -290,7 +288,6 @@ class Optimizer(object):
 
         if self.progress:
             if resetProgress:
-                # print("")
                 self.make_progress_bars(inits=True, basin=True)
                 clear_output()
             self.callback = self.gbar.reset(get_call=True, gbasin=resetProgress)
@@ -304,7 +301,7 @@ class Optimizer(object):
             fit_info = out.lowest_optimization_result
 
         elif bp['method']=='evolution':
-            out = differential_evolution(costfx, bounds=self.polish_args['bounds'], popsize=bp['popsize'], recombination=bp['recombination'], mutation=bp['mutation'], strategy=bp['strategy'], disp=bp['disp'], polish=True, maxiter=bp['maxiter'], tol=bp['tol'], callback=self.callback, atol=self.fitparams['tol'])
+            out = differential_evolution(costfx, bounds = self.polish_args['bounds'], popsize=bp['popsize'], recombination=bp['recombination'], mutation=bp['mutation'], strategy=bp['strategy'], disp=bp['disp'], polish=True, maxiter=bp['maxiter'], tol=bp['tol'], callback=self.callback, atol=self.fitparams['tol'])
             if self.progress:
                 self.gbar.clear()
             fit_info = out
@@ -357,8 +354,6 @@ class Optimizer(object):
             lmParamsNames = list(lmParams.valuesdict())
             sim.update(lmParamsNames=lmParamsNames, ksData=sim.ksData)
             costfx = sim.cost_fx_lmfit
-            # if self.ksTest:
-                # costfx = sim.ks_stat_lmfit
 
         self.lmParams = lmParams
 
@@ -444,7 +439,7 @@ class Optimizer(object):
         idxParams = pd.DataFrame([pd.Series(self.popt)]*nsamples)
 
         if not hasattr(self, 'rlParams'):
-            rlParams = theta.random_inits(['B', 'C', 'R'], ninits=nsamples, kind=self.kind, as_list=True, method=self.basinparams['sample_method'])
+            rlParams = theta.random_inits(['AX', 'BX', 'PX'], ninits=nsamples, kind=self.kind, as_list=True, method=self.basinparams['sample_method'])
             rlParamsDF = pd.concat([idxParams,pd.DataFrame(rlParams.tolist())], axis=1)
             self.rlParams = np.array(rlParamsDF.to_dict('records'))
             self.rlYhat = pd.DataFrame(np.vstack([simfx(p) for p in self.rlParams]))
@@ -558,29 +553,6 @@ class Optimizer(object):
         nfev = self.lmMin.nfev
         try: niter = self.lmMin.nit
         except Exception: niter = nfev
-        # resContainer = self.lmMin
-        #
-        # # check if global optimization better
-        # if hasattr(self, "global_popt"):
-        #     checkGlobal = list(self.global_popt) == list(popt)
-        #     if fmin > self.global_fmin and checkGlobal:
-        #         popt = deepcopy(self.global_popt)
-        #         fmin = self.global_fmin
-        #         resContainer = self.global_results.lowest_optimization_result
-        #         resContainer['nfev'] = self.global_results.nfev
-        #         resContainer['nit'] = self.global_results.nit
-        #
-        # residualList = []
-        # for i in range(5):
-        #     # sim.update(inits=popt)
-        #     yhat = sim.simulate_model(popt)
-        #     residualList.append(wts * (yhat - y))
-        #
-        # residual = np.mean(residualList, axis=0)
-        # yhat = (residual / wts) + y
-        # success = resContainer.success
-        # nfev = resContainer.nfev
-        # niter = resContainer.nit
 
         # TODO: extract, calculate, and store std.errors of popt
         # presults is scipy.minimize object (see hop_around() for global_results)
