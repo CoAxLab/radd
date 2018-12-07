@@ -226,35 +226,6 @@ class Model(RADDCore):
             return self.finfo, self.popt, self.yhat
 
 
-    def nested_optimize(self, depends=[], flatp=None, saveplot=True, plotfits=False, custompath=None, progress=True, saveresults=True, saveobserved=False):
-        """ optimize a series of models using same init parameters where the i'th model
-            has depends_on = {<depends[i]> : <cond>}.
-            NOTE: only for models with fit_on='average'
-        ::Arguments::
-            depends (list):
-                list of depends_on dictionaries to fit using a single set of init parameters (self.flat_popt)
-            plotfits (bool):
-                if True (default), plot model predictions over observed data
-            saveplot (bool):
-                if True (default), save plots to model.handler.results_dir
-            custompath (str):
-                path starting from any subdirectory of "~/" (e.g., home).
-                all saved output will write to "~/<custompath>/<self.model_id>/"
-            progress (bool):
-                track progress across model fits, ninits, and basinhopping
-        """
-
-        if flatp is None:
-            self.set_basinparams(method='basin', nsamples=1000)
-            self.set_testing_params()
-            self.set_fitparams(force='flat')
-            flatp = deepcopy(self.optimize_flat())
-
-        self.fitdf, self.poptdf, self.yhatdf = nested_optimize(depends, self.data, kind=self.kind, flatp=flatp, saveplot=saveplot, plotfits=plotfits, custompath=custompath, progress=progress, saveresults=saveresults)
-
-        return self.fitdf, self.poptdf, self.yhatdf
-
-
     def log_fit_info(self, finfo=None, popt=None, yhat=None):
         """ write meta-information about latest fit
         to logfile (.txt) in working directory
@@ -408,7 +379,42 @@ class Model(RADDCore):
         return self.fitdf, self.poptdf, self.yhatdf
 
 
-def nested_optimize(depends, data, kind='xdpm', flatp=None, saveplot=True, plotfits=False, custompath=None, progress=True, saveresults=False, saveobserved=False):
+    def nested_optimize(self, depends=[], flatp=None, saveplot=True, plotfits=False, custompath=None, progress=True, saveresults=True, saveobserved=False):
+        """ optimize a series of models using same init parameters where the i'th model
+            has depends_on = {<depends[i]> : <cond>}.
+            NOTE: only for models with fit_on='average'
+        ::Arguments::
+            depends (list):
+                list of depends_on dictionaries to fit using a single set of init parameters (self.flat_popt)
+            plotfits (bool):
+                if True (default), plot model predictions over observed data
+            saveplot (bool):
+                if True (default), save plots to model.handler.results_dir
+            custompath (str):
+                path starting from any subdirectory of "~/" (e.g., home).
+                all saved output will write to "~/<custompath>/<self.model_id>/"
+            progress (bool):
+                track progress across model fits, ninits, and basinhopping
+        """
+
+        if flatp is None:
+            self.set_basinparams(method='basin', nsamples=1000)
+            self.set_testing_params()
+            self.set_fitparams(force='flat')
+            flatp = deepcopy(self.optimize_flat())
+
+        data = self.data.copy()
+        kind = self.kind
+        ssd_method = self.ssd_method
+        bp = self.basinparams
+        fp = self.fitparams
+
+        self.fitdf, self.poptdf, self.yhatdf = nested_optimize(depends, data, flatp=flatp, kind=kind, basinparams=bp, fitparams=fp, ssd_method=ssd_method, saveplot=saveplot, plotfits=plotfits, custompath=custompath, progress=progress, saveresults=saveresults)
+
+        return self.fitdf, self.poptdf, self.yhatdf
+
+
+def nested_optimize(depends, data, kind='xdpm', flatp=None, basinparams=None, fitparams=None, saveplot=True, plotfits=False, custompath=None, progress=True, saveresults=False, saveobserved=False, ssd_method='all'):
     """ optimize a series of models using same init parameters where the i'th model
         has depends_on = {<depends[i]> : <cond>}.
         NOTE: only for models with fit_on='average'
@@ -431,17 +437,24 @@ def nested_optimize(depends, data, kind='xdpm', flatp=None, saveplot=True, plotf
     fits, popts, yhats = [], [], []
 
     for i, depends_on in enumerate(depends):
-        m = Model(data=data, kind=kind, depends_on=depends_on, quantiles=np.arange(.1, 1.,.1), ssd_method='all')
-        m.set_basinparams(method='basin', nsamples=1000)
-        m.custompath = custompath
+
+        m = Model(data=data, kind=kind, depends_on=depends_on, ssd_method=ssd_method, quantiles=fitparams['quantiles'])
+
+        basinMethod = basinparams['method']
+        nsamples = basinparams['nsamples']
+        ninits = basinparams['ninits']
+        m.set_fitparams(force='cond', dt=fitparams['dt'])
+        m.set_basinparams(method=basinMethod, nsamples=nsamples, ninits=ninits)
+
         pnames = m.toggle_pbars(progress=progress, models=depends)
+        m.custompath = custompath
 
         if progress:
             m.mbar.update(value=i, status=pnames[i])
 
-        m.set_fitparams(force='cond')
-        flatp_ = deepcopy(flatp)
-        finfo, popt, yhat = m.optimize_conditional(flatp_, hop=True, get_results=True)
+        #m.set_fitparams(force='cond')
+        flatpCopy = deepcopy(flatp)
+        finfo, popt, yhat = m.optimize_conditional(flatpCopy, hop=True, get_results=True)
 
         m.write_results(finfo, popt, yhat)
         m.fitdf.insert(0, 'modelID', '_'.join(list(m.depends_on)))
