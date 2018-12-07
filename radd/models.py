@@ -147,11 +147,14 @@ class Simulator(object):
     def simulate_model(self, params, analyze=True, get_rts=False):
         xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx = self.params_to_array(params, preprocess=True)
         dvg, goRT, ssRT = self.get_io_copies()
+
         sim_many_dpm(self.rProb, self.rProbSS, dvg, goRT, ssRT, xtb, drift, ssdrift, bound, gbase, gOnset, ssOnset, dx, self.si, self.dt)
+
         if analyze:
             return self.analyze(goRT, ssRT)
         elif get_rts:
             return [goRT, ssRT]
+
         return pandaify_results(goRT, ssRT, ssd=self.ssd, bootstrap=False, clmap=self.clmap, tb=self.tb)
 
 
@@ -238,6 +241,7 @@ class Simulator(object):
         #     s2 = si**2
         #     dx = np.sqrt(s2 * self.dt)
         #     vProb = 0.5 * (1 + v * dx / s2)
+
         gbase = a * z
         gOnset = get_onset_index(tr, self.dt)
         ssOnset = np.round(ssd / self.dt, 1).astype(int)
@@ -285,7 +289,6 @@ class Simulator(object):
 
 
     def make_io_vectors(self):
-
         self.rProb = randsample((self.nlevels, self.ntrials, self.ntime))
         dvg = np.zeros_like(self.rProb)
         self.goRT = np.zeros((self.nlevels, self.ntrials))
@@ -333,7 +336,8 @@ class Simulator(object):
         level_data = list(product(*c_levels))
         condsdf = pd.DataFrame(level_data, columns=self.conds, index=index)
 
-        # concat (along axis 1) conditional level names and depends_on param columns
+        # concat (along axis 1) conditional level
+        # names and depends_on param columns
         pmatrix = pd.concat([condsdf, pmatrix], axis=1)
         for pvary in self.pvary:
             pv_cond = self.depends_on[pvary]

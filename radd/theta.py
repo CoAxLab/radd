@@ -60,7 +60,7 @@ def init_distributions(pkey, kind='dpm', nrvs=25, tb=.65, force_normal=False):
     lower = np.min(bounds)
     upper = np.max(bounds)
     normal_params = ['a', 'tr', 'v', 'vd', 'ssv', 'sso', 'xb', 'z', 'Beta']
-    uniform_params = ['vi', 'C', 'B', 'R', 'si']
+    uniform_params = ['vi', 'BX', 'AX', 'PX', 'si']
 
     # init and freeze dist shape
     if pkey in normal_params:
@@ -104,9 +104,9 @@ def get_bounds(kind='dpm', tb=None):
              'xb': (.6, 1.4),
              'z': (0.01, 0.6)}
 
-    boundsRL = {'B': (.0005, .31),
-                'C': (.001, .20),
-                'R': (.0001, .005),
+    boundsRL = {'AX': (.0005, .31),
+                'BX': (.001, .20),
+                'PX': (.0001, .005),
                 'Beta': (.5, 5.),
                 'vd': (.1, 2.1),
                 'vi': (.1, 1.0)}
@@ -137,9 +137,9 @@ def get_theta_params(pkey, kind='dpm'):
              'xb': (1., .35),
              'z': (.3, .2)}
 
-    thetaRL={'B': (.0005, .3),
-             'C': (.001, .20),
-             'R': (.0001, .005),
+    thetaRL={'AX': (.0005, .3),
+             'BX': (.001, .20),
+             'PX': (.0001, .005),
              'vd': (.5, .5),
              'vi': (.3, .4)}
 
@@ -156,7 +156,7 @@ def loadParameters(inits=None, is_flat=False, kind=None, pcmap={}):
     bounded parameters initialized for flat or non flat model fit
     """
     lmParams = lmParameters()
-    pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso', 'C', 'B', 'R']
+    pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso', 'BX', 'AX', 'PX']
     pfit = list(set(inits.keys()).intersection(pnames))
     bounds = get_bounds(kind=kind)
     for pkey, pclist in pcmap.items():
@@ -229,9 +229,9 @@ def get_default_inits(kind='dpm', depends_on={}, learn=False, ssdelay=False, gba
     if gbase:
         inits['z'] = .1
     if learn:
-        inits['C'] = .02
-        inits['B'] = .15
-        inits['R'] = .0015
+        inits['BX'] = .02
+        inits['AX'] = .15
+        inits['PX'] = .0015
     return inits
 
 
@@ -297,7 +297,7 @@ def check_inits(inits={}, depends_on={}, kind='dpm'):
     if 'x' not in kind and 'xb' in inits:
         inits.pop('xb')
     # make sure inits only contains subsets of these params
-    pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso', 'C', 'B', 'R']
+    pnames = ['a', 'tr', 'v', 'ssv', 'z', 'xb', 'si', 'sso', 'BX', 'AX', 'PX']
     pfit = list(set(list(inits)).intersection(pnames))
     return {pk: inits[pk] for pk in pfit}
 

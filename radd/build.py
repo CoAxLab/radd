@@ -18,23 +18,31 @@ from IPython.display import clear_output
 class Model(RADDCore):
     """ Main class for instantiating, fitting, and simulating models.
     Inherits from RADDCore parent class (see CORE module).
+
     ::Arguments::
+
         data (pandas DF):
             data frame with columns 'idx', 'rt', 'acc', 'ttype', 'response',
             <Condition Name> declared in depends_on values
+
         kind (str):
             declares model type ['dpm', 'irace', 'pro']
             append 'x' to front of model name to include a dynamic
             bias signal in model
+
         inits (dict):
             dictionary of parameters (v, a, tr, ssv, z) used to initialize model
+
         fit_on (str):
             set if model fits 'average', 'subjects', 'bootstrap' data
+
         depends_on (dict):
             set parameter dependencies on task conditions
             (ex. depends_on={'v': 'Condition'})
+
         weighted (bool):
             if True (default), perform fits using a weighted least-squares approach
+
         quantiles (array):
             set the RT quantiles used to fit model
     """
@@ -208,6 +216,7 @@ class Model(RADDCore):
 
         if powell:
             self.set_fitparams(method='powell', inits=popt, force='cond', maxfev=1000)
+
             self.opt.update(inits=popt)
             finfo, popt, yhat = self.opt.gradient_descent(p=popt, learn=self.learn)
 
@@ -268,7 +277,6 @@ class Model(RADDCore):
         # pcopy = theta.scalarize_params(deepcopy(popt))
         pcopy = deepcopy(popt)
         self.poptdf = self.handler.fill_poptdf(popt=pcopy, fitparams=self.fitparams)
-
 
 
     def plot_model_fits(self, y=None, yhat=None, kde=True, err=None, save=False, bw='scott', savestr=None, same_axis=True, clrs=None, lbls=None, cumulative=True, simdf=None, suppressLegend=False, simData=None, condData=None, shade=True, plot_error_rts=True, figure=None, reorder=None):
@@ -340,12 +348,12 @@ class Model(RADDCore):
     def optimize_idx_params(self, idxlist=None, pos=0, output=None, progress=True):
         """ optimize parameters for individual subjects, store results
         :: Arguments ::
-            param_sets (list):
-                parameters dictionary
-            force (str):
-                if 'cond' forces fits to conditional data, if 'flat' forces flat data
-            save (bool):
-                save output dataframes if True
+        param_sets (list):
+            parameters dictionary
+        force (str):
+            if 'cond' forces fits to conditional data, if 'flat' forces flat data
+        save (bool):
+            save output dataframes if True
         :: Returns ::
             fitdf (DataFrame): fit statistics
             poptdf (DataFrame): optimized parameters
@@ -423,9 +431,8 @@ def nested_optimize(depends, data, kind='xdpm', flatp=None, saveplot=True, plotf
     fits, popts, yhats = [], [], []
 
     for i, depends_on in enumerate(depends):
-        m = Model(data=data, kind=kind, depends_on=depends_on)
+        m = Model(data=data, kind=kind, depends_on=depends_on, quantiles=np.arange(.1, 1.,.1), ssd_method='all')
         m.set_basinparams(method='basin', nsamples=1000)
-        m.set_testing_params()
         m.custompath = custompath
         pnames = m.toggle_pbars(progress=progress, models=depends)
 
@@ -434,7 +441,7 @@ def nested_optimize(depends, data, kind='xdpm', flatp=None, saveplot=True, plotf
 
         m.set_fitparams(force='cond')
         flatp_ = deepcopy(flatp)
-        finfo, popt, yhat = m.optimize_conditional(flatp_, get_results=True)
+        finfo, popt, yhat = m.optimize_conditional(flatp_, hop=True, get_results=True)
 
         m.write_results(finfo, popt, yhat)
         m.fitdf.insert(0, 'modelID', '_'.join(list(m.depends_on)))

@@ -19,7 +19,7 @@ class Simulator(object):
         self.quantiles = fitparams.quantiles
         self.fitparams = fitparams
         self.nruns = nruns
-        self.allparams = ['B', 'C', 'R', 'a', 'ssv', 'tr', 'v', 'xb']
+        self.allparams = ['AX', 'BX', 'PX', 'a', 'ssv', 'tr', 'v', 'xb']
         self.simfx_version = 'v1'
         self.update(fitparams=self.fitparams, inits=inits, data=data, constants=constants, nblocks=nblocks, simfx_version=self.simfx_version)
         self.simfx = self.simulate_model
@@ -35,10 +35,11 @@ class Simulator(object):
             self.fitparams = kwargs['fitparams']
         if 'inits' in kw_keys:
             self.inits = deepcopy(kwargs['inits'])
-            if 'B' not in list(self.inits):
-                self.inits['B'] = .1
-                self.inits['C'] = .002
-                self.inits['R'] = .001
+            if 'AX' not in list(self.inits):
+                self.inits.update({'AX':.1, 'BX':.1, 'PX':.1})
+                # self.inits['AX'] = .1
+                # self.inits['BX'] = .002
+                # self.inits['PX'] = .001
             self.theta = pd.Series(self.inits)
         if 'nruns' in kw_keys:
             self.nruns = kwargs['nruns']
@@ -93,7 +94,7 @@ class Simulator(object):
 
     # def simulate_model_nruns(self, p, analyze=True):
         #     self.preproc_params(p)
-        #     res = jitfx.sim_dpm_learning_nruns(self.nresults, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials, self.nruns)
+        #     res = jitfx.sim_dpm_learning_nruns(self.nresults, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.AX, self.BX, self.PX, self.dx, self.dt, self.tb, self.ntrials, self.nruns)
         #     if analyze:
         #         return self.analyze(res)
         #     self.nresultsDF.loc[:, self.resultsHeader] = res
@@ -102,7 +103,7 @@ class Simulator(object):
     # def simulate_model(self, p, analyze=True):
     #     self.preproc_params(p)
     #     results = np.copy(self.results)
-    #     jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+    #     jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.vProb, self.vsProb, self.bound, self.gOnset, self.AX, self.BX, self.PX, self.dx, self.dt, self.tb, self.ntrials)
     #     if analyze:
     #         return self.analyze(results)
     #     self.resultsDF.loc[:, self.resultsHeader] = results
@@ -114,7 +115,7 @@ class Simulator(object):
     def simulate_model(self, p, analyze=True):
         self.preproc_params(p)
         results = np.copy(self.results)
-        jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.drift, self.ssdrift, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+        jitfx.sim_dpm_learning(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.drift, self.ssdrift, self.bound, self.gOnset, self.AX, self.BX, self.PX, self.dx, self.dt, self.tb, self.ntrials)
         if analyze:
             return self.analyze(results)
         self.resultsDF.loc[:, self.resultsHeader] = results
@@ -123,7 +124,7 @@ class Simulator(object):
     def simulate_model_alt(self, p, analyze=True):
         self.preproc_params(p)
         results = np.copy(self.results)
-        jitfx.sim_dpm_learning_alt(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.drift, self.ssdrift, self.bound, self.gOnset, self.Beta, self.Alpha, self.Rho, self.dx, self.dt, self.tb, self.ntrials)
+        jitfx.sim_dpm_learning_alt(results, self.rProb, self.rProbSS, self.xtb, self.idxArray, self.drift, self.ssdrift, self.bound, self.gOnset, self.AX, self.BX, self.PX, self.dx, self.dt, self.tb, self.ntrials)
         if analyze:
             return self.analyze(results)
         self.resultsDF.loc[:, self.resultsHeader] = results
@@ -161,9 +162,9 @@ class Simulator(object):
         params.update(p)
 
         try:
-            self.Beta = params['B']
-            self.Alpha = params['C']
-            self.Rho = params['R']
+            self.AX = params['AX']
+            self.BX = params['BX']
+            self.PX = params['PX']
         except Exception:
             pass
 

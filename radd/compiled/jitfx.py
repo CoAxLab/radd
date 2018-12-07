@@ -250,7 +250,7 @@ def sim_dpm_go(rProb, xtb, vProb, bound, onsetIX, dx, dt, evidence):
 
 
 @jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
-def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bound, onset, B, C, R, dx, dt, tb, maxTrials):
+def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bound, onset, AX, BX, PX, dx, dt, tb, maxTrials):
 
     onsetIX = np.int(onset)
     TargetRT = .52
@@ -270,38 +270,31 @@ def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bou
 
         for t in range(ntrials):
             ttype, ssOnset = idxResults[t, 1:3]
-            sensitivity = np.exp2(-t*R) #(t/10.)**-R
-            B_t = B * sensitivity
-            C_t = C * sensitivity
-
+            sensitivity = np.exp2(-t*PX)
+            AX_t = AX * sensitivity
+            BX_t = BX * sensitivity
             vProbTrial = 0.5 * (1 + (vTrial * np.sqrt(dt))/si)
 
             if ttype==0.:
                 ssdIX = np.int(ssOnset)
                 response, rt = sim_dpm_go_stop(rProb[t], xtb, vProbTrial, aTrial, onsetIX, rProbSS[t], vsProb, ssdIX, dx, dt, goStartTrial, ssbound)
-
                 if response:
                     correct = 0.; score = -1.; errT = 0.
-                    # vTrial = vTrial * np.exp((rt-tb) * B_t)
-                    #vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
-                    vTrial = vTrial + B_t * ((aTrial/tb) - (aTrial/rt))
+                    vTrial = vTrial + AX_t * ((aTrial/tb) - (aTrial/rt))
                 else:
                     correct = 1.; score = 0.; errT += 1.
-                #aTrial = bound + C_t * np.exp(-errT)
-
             else:
                 errT += 1
                 response, rt = sim_dpm_go(rProb[t], xtb, vProbTrial, aTrial, onsetIX, dx, dt, goStartTrial)
                 if response:
                     correct = 1.
                     score = np.exp(-abs(TargetRT-rt)*10)
-                    #vTrial = vTrial * np.exp((rt-TargetRT) * B)
-                    vTrial = vTrial + B * ((aTrial/TargetRT) - (aTrial/rt))
+                    vTrial = vTrial + AX * ((aTrial/TargetRT) - (aTrial/rt))
                 else:
                     correct = 0.
                     score = -1.
 
-            aTrial = bound + C_t * np.exp(-errT)
+            aTrial = bound + BX_t * np.exp(-errT)
 
             if vTrial > 2.0:
                 vTrial = 1.8
@@ -315,7 +308,7 @@ def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bou
 
 
 @jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
-def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bound, onset, B, C, R, dx, dt, tb, maxTrials):
+def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift, bound, onset, AX, BX, PX, dx, dt, tb, maxTrials):
 
     onsetIX = np.int(onset)
     TargetRT = .52
@@ -335,9 +328,9 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
 
         for t in range(ntrials):
             ttype, ssOnset = idxResults[t, 1:3]
-            sensitivity = np.exp2(-t*R) #(t/10.)**-R
-            B_t = B * sensitivity
-            C_t = C * sensitivity
+            sensitivity = np.exp2(-t*PX)
+            AX_t = AX * sensitivity
+            BX_t = BX * sensitivity
 
             vProbTrial = 0.5 * (1 + (vTrial * np.sqrt(dt))/si)
 
@@ -347,29 +340,21 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
 
                 if response:
                     correct = 0.; score = -1.; errT = 0.
-                    #vTrial = vTrial * np.exp((rt-tb) * B_t)
-                    #vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
-                    # vTrial = vTrial + B_t * ((aTrial/tb) - (aTrial/rt))
-                    # aTrial = aTrial * np.exp((rt-TargetRT) * B)
-                    aTrial = aTrial * 1/np.exp((rt-tb) * B_t)
+                    aTrial = aTrial * 1/np.exp((rt-tb) * AX_t)
                 else:
                     correct = 1.; score = 0.; errT += 1.
-                #vTrial = drift - C_t * np.exp(-errT)
-
             else:
                 errT += 1
                 response, rt = sim_dpm_go(rProb[t], xtb, vProbTrial, aTrial, onsetIX, dx, dt, goStartTrial)
                 if response:
                     correct = 1.
                     score = np.exp(-abs(TargetRT-rt)*10)
-                    aTrial = aTrial * 1/np.exp((rt-TargetRT) * B_t)
-                    #vTrial = vTrial * np.exp((rt-TargetRT) * B)
-                    # vTrial = vTrial + B * ((aTrial/TargetRT) - (aTrial/rt))
+                    aTrial = aTrial * 1/np.exp((rt-TargetRT) * AX_t)
                 else:
                     correct = 0.
                     score = -1.
 
-            vTrial = drift - C_t * np.exp(-errT)
+            vTrial = drift - BX_t * np.exp(-errT)
 
             if vTrial > 2.0:
                 vTrial = 1.8
@@ -383,7 +368,7 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
 
 #
 # @jit((float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64), nopython=True)
-# def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, B, C, R, dx, dt, tb, maxTrials):
+# def sim_dpm_learning(results, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, AX, BX, R, dx, dt, tb, maxTrials):
 #
 #     # rProb = randsample((maxTrials, 680))
 #     # rProbSS = randsample((maxTrials, 680))
@@ -398,7 +383,7 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
 #     # resultsTemp[:, np.array([0, 1, 2])] = results[:, np.array([0, 1, 2])]
 #
 #     # Taim = lambda tr, a, v: tr + (a / v)
-#     # zBrake = lambda v, muSSD, tr: v * (muSSD - tr)
+#     # zAXrake = lambda v, muSSD, tr: v * (muSSD - tr)
 #     # SSRT = lambda z, muSSD, ssv: muSSD + (z / abs(ssv))
 #
 #     for idx in idxArray:
@@ -415,20 +400,20 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
 #         for t in range(ntrials):
 #             ttype, ssOnset = idxResults[t, 1:3]
 #             sensitivity = np.exp2(-t*R) #(t/10.)**-R
-#             B_t = B * sensitivity
-#             C_t = C * sensitivity
+#             AX_t = AX * sensitivity
+#             BX_t = BX * sensitivity
 #             if ttype==0.:
 #                 ssdIX = np.int(ssOnset)
 #                 response, rt = sim_dpm_go_stop(rProb[t], xtb, vTrial, aTrial, onsetIX, rProbSS[t], vsProb, ssdIX, dx, dt, goStartTrial, ssbound)
 #
 #                 if response:
 #                     correct = 0.; score = -1.; errT = 0.
-#                     #vTrial = vTrial * np.exp((rt-tb) * B_t)
-#                     vTrial = vTrial + C_t * ((aTrial/tb) - (aTrial/rt))
+#                     #vTrial = vTrial * np.exp((rt-tb) * AX_t)
+#                     vTrial = vTrial + BX_t * ((aTrial/tb) - (aTrial/rt))
 #                 else:
 #                     correct = 1.; score = 0.; errT += 1.
 #
-#                 aTrial = bound + C_t * np.exp(-errT)
+#                 aTrial = bound + BX_t * np.exp(-errT)
 #                 sigTrial = sigTrial - (alphaTrial * sigTrial)
 #                 alphaTrial = sigTrial / (sigTrial + tau)
 #
@@ -439,12 +424,12 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
 #                 if response:
 #                     correct = 1.
 #                     score = np.exp(-abs(TargetRT-rt)*10)
-#                     # vTrial = vTrial * np.exp((rt-TargetRT) * B)
+#                     # vTrial = vTrial * np.exp((rt-TargetRT) * AX)
 #
 #                     #############################
 #                     ### NEW DRIFT UPDATE RULE ###
 #                     #############################
-#                     vTrial = vTrial + B_t * ((aTrial/TargetRT) - (aTrial/rt))
+#                     vTrial = vTrial + AX_t * ((aTrial/TargetRT) - (aTrial/rt))
 #                     #vTrial = vTrial + alphaTrial * ((aTrial/rt) - (aTrial/TargetRT))
 #                 else:
 #                     correct = 0.
@@ -463,22 +448,22 @@ def sim_dpm_learning_alt(results, rProb, rProbSS, xtb, idxArray, drift, ssdrift,
         # wRT = np.int(np.floor(rtVals.size / nblocks))
         # wAcc = np.int(np.floor(saccVals.size / nblocks))
         # for i in range(nblocks):
-        #     rtMatrix[idxCount, i] = np.nanmean(rtVals[ixRT:ixRT+wRT])
-        #     saccMatrix[idxCount, i] = np.nanmean(saccVals[ixAcc:ixAcc+wAcc])
+        #     rtMatrix[idxBXount, i] = np.nanmean(rtVals[ixRT:ixRT+wRT])
+        #     saccMatrix[idxBXount, i] = np.nanmean(saccVals[ixAcc:ixAcc+wAcc])
         #     ixRT += wRT
         #     ixAcc += wAcc
-        # idxCount += 1
+        # idxBXount += 1
 
 
 # @jit(float64[:,:](float64[:,:], float64[:,:], float64[:,:], float64[:], int64[:], float64, float64, float64, float64, float64, float64, float64, float64, float64, float64, int64, int64), nopython=True)
-# def sim_dpm_learning_nruns(nresults, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, B, C, R, dx, dt, tb, ntrials, n):
+# def sim_dpm_learning_nruns(nresults, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, AX, BX, R, dx, dt, tb, ntrials, n):
 #     nidx = idxArray.size
 #     nrowsTotal = nidx * ntrials
 #     for i in range(n):
 #         start = nrowsTotal*i
 #         end = nrowsTotal*(i+1)
 #         res = nresults[start:end, :]
-#         nresults[start:end, :] = sim_dpm_learning(res, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, B, C, R, dx, dt, tb, ntrials)
+#         nresults[start:end, :] = sim_dpm_learning(res, rProb, rProbSS, xtb, idxArray, vProb, vsProb, bound, onset, AX, BX, R, dx, dt, tb, ntrials)
 #     return nresults
 
 
@@ -538,7 +523,7 @@ def sim_multi_params(rProb, dvg, rts, xtb, vProb, bound, gOnset, dx, dt):
     #     rts[i,j] = rt_ix * dt
 
 # @jit(nopython=True)
-# def sim_multi_radd(results, xtb, idxArray, vProb, bound, onset, B, dx, dt, tb, maxTrials):
+# def sim_multi_radd(results, xtb, idxArray, vProb, bound, onset, AX, dx, dt, tb, maxTrials):
 #     TargetRT = .52
 #     onsetIX = np.int(onset)
 #     rProb = randsample((maxTrials, nAlt, 680))
@@ -555,7 +540,7 @@ def sim_multi_params(rProb, dvg, rts, xtb, vProb, bound, gOnset, dx, dt):
 #             else:
 #                 correct = 0.
 #                 score = -1.
-#             vTrial = vTrial + (B * (vTrial - vTrial * np.exp((TargetRT-rt))))
+#             vTrial = vTrial + (AX * (vTrial - vTrial * np.exp((TargetRT-rt))))
 #         if vTrial > 1.0:
 #             vTrial = .95
 #         elif vTrial < .05:
@@ -571,45 +556,45 @@ def sim_multi_params(rProb, dvg, rts, xtb, vProb, bound, gOnset, dx, dt):
 #     TargetRT = tb
 
 
-# X = xBase * t**-.1
+# X = xAXase * t**-.1
 # idxSSD = np.zeros(idxResults[idxResults[:, 2]<1.].shape[0])
 # idxSSD = results[results[:, 2]<1.]
-# decay = np.exp(np.arange(ntrials)*-xBase)
+# decay = np.exp(np.arange(ntrials)*-xAXase)
 # ssExpected = .5
-# xBase = .0005
+# xAXase = .0005
 # ssdMS = ssdIX*.001
 # delta = ssdMS - ssExpected
-# ssExpected = ssExpected + C * delta
-# lrDecay = (t/10)**-xBase #np.exp(t*-xBase)
-# C = lrDecay * C
+# ssExpected = ssExpected + BX * delta
+# lrDecay = (t/10)**-xAXase #np.exp(t*-xAXase)
+# BX = lrDecay * BX
 
-# TargetRT = TargetRT + ((C * t**-.1) * TargetRT)
-# TargetRT = TargetRT + ((C * t**-.1) * TargetRT)
+# TargetRT = TargetRT + ((BX * t**-.1) * TargetRT)
+# TargetRT = TargetRT + ((BX * t**-.1) * TargetRT)
 # TargetRT = TargetRT + ((R * t**-.1) * TargetRT)
 # TargetRT = TargetRT + .001
 # TargetRT = TargetRT + .001 * decay[t]
-# TargetRT = .52 + xBase * np.exp(-errT) #(lrDecay * C) * TargetRT
-# TargetRT = .52 + C * np.exp(-errT)
+# TargetRT = .52 + xAXase * np.exp(-errT) #(lrDecay * BX) * TargetRT
+# TargetRT = .52 + BX * np.exp(-errT)
 
 # TargetRT = TargetRT - ((R * t**-.1) * TargetRT)
 # TargetRT = TargetRT - .001 #* sensitivity#(sensitivity * .01 * TargetRT)
-# TargetRT = TargetRT - .001 * decay[t]#(lrDecay * C) * TargetRT
-# TargetRT = TargetRT - ((C * t**-.1) * TargetRT)
+# TargetRT = TargetRT - .001 * decay[t]#(lrDecay * BX) * TargetRT
+# TargetRT = TargetRT - ((BX * t**-.1) * TargetRT)
 
-# TargetRT = .52 + xBase * np.exp(-errT)
+# TargetRT = .52 + xAXase * np.exp(-errT)
 
 
-# TargetRT = .52 + C * np.exp(-errT)
+# TargetRT = .52 + BX * np.exp(-errT)
 # * np.exp((stopTargetRT-rt)))
 #
 # if nthStop<15:
-#     lrBound = .1 * C
+#     lrAXound = .1 * BX
 # else:
-#     # lrBound = lrBound + C * (np.std(idxSSD[nthStop-15 : nthStop]) - lrBound)
-#     lrBound = C * np.std(idxSSD[nthStop-15 : nthStop])
-# aTrial = bound + lrBound * np.exp(-errT)
-# aTrial = bound * np.exp(C * delta)
-# ssbound = C * np.exp(-errT)
+#     # lrAXound = lrAXound + BX * (np.std(idxSSD[nthStop-15 : nthStop]) - lrAXound)
+#     lrAXound = BX * np.std(idxSSD[nthStop-15 : nthStop])
+# aTrial = bound + lrAXound * np.exp(-errT)
+# aTrial = bound * np.exp(BX * delta)
+# ssbound = BX * np.exp(-errT)
 # nthStop += 1
 
 # TargetRT = TargetRT - .001 * sensitivity
@@ -630,10 +615,10 @@ def sim_multi_params(rProb, dvg, rts, xtb, vProb, bound, gOnset, dx, dt):
 # stopTargetRT = stopTargetRT + .002 * stopTargetRT
 # if stopTargetRT > tb:
 #     stopTargetRT = tb
-# TargetRT = TargetRT + C * TargetRT
+# TargetRT = TargetRT + BX * TargetRT
 
 
-# stopTargetRT = stopTargetRT - C * stopTargetRT
+# stopTargetRT = stopTargetRT - BX * stopTargetRT
 # if stopTargetRT < TargetRT:
 #     stopTargetRT = TargetRT
 
@@ -643,37 +628,37 @@ def sim_multi_params(rProb, dvg, rts, xtb, vProb, bound, gOnset, dx, dt):
 # ssdTrue = ssdVector[ssdVector>0].mean()
 # lnlike=1.
 # lnlike = get_norm(ssExpected, .05, ssOnset*.001)
-# ssExpected = ssExpected + C * (ssOnset*.001 - ssExpected)
+# ssExpected = ssExpected + BX * (ssOnset*.001 - ssExpected)
 
-# vTrial = vTrial * np.exp(-(TargetRT-rt)* B * Learn)
-# vTrial = vTrial * np.exp((tb-rt) * B * Learn *
-# vTrial = vTrial + (B * Learn * (vTrial - vTrial * np.exp(TargetRT-rt)))
-# vTrial = vTrial + (B * Learn * (vTrial - vTrial * np.exp((TargetRT-rt))))
-# vTrial = vTrial + (B * Learn * (vTrial - vTrial * np.exp((ssExpected-ssExPrevious))))
+# vTrial = vTrial * np.exp(-(TargetRT-rt)* AX * Learn)
+# vTrial = vTrial * np.exp((tb-rt) * AX * Learn *
+# vTrial = vTrial + (AX * Learn * (vTrial - vTrial * np.exp(TargetRT-rt)))
+# vTrial = vTrial + (AX * Learn * (vTrial - vTrial * np.exp((TargetRT-rt))))
+# vTrial = vTrial + (AX * Learn * (vTrial - vTrial * np.exp((ssExpected-ssExPrevious))))
 # vTrial  np.exp(-(ssOnset*.001 - ssExpected))
-# vTrial = vTrial + (C * Learn * (vTrial - vTrial * np.exp((tb-rt))))
-# vTrial = vTrial + (B * Learn * (vTrial - vTrial * np.exp((stopTargetRT-rt))))
-# vTrial = vTrial + (B * Learn * (vTrial - vTrial * np.exp((stopTargetRT-rt))))
+# vTrial = vTrial + (BX * Learn * (vTrial - vTrial * np.exp((tb-rt))))
+# vTrial = vTrial + (AX * Learn * (vTrial - vTrial * np.exp((stopTargetRT-rt))))
+# vTrial = vTrial + (AX * Learn * (vTrial - vTrial * np.exp((stopTargetRT-rt))))
 
-# vsTrial = vsTrial + (C * Learn * (vsTrial - vsTrial * np.exp((stopTargetRT-rt))))
+# vsTrial = vsTrial + (BX * Learn * (vsTrial - vsTrial * np.exp((stopTargetRT-rt))))
 
-# aTrial = aTrial + C * startLearn * 1/np.exp((ssExpected-ssExPrevious))
-# aTrial = aTrial - (C * Learn * (aTrial - aTrial * np.exp((stopTargetRT-rt))))
-# aTrial = aTrial + C * Learn * bound
-# aTrial = aTrial - (C * Learn * (aTrial - aTrial * np.exp((stopTargetRT-rt))))
-# aTrial = aTrial - (C * Learn * (aTrial - aTrial * np.exp((stopTargetRT-rt))))
-# aTrial = aTrial + Learn * C * (ssExpected - ssExPrevious)
-# aTrial = aTrial + Learn * C * aTrial #np.exp(ssExPrevious - ssExpected)
-# aTrial = bound * (t/10)**-C
+# aTrial = aTrial + BX * startLearn * 1/np.exp((ssExpected-ssExPrevious))
+# aTrial = aTrial - (BX * Learn * (aTrial - aTrial * np.exp((stopTargetRT-rt))))
+# aTrial = aTrial + BX * Learn * bound
+# aTrial = aTrial - (BX * Learn * (aTrial - aTrial * np.exp((stopTargetRT-rt))))
+# aTrial = aTrial - (BX * Learn * (aTrial - aTrial * np.exp((stopTargetRT-rt))))
+# aTrial = aTrial + Learn * BX * (ssExpected - ssExPrevious)
+# aTrial = aTrial + Learn * BX * aTrial #np.exp(ssExPrevious - ssExpected)
+# aTrial = bound * (t/10)**-BX
 # aTrial = aTrial * Learn * np.exp(-(stopTargetRT-rt))
-# aTrial = aTrial + C * (score - np.mean(idxResults[:t, 6]))
-# aTrial = aTrial + C *
-# aTrial = aTrial + C * (aTrial - (aTrial * startLearn * np.exp(-(stopTargetRT-rt))))
-# aTrial = aTrial + aTrial * Learn * C * np.exp(stopTargetRT-rt) * np.exp(ssOnset*.001 - ssExpected)
+# aTrial = aTrial + BX * (score - np.mean(idxResults[:t, 6]))
+# aTrial = aTrial + BX *
+# aTrial = aTrial + BX * (aTrial - (aTrial * startLearn * np.exp(-(stopTargetRT-rt))))
+# aTrial = aTrial + aTrial * Learn * BX * np.exp(stopTargetRT-rt) * np.exp(ssOnset*.001 - ssExpected)
 
-# goStartTrial = goStartTrial - (B * startLearn * np.exp((stopTargetRT-rt)))
-# goStartTrial = goStartTrial + C * Learn * np.exp((rt-stopTargetRT))
-# goStartTrial = goStartTrial - C * startLearn * 1/np.exp((ssExpected-ssExPrevious))
+# goStartTrial = goStartTrial - (AX * startLearn * np.exp((stopTargetRT-rt)))
+# goStartTrial = goStartTrial + BX * Learn * np.exp((rt-stopTargetRT))
+# goStartTrial = goStartTrial - BX * startLearn * 1/np.exp((ssExpected-ssExPrevious))
 
 # if goStartTrial > 0:
 #     goStartTrial = 0

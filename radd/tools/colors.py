@@ -43,7 +43,7 @@ def style_params():
     return {'colors': colors, 'greens': colors[:4], 'blues': colors[4:8], 'purples': colors[8:12], 'grays': colors[12:17], 'reds': colors[17:22], 'yellows': colors[22:]}
 
 def param_color_map(param='all'):
-    param_color_map = {'a': "#375ee1", 'tr': "#f19b2c", 'v': "#27ae60", 'xb': "#16a085", 'ssv': "#e5344a", 'ssv_v': "#3498db", 'sso': "#e941cd", 'z': '#ff711a', 'all': '#6C7A89', 'flat': '#6C7A89', 'C': '#f19b2c', 'B': '#3498db', 'Beta': "#ff711a", 'v_ssv': "#9B59B6", 'R':"#e5344a"}
+    param_color_map = {'a': "#375ee1", 'tr': "#f19b2c", 'v': "#27ae60", 'xb': "#16a085", 'ssv': "#e5344a", 'ssv_v': "#3498db", 'sso': "#e941cd", 'z': '#ff711a', 'all': '#6C7A89', 'flat': '#6C7A89', 'BX': '#f19b2c', 'AX': '#3498db', 'Beta': "#ff711a", 'v_ssv': "#9B59B6", 'PX':"#e5344a"}
     if param=='all':
         return param_color_map
     if param in list(param_color_map):

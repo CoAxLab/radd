@@ -135,9 +135,9 @@ def plot_stop_fit(y, yhat, x=None, err=None, color=None, label=None, ax=None, al
         x = np.linspace(.100, .500, len(y), dtype='float')
     if label is None:
         label = ['Data', 'Model']
-    else:
-        label = [label.capitalize(), None]
-    if suppressLegend:
+    #else:
+    #    label = [label.capitalize(), None]
+    elif suppressLegend:
         label = [None, None]
     plot_stop_data(y, x=x, err=err, color=color, label=label[0], ax=ax, lw=0)
     plot_stop_curve_predicted(yhat, x=x, color=color, label=label[1], ax=ax, alpha=alpha)
@@ -180,6 +180,8 @@ def plot_stop_curve_predicted(y, x=None, label=None, alpha=1., color='k', ax=Non
     ax.plot(x, y, lw=0., marker='o', ms=10, mew=1.25, alpha=1, mfc='k', mec=color)
     ax.plot(xsim[::-1], ysim, lw=2., color=color, alpha=1, linestyle='-')
     ax.plot(x[0], y[0], lw=2., marker='o', ms=10, mew=1.25, alpha=1, mfc='k', mec=color, label=label, color=color)
+    if label is not None:
+        ax.legend()
     if get_pse:
         PSEix = (np.abs(ysim - .5)).argmin()
         return xsim[PSE]
@@ -404,6 +406,141 @@ def plot_model_gof(gof_dict, aicwinner, pvary=None, yerr=None):
 
 
 
+def simulate_multiple(params, m, nsims=5, simfunc='adaptive'):
+    AX=params['AX']
+    BX=params['BX']
+    PX=params['PX']
+    if isinstance(params, dict):
+        params = [deepcopy(params)]
+    p = deepcopy(params)
+    if simfunc!='adaptive':
+        AX = 0.
+        BX = 0.
+        PX = 0.
+    setList = []
+    for pset in params:
+        pset['AX'] = AX
+        pset['BX'] = BX
+        pset['PX'] = PX
+        results = []
+        for n in range(nsims):
+            m.opt.simRL.update(inits=pset)
+            r = m.opt.simRL.simulate_model(pset, analyze=False)
+            results.append(r)
+        setList.append(pd.concat(results))
+    return pd.concat(setList)
+
+
+def trialwise_model_predictions_all(params, model, data, nsims=5, nblocks=35, simfunc='adaptive', clrs=None, axes=None):
+    if clrs is None:
+        clrs = ["#3498db", '#6C7A89', "#9B59B6"]
+    AX=params['AX']
+    BX=params['BX']
+    PX=params['PX']
+    blocksCol = 'block{}'.format(nblocks)
+    if axes==None:
+        f, axes = plt.subplots(2, 3, figsize=(14, 8.5))
+    axes = np.asarray(axes).reshape(2,3)
+    data_conds = [data[data.cond==C].reset_index(drop=True) for C in data.cond.unique()]
+    for i, datdf in enumerate(data_conds):
+        #model.opt.simRL.update(data=datdf, learn=True, nblocks=nblocks)
+        trialwise_model_predictions(params, model, df=datdf, nsims=nsims, nblocks=nblocks, axes=axes[:, i], simfunc=simfunc, c=clrs[i])
+    for ax in axes.flatten():
+        if not ax.is_first_col():
+            ax.set_yticklabels([])
+            ax.set_ylabel('')
+        if not ax.is_last_row():
+            ax.set_xticklabels([])
+            ax.set_xlabel('')
+    plt.tight_layout()
+
+
+def trialwise_model_predictions(params, model, df=None, nsims=5, nblocks=30, axes=None, simfunc='adaptive', c='#6C7A89', legendSize=15, tickSize=15, labelSize=17):
+    #legendSize=15, tickSize=15, labelSize=17
+    clrs = ["#3498db", '#6C7A89', "#9B59B6"]
+    obsClrs = ['#3572C6', '#3f4850', "#663399"]
+
+    sns.set(style='ticks', font_scale=1.45)
+    blocksCol = 'block{}'.format(nblocks)
+
+    #df = model.opt.simRL.data.copy()
+    opt = model.opt
+    if axes is None:
+        f, axes = plt.subplots(1, 2, figsize=(14, 5))
+        legendSize = 17
+        tickSize=16
+        labelSize=18
+
+    axrt, axacc = axes.flatten()
+    if df is None:
+        df = model.data.copy()
+
+    opt.simRL.update(data=df, learn=True, nblocks=nblocks)
+
+    o = model.opt.simRL.data
+    r = simulate_multiple(params, m=model, nsims=nsims, simfunc=simfunc)
+    x = np.arange(1, nblocks+1)
+
+    rtSim, rtSimErr, accSim, accSimErr = opt.simRL.blockify_data(r, get_var=True, measures=['rt', 'acc'])
+    rtEmp, rtEmpErr, accEmp, accEmpErr = opt.simRL.blockify_data(o, get_var=True, measures=['rt', 'acc'])
+
+    if simfunc=='adaptive':
+        simAlpha = 1.
+        simLw = 2.5
+        simLabel = 'Adaptive Model'
+        nlegendCols = 2
+    else:
+        simAlpha = 1.
+        simLw = 2.5
+        simLabel = 'Static'
+        nlegendCols=3
+
+    axrt.errorbar(x, rtSim, yerr=rtSimErr, label=simLabel, color=c, lw=simLw, alpha=simAlpha, linestyle='-')
+    axacc.errorbar(x, accSim, yerr=accSimErr, color=c, lw=simLw, alpha=simAlpha, linestyle='-')
+
+    if simfunc=='adaptive':
+        oc = obsClrs[clrs.index(c)]
+
+        rty1, rty2 = rtEmp-rtEmpErr, rtEmp+rtEmpErr
+        #axrt.plot(x, rtEmp, label='Data', color=oc, lw=3, alpha=.5)
+        axrt.fill_between(x, rty1, rty2, color=oc, alpha=.35)
+
+        accy1, accy2 = accEmp-accEmpErr,accEmp+accEmpErr
+        #axacc.plot(x, accEmp, color=oc, lw=3, alpha=.5)
+        axacc.fill_between(x, accy1, accy2, color=oc, alpha=.35)
+
+    rtmax = np.hstack(np.hstack([rtSim, rtEmp])).squeeze().max() * 1.02
+    rtmin = np.hstack(np.hstack([rtSim, rtEmp])).squeeze().min() * .97
+    rtmax, rtmin = [np.around(rtlim, 2) for rtlim in [rtmax, rtmin]]
+    axrt.set_ylim(rtmin, rtmax)
+    rtTicks = np.arange(rtmin, rtmax+.025, .025)
+    axrt.set_yticks(rtTicks)
+    axrt.set_yticklabels((rtTicks*1000).astype(int), fontsize=tickSize)
+
+    accTicks = np.arange(0.,1.2,.2)
+    axacc.set_ylim(0., 1.0)
+    axacc.set_yticks(accTicks)
+    axacc.set_yticklabels(accTicks, fontsize=tickSize)
+    xticks = np.arange(0, nblocks+5, 5)
+    xticks[0] = 1
+
+    for ax in axes.flatten():
+        ax.set_xlim(0, nblocks)
+        ax.set_xticks(xticks)
+        if ax.is_last_row():
+            ax.set_xticklabels(xticks, fontsize=tickSize)
+            ax.set_xlabel('Trial Blocks', fontsize=labelSize)
+        else:
+            ax.set_xticklabels([])
+            ax.set_xlabel('')
+
+    axrt.set_ylabel('RT (ms)', fontsize=labelSize)
+    axacc.set_ylabel('Stop Accuracy', fontsize=labelSize)
+    axrt.legend(fontsize=legendSize, ncol=nlegendCols, loc=9)
+    sns.despine(trim=True, offset=.2)
+
+
+
 def plot_param_distributions(p=['a', 'sso', 'ssv', 'tr', 'v', 'xb', 'z'], n=2000, method='random'):
     from radd import theta
     sns.set(style='white', font_scale=1.3)
@@ -470,12 +607,12 @@ def parameter_name(param, tex=False):
         'z': ['Execution Baseline', '$z_{E}$'],
         'aG': ['Alpha+', '$\\alpha^+$'],
         'aErr': ['Alpha-', '$\\alpha^-$'],
-        'B': ['Alpha', '$\\alpha$'],
-        'C': ['Beta', '$\\beta$'],
-        'R': ['Rho', '$p$'],
+        'AX': ['Alpha', '$\\alpha$'],
+        'BX': ['Beta', '$\\beta$'],
+        'PX': ['Rho', '$p$'],
         'flat': ['Flat', 'Flat'],
         'all': ['Flat', 'Flat']}
-        
+
     if '_' in param: # and param!='v_ssv':
         param = param.split('_')
     if isinstance(param, list):
