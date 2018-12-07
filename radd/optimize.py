@@ -268,17 +268,19 @@ class Optimizer(object):
         bp = self.basinparams
         popt = deepcopy(p)
         if learn:
+            if 'AX' not in list(popt):
+                popt.update({'AX':.1, 'BX':.1, 'PX':.1})
             if fitDynamics:
                 costfx = self.simRL.cost_fx_rl
             else:
                 costfx = self.simRL.cost_fx
             if ratesOnly:
-                pkeys = [k for k in list(p) if k not in rateParams]
+                pkeys = [k for k in list(popt) if k not in rateParams]
             else:
                 pkeys = []
-
-            self.simRL.update(inits=p, constants=pkeys)
-            x0 = self.simRL.preproc_params(p, asarray=True)
+            self.simRL.update(inits=popt, constants=pkeys)
+            x0 = self.simRL.preproc_params(popt, asarray=True)
+            
         else:
             self.sim.set_pconstant_values_matrix(p)
             x0 = self.sim.pdict_to_array(p)
