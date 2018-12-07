@@ -2,11 +2,11 @@ from setuptools import setup, find_packages
 import numpy as np
 import os
 
-package_data = {'radd':['docs/*.md', 'docs/*.txt', 'styles/*.css', 'datasets/eLife15/*.csv', 'datasets/jNeuro18/*.csv', 'docs/examples/*.py', 'docs/examples/*.mp4']}
+package_data = {'radd':['docs/*.md', 'docs/*.txt', 'styles/*.css', 'datasets/eLife15/*.csv', 'datasets/jNeuro18/*.csv', 'docs/examples/*.py', 'docs/examples/*.png', 'docs/examples/*.mp4']}
 
 setup(
     name='RADD',
-    version='0.4.1',
+    version='0.5.0',
     author='Kyle Dunovan, Timothy Verstynen, Jeremy Huang',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
