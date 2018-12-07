@@ -153,9 +153,9 @@ class RADDCore(object):
             # initialize with default values and first arrays in observed_flat, flat_wts
             #local methods = ['nelder', 'powell', 'lbfgsb' 'tnc', 'cobyla']
             self.fitparams = {'ix':0,
-                            'ntrials': 10000,
+                            'ntrials': 20000,
                             'si': .1,
-                            'dt':.003,
+                            'dt':.005,
                             'tol': 1.e-25,
                             'method': 'nelder',
                             'maxfev': 800,
