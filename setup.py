@@ -4,12 +4,12 @@ import os
 
 package_data = {'radd':['docs/*.md', 'docs/*.txt', 'styles/*.css', 'datasets/eLife15/*.csv', 'datasets/jNeuro18/*.csv', 'docs/examples/*.py', 'docs/examples/*.png', 'docs/examples/*.mp4']}
 
-# git commit -a -m "patch version bump v0.5.3"; git tag -a v0.5.3 -m "version 0.5.3"; git push origin master; git push origin v0.5.3; python setup.py sdist bdist_wheel; twine upload dist/radd-0.5.3*
+# git commit -a -m "patch version bump v0.5.4"; git tag -a v0.5.4 -m "version 0.5.4"; git push origin master; git push origin v0.5.4; python setup.py sdist bdist_wheel; twine upload dist/radd-0.5.4*
 
 
 setup(
     name='RADD',
-    version='0.5.3',
+    version='0.5.4',
     author='Kyle Dunovan, Timothy Verstynen, Jeremy Huang',
     author_email='dunovank@gmail.com',
     url='http://github.com/CoAxLab/radd',
