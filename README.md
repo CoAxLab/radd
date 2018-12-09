@@ -14,6 +14,6 @@ pip install --upgrade radd
 ```
 
 ### Interactive Demos:
-Click the "launch binder" button below to open up an interactive demo of radd in your browser (created using [binder](http://mybinder.org/)). Or view/download the demo notebooks [here](https://nbviewer.jupyter.org/github/CoAxLab/radd/blob/master).
+Click the "launch binder" button below to open up an interactive demo of radd in your browser (created using [binder](http://mybinder.org/)). Or view/download the demo notebooks [here](https://nbviewer.jupyter.org/github/CoAxLab/radd).
 
 [![Binder](http://mybinder.org/badge.svg)](http://mybinder.org:/repo/coaxlab/radd)
