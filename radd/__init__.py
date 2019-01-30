@@ -21,7 +21,7 @@ def load_example_data(name='elife'):
             data_fpath = os.path.join(data_dir, 'pro_stop_data.csv')
         else:
             # 're_stop_data.csv'
-            data_fpath = os.path.join(data_dir, 'elife2015_example_data.csv')
+            data_fpath = os.path.join(data_dir, 're_stop_data.csv') #'elife2015_example_data.csv')
     elif name == 'jneuro':
         data_dir = os.path.join(_package_dir, 'datasets/jNeuro18')
         data_fpath = os.path.join(data_dir, 'adaptive_ss_behavior.csv')
