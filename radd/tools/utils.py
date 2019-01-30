@@ -17,7 +17,6 @@ from itertools import product
 
 def pandaify_results(gort, ssrt, tb=.68, clmap=None, bootstrap=False, bootinfo={'nsubjects':25, 'ntrials':1000, 'groups':['ssd']}, ssd=np.array([[.2, .25, .3, .35, .4]])):
 
-
     nlevels = gort.shape[0]
     if nlevels==1:
         clmap = {'flat': ['flat']}
