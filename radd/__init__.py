@@ -10,14 +10,18 @@ __version__ = '0.5.4'
 def load_example_data(name='elife'):
     """ load example data from elife (2015) or jneuro (2018) publications
     ::Arguments::
-        name (str): 'elife' or 'jneuro'
+        name (str): 'elife', 'elife_pro', or 'jneuro'
     ::Returns::
         pandas dataframe with behavioral data from elife or jneuro pubs
     """
     import pandas as pd
-    if name == 'elife':
+    if 'elife' in name:
         data_dir = os.path.join(_package_dir, 'datasets/eLife15')
-        data_fpath = os.path.join(data_dir, 'reactive_example_idx.csv')
+        if 'pro' in name:
+            data_fpath = os.path.join(data_dir, 'pro_stop_data.csv')
+        else:
+            # 're_stop_data.csv'
+            data_fpath = os.path.join(data_dir, 'elife2015_example_data.csv')
     elif name == 'jneuro':
         data_dir = os.path.join(_package_dir, 'datasets/jNeuro18')
         data_fpath = os.path.join(data_dir, 'adaptive_ss_behavior.csv')
