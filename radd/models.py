@@ -18,6 +18,7 @@ class Simulator(object):
         self.fitparams = fitparams
         self.pc_map = pc_map
         self.kind = kind
+        self.include_ss=False
         if 'ssd_info' in fitparams.keys():
             self.ssd_info = fitparams['ssd_info']
             self.include_ss=True

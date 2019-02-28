@@ -76,7 +76,7 @@ class DataHandler(object):
         index = range(nrows)
         nan_data = np.zeros((nrows, ncols))*np.nan
 
-        self.datdf = self.grpData.apply(self.rangl_data).sortlevel(0)
+        self.datdf = self.grpData.apply(self.rangl_data).sort_index(0)
         self.dfvals = self.datdf.values
         self.observedDF = pd.DataFrame(nan_data, columns=masterDF_header, index=index)
         self.observedDF.loc[:, self.groups] = self.datdf.reset_index()[self.groups].values
@@ -236,6 +236,10 @@ class DataHandler(object):
               QSEM = mjci(rtvectors)
               wts = median(QSEM)/QSEM
         """
+        if self.model.kind=='pro':
+            n = 1
+        else:
+            n = 2
         idx_mjci = lambda x: mjci(x.rt, prob=self.model.quantiles)
         nidx = self.nidx
         nquant = self.model.quantiles.size
@@ -249,7 +253,7 @@ class DataHandler(object):
         # apply self.idx_mjci() to estimate quantile CI's
         quant_err = np.vstack(godf_grouped.apply(idx_mjci).values)
         # reshape [nidx   x   ncond * nquant * nacc]
-        idx_qerr = quant_err.reshape(nidx, nsplits * nquant * 2)
+        idx_qerr = quant_err.reshape(nidx, nsplits * nquant * n)
         # calculate subject median across all conditions quantiles and accuracy
         # this implicitly accounts for n_obs as the mjci estimate of sem will be lower
         # for conditions with greater number of observations (i.e., more acc==1 in godf)
@@ -258,7 +262,7 @@ class DataHandler(object):
         # set extreme values to max_wt arg val
         idx_qratio[idx_qratio >= self.max_wt] = self.max_wt
         # reshape to fit in wtsDF[:, q_cols]
-        return idx_qratio.reshape(nidx * nsplits, nquant * 2)
+        return idx_qratio.reshape(nidx * nsplits, nquant * n)
 
     def idx_acc_weights(self, index=['idx']):
         """ count number of observed responses across levels, transform into ratios
