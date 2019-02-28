@@ -5,7 +5,7 @@ modules = glob.glob(os.path.dirname(__file__)+"/*.py")
 __all__ = [ os.path.basename(f)[:-3] for f in modules]
 
 _package_dir = os.path.dirname(os.path.realpath(__file__))
-__version__ = '0.5.4'
+__version__ = '0.5.5'
 
 def load_example_data(name='elife'):
     """ load example data from elife (2015) or jneuro (2018) publications

@@ -75,11 +75,13 @@ def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on
         goQuery = 'ttype=="go"'
         stopQuery = 'ttype=="stop"'
     gac = data.query(goQuery).acc.mean()
+
     grt = data.query('response==1 & acc==1').rt.values
     ert = data.query('response==1 & acc==0').rt.values
     gq = mq(grt[grt<5.], prob=quantiles)
     eq = mq(ert[ert<5.], prob=quantiles)
     data_vector = [gac, gq, eq]
+
     if 'ssd' in data.columns:
         stopdf = data.query(stopQuery)
         if 'probe' in stopdf.columns:
@@ -89,6 +91,7 @@ def rangl_data(data, ssd_method='all', quantiles=np.linspace(.01,.99,15), fit_on
         elif ssd_method=='central':
             sacc = np.array([stopdf.mean()['acc']])
         data_vector.insert(1, sacc)
+
     return np.hstack(data_vector)
 
 

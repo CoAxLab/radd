@@ -88,7 +88,7 @@ class DataHandler(object):
         data = self.data.copy()
         ssdmethod = self.ssd_method
         self.grpData = data.groupby(np.hstack(['idx', self.conds]).tolist())
-        datdf = self.grpData.apply(analyze.rangl_data, ssdmethod, self.quantiles).sortlevel(0)
+        datdf = self.grpData.apply(analyze.rangl_data, ssdmethod, self.quantiles).sort_index(0)
         # self.datdf = datdf
         groupvalues = datdf.reset_index()[self.groups].values
         nan_data = np.zeros((groupvalues.shape[0], len(odf_header)), dtype=np.int64)
